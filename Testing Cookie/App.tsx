@@ -2964,39 +2964,46 @@ const App: React.FC = () => {
                     // Collect Multimodal Parts (Text + Images)
                     const directorParts: any[] = [{ text: directorPrompt }];
 
-                    selectedChars.forEach((c) => {
-                        if (c.faceImage) {
-                            const [h, d] = c.faceImage.split(',');
-                            const m = h.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                            directorParts.push({ text: `[Visual Ref: ${c.name} Face]` });
-                            directorParts.push({ inlineData: { data: d, mimeType: m } });
-                        }
-                        if (c.bodyImage) {
-                            const [h, d] = c.bodyImage.split(',');
-                            const m = h.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                            directorParts.push({ text: `[Visual Ref: ${c.name} Outfit]` });
-                            directorParts.push({ inlineData: { data: d, mimeType: m } });
-                        }
-                        if (c.props) {
-                            c.props.forEach(p => {
-                                if (p.image) {
-                                    const [h, d] = p.image.split(',');
-                                    const m = h.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                                    directorParts.push({ text: `[Visual Ref: ${c.name} Prop - ${p.name}]` });
+                    // Helper function to safely add image data
+                    const safeAddImage = (img: string | undefined | null, label: string) => {
+                        if (img && img.startsWith('data:') && img.includes(',')) {
+                            try {
+                                const [h, d] = img.split(',');
+                                const m = h.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                                if (d && d.length > 100) {
+                                    directorParts.push({ text: label });
                                     directorParts.push({ inlineData: { data: d, mimeType: m } });
                                 }
+                            } catch (e) {
+                                console.warn("Could not process image:", label);
+                            }
+                        }
+                    };
+
+                    selectedChars.forEach((c) => {
+                        safeAddImage(c.faceImage, `[Visual Ref: ${c.name} Face]`);
+                        safeAddImage(c.bodyImage, `[Visual Ref: ${c.name} Outfit]`);
+                        if (c.props) {
+                            c.props.forEach(p => {
+                                safeAddImage(p.image, `[Visual Ref: ${c.name} Prop - ${p.name}]`);
                             });
                         }
                     });
 
                     // Add Previous Scene for Continuity if available
-                    if (isContinuityMode && currentSceneIndex > 0 && currentState.scenes[currentSceneIndex - 1].generatedImage) {
+                    if (isContinuityMode && currentSceneIndex > 0) {
                         const prevImg = currentState.scenes[currentSceneIndex - 1].generatedImage;
-                        if (prevImg) {
-                            const [h, d] = prevImg.split(',');
-                            const m = h.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                            directorParts.push({ text: `[Visual Ref: Previous Scene Context]` });
-                            directorParts.push({ inlineData: { data: d, mimeType: m } });
+                        if (prevImg && prevImg.startsWith('data:') && prevImg.includes(',')) {
+                            try {
+                                const [h, d] = prevImg.split(',');
+                                const m = h.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                                if (d && d.length > 100) { // Ensure we have actual data
+                                    directorParts.push({ text: `[Visual Ref: Previous Scene Context]` });
+                                    directorParts.push({ inlineData: { data: d, mimeType: m } });
+                                }
+                            } catch (imgErr) {
+                                console.warn("Could not add previous scene image to prompt");
+                            }
                         }
                     }
 
