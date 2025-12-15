@@ -1,6 +1,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import type { ProjectState, Character, Scene, CharacterProp, ScriptPreset } from './types';
+import type { ProjectState, Character, Scene, CharacterProp, ScriptPreset, Product } from './types';
+import { Trash2, Plus } from 'lucide-react';
 import { useHotkeys } from './hooks/useHotkeys';
 import { saveProject, openProject } from './utils/fileUtils';
 import { GoogleGenAI, Modality, Type } from "@google/genai";
@@ -8,6 +9,10 @@ import { PresetSelector } from './components/PresetSelector';
 import { getPresetById } from './utils/scriptPresets';
 import { buildScriptPrompt } from './utils/promptBuilder';
 import { AdvancedImageEditor } from './components/AdvancedImageEditor';
+import Modal from './components/Modal';
+import SingleImageSlot from './components/SingleImageSlot';
+import { CharacterDetailModal } from './components/CharacterDetailModal';
+import { ProductDetailModal } from './components/ProductDetailModal';
 
 // @ts-ignore
 const JSZip = window.JSZip;
@@ -16,8 +21,8 @@ const XLSX = window.XLSX;
 
 
 const APP_NAME = "Khung Ứng Dụng";
-const PRIMARY_GRADIENT = "from-green-500 to-green-300";
-const PRIMARY_GRADIENT_HOVER = "from-green-400 to-green-200";
+const PRIMARY_GRADIENT = "from-orange-600 to-red-600";
+const PRIMARY_GRADIENT_HOVER = "from-orange-500 to-red-500";
 
 const slugify = (text: string): string => {
     return text
@@ -105,6 +110,7 @@ const INITIAL_STATE: ProjectState = {
         isDefault: false,
         isAnalyzing: false,
     })),
+    products: [],
     scenes: [],
 };
 
@@ -186,7 +192,7 @@ const Header: React.FC<HeaderProps> = ({ isSticky, onApiKeyClick, onSave, onOpen
                     <span className="text-xs font-semibold text-gray-300">Khóa Bối Cảnh (Continuity):</span>
                     <button
                         onClick={toggleContinuityMode}
-                        className={`w-10 h-5 flex items-center rounded-full p-1 duration-300 ease-in-out ${isContinuityMode ? 'bg-green-500' : 'bg-gray-600'}`}
+                        className={`w-10 h-5 flex items-center rounded-full p-1 duration-300 ease-in-out ${isContinuityMode ? 'bg-brand-orange' : 'bg-gray-600'}`}
                     >
                         <div className={`bg-white w-3 h-3 rounded-full shadow-md transform duration-300 ease-in-out ${isContinuityMode ? 'translate-x-5' : ''}`}></div>
                     </button>
@@ -227,24 +233,7 @@ const ProjectNameInput: React.FC<ProjectNameInputProps> = ({ value, onChange }) 
     </div>
 );
 
-interface ModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    children: React.ReactNode;
-    title: string;
-}
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title }) => {
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-md m-4 p-6 relative animate-fade-in max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-2xl font-bold mb-4 text-white">{title}</h2>
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors text-2xl">&times;</button>
-                {children}
-            </div>
-        </div>
-    );
-};
+
 
 interface ApiKeyModalProps {
     isOpen: boolean;
@@ -508,12 +497,12 @@ CHARACTER DESCRIPTION:
 ${prompt}
 
 MANDATORY REQUIREMENTS:
-- Background: Pure white or light grey studio background (NO complex scenes, NO environments)
-- Framing: Full body shot, character facing forward or 3/4 view
-- Pose: Clear T-pose or A-pose for character sheet reference
-- Lighting: Even, professional studio lighting with no harsh shadows
-- Quality: Ultra high resolution, 8K, masterpiece quality
-- Consistency: Maintain EXACT style characteristics throughout entire image
+- Background: Solid neutral background (White/Dark Grey) for easy masking.
+- Framing: Full body, clear silhouette.
+- Pose: Standard A-Pose or T-Pose.
+- Lighting: Studio softbox lighting, rim light for separation, high contrast.
+- Quality: 8K, Ultra-Sharp focus, Hyper-detailed texture, Ray-tracing style.
+- Consistency: Unified style, no artifacts, clean lines.
 
 CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate from the specified aesthetic.
             `.trim();
@@ -793,11 +782,12 @@ CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate fr
 interface ScriptGeneratorModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onGenerate: (idea: string, count: number) => Promise<void>;
+    onGenerate: (idea: string, count: number, selectedCharacterIds: string[]) => Promise<void>;
     isGenerating: boolean;
     activePresetId: string;
     customPresets: ScriptPreset[];
     onPresetChange: (presetId: string) => void;
+    characters: Character[]; // New prop
 }
 
 const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
@@ -807,10 +797,25 @@ const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
     isGenerating,
     activePresetId,
     customPresets,
-    onPresetChange
+    onPresetChange,
+    characters
 }) => {
     const [idea, setIdea] = useState('');
     const [sceneCount, setSceneCount] = useState(5);
+    const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
+
+    // Initialize selected characters when modal opens or characters change
+    useEffect(() => {
+        if (isOpen && characters.length > 0) {
+            setSelectedCharacterIds(characters.map(c => c.id));
+        }
+    }, [isOpen, characters.length]);
+
+    const toggleCharacter = (id: string) => {
+        setSelectedCharacterIds(prev =>
+            prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]
+        );
+    };
 
     const handleSubmit = () => {
         if (!idea.trim()) return alert("Vui lòng nhập ý tưởng.");
@@ -820,7 +825,7 @@ const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
         setIdea(''); // Clear input
 
         // Trigger generation in background
-        onGenerate(idea, sceneCount);
+        onGenerate(idea, sceneCount, selectedCharacterIds);
     };
 
     return (
@@ -833,13 +838,39 @@ const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
                     onSelect={onPresetChange}
                 />
 
+                {/* Character Selection */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Nhân vật xuất hiện</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 bg-gray-900/50 rounded-lg border border-gray-700">
+                        {characters.map(char => (
+                            <label key={char.id} className="flex items-center space-x-2 p-2 rounded hover:bg-gray-800 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedCharacterIds.includes(char.id)}
+                                    onChange={() => toggleCharacter(char.id)}
+                                    className="rounded border-gray-600 text-green-500 focus:ring-green-500 bg-gray-700"
+                                />
+                                <div className="flex items-center space-x-2 truncate">
+                                    {char.masterImage ? (
+                                        <img src={char.masterImage} alt="" className="w-6 h-6 rounded-full object-cover" />
+                                    ) : (
+                                        <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center text-xs">{char.name.charAt(0)}</div>
+                                    )}
+                                    <span className="text-sm text-gray-300 truncate">{char.name || 'Unnamed'}</span>
+                                </div>
+                            </label>
+                        ))}
+                        {characters.length === 0 && <span className="text-gray-500 text-sm p-2 col-span-3">Chưa có nhân vật nào.</span>}
+                    </div>
+                </div>
+
                 <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Ý tưởng câu chuyện</label>
                     <textarea
                         value={idea}
                         onChange={(e) => setIdea(e.target.value)}
                         placeholder="VD: Một cuộc rượt đuổi nghẹt thở dưới mưa neon, nhân vật chính bị thương..."
-                        rows={5}
+                        rows={3}
                         className="w-full bg-gray-800 border border-gray-600 rounded-md text-white p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                     <p className="text-xs text-gray-500 mt-1">AI sẽ tính toán Blocking (vị trí đứng), Góc máy (OTS, Low angle) và Khớp nối bối cảnh.</p>
@@ -997,222 +1028,85 @@ const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     <h2 className="text-3xl font-bold text-center mb-8 bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-green-200">{children}</h2>
 );
 
-interface SingleImageSlotProps {
-    label: string;
-    image: string | null;
-    onUpload: (base64: string) => void;
-    onDelete: () => void;
-    onEdit?: () => void;
-    onGenerate?: () => void; // New prop for AI Generation
-    aspect?: 'square' | 'portrait';
-    subLabel?: React.ReactNode;
-    isProcessing?: boolean;
-}
-
-const SingleImageSlot: React.FC<SingleImageSlotProps> = ({ label, image, onUpload, onDelete, onEdit, onGenerate, aspect = 'square', subLabel, isProcessing }) => {
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => onUpload(ev.target?.result as string);
-        reader.readAsDataURL(file);
-        e.target.value = ''; // reset
-    };
-
-    return (
-        <div className="flex flex-col space-y-1 w-full">
-            <div className="flex justify-between items-center">
-                <span className="text-xs font-semibold text-gray-400">{label}</span>
-                {onGenerate && !image && (
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onGenerate(); }}
-                        className="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded flex items-center space-x-1 transition-colors"
-                    >
-                        <span>✨ Tạo bằng AI</span>
-                    </button>
-                )}
-            </div>
-            <div
-                className={`relative border-2 border-dashed border-gray-600 rounded-lg hover:border-gray-500 transition-colors bg-gray-900/50 flex flex-col items-center justify-center cursor-pointer group overflow-hidden w-full ${aspect === 'portrait' ? 'aspect-[3/4]' : 'aspect-square'}`}
-                onClick={() => !image && fileInputRef.current?.click()}
-            >
-                <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-
-                {isProcessing ? (
-                    <div className="absolute inset-0 bg-black/60 z-10 flex items-center justify-center flex-col">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mb-2"></div>
-                        <span className="text-[10px] text-green-400">AI Creating...</span>
-                    </div>
-                ) : image ? (
-                    <>
-                        <img src={image} alt="slot" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity flex-col space-y-2 p-2">
-                            <div className="flex space-x-2">
-                                <button onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} className="p-1.5 bg-blue-600 hover:bg-blue-500 rounded text-white text-xs">Up lại</button>
-                                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 bg-red-600 hover:bg-red-500 rounded text-white text-xs">Xóa</button>
-                            </div>
-                            {onEdit && (
-                                <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="w-full p-1.5 bg-green-600 hover:bg-green-500 rounded text-white text-xs font-semibold flex items-center justify-center">
-                                    ✏️ Sửa ảnh (AI)
-                                </button>
-                            )}
-                        </div>
-                    </>
-                ) : (
-                    <div className="text-center p-2">
-                        <span className="text-2xl text-gray-600">+</span>
-                        {subLabel && <div className="text-[10px] text-gray-500 mt-1">{subLabel}</div>}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
 
 
+// --- Compact Character Card (List View) ---
 interface CharacterCardProps {
     character: Character;
     index: number;
-    updateCharacter: (id: string, updates: Partial<Character>) => void;
     setDefault: (id: string) => void;
-    onMasterUpload: (id: string, image: string) => void;
-    onEditImage: (id: string, image: string, type: 'master' | 'face' | 'body' | 'prop', propIndex?: number) => void;
-    onOpenCharGen: (id: string) => void; // New prop
+    onDelete: () => void;
+    onValuesChange: (id: string, updates: Partial<Character>) => void; // For quick name edit
+    onEdit: () => void; // Opens detail modal
 }
-const CharacterCard: React.FC<CharacterCardProps> = ({ character, index, updateCharacter, setDefault, onMasterUpload, onEditImage, onOpenCharGen }) => {
 
-    const updateProp = (propIndex: number, field: keyof CharacterProp, value: string | null) => {
-        const newProps = [...character.props];
-        newProps[propIndex] = { ...newProps[propIndex], [field]: value };
-        updateCharacter(character.id, { props: newProps });
-    };
-
+const CharacterCard: React.FC<CharacterCardProps> = ({ character, index, setDefault, onDelete, onValuesChange, onEdit }) => {
     return (
-        <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 relative overflow-hidden flex flex-col h-full">
-            {character.isAnalyzing && !character.masterImage && (
-                <div className="absolute inset-0 bg-black/60 z-10 flex items-center justify-center rounded-lg">
-                    <div className="bg-gray-800 p-4 rounded-lg shadow-xl flex items-center space-x-3 border border-green-500/50">
-                        <svg className="animate-spin h-6 w-6 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span className="text-green-400 font-medium animate-pulse">Analyzing...</span>
+        <div
+            onClick={onEdit}
+            className="bg-brand-dark/80 p-4 rounded-lg border border-gray-700 hover:border-brand-orange cursor-pointer transition-all flex items-center space-x-4 relative group animate-fadeIn"
+        >
+            {/* Avatar Preview */}
+            <div className="w-16 h-16 rounded-md bg-gray-900 border border-gray-600 overflow-hidden flex-shrink-0 relative">
+                {character.masterImage ? (
+                    <img src={character.masterImage} alt={character.name} className="w-full h-full object-cover" />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-600 text-2xl font-bold">
+                        {character.name.charAt(0) || '?'}
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Google Labs Workflow Status */}
-            {character.workflowStatus === 'active' && (
-                <div className="absolute inset-0 bg-black/70 z-10 flex items-center justify-center rounded-lg">
-                    <div className="bg-gray-800 p-4 rounded-lg shadow-xl flex items-center space-x-3 border border-blue-500/50">
-                        <svg className="animate-spin h-6 w-6 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span className="text-blue-400 font-medium animate-pulse">⏳ Google Labs đang tạo...</span>
+                {/* Status Indicators */}
+                {character.isAnalyzing && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-orange"></div>
                     </div>
-                </div>
-            )}
-
-            <div className="flex justify-between items-center mb-4">
-                <div className="flex-1 mr-2 relative">
-                    <input
-                        type="text"
-                        placeholder={`Character Name ${index + 1}`}
-                        value={character.name}
-                        onChange={e => updateCharacter(character.id, { name: e.target.value })}
-                        className="w-full bg-transparent text-xl font-bold text-white border-b border-gray-600 focus:border-green-500 outline-none pb-1 placeholder-gray-600"
-                    />
-                </div>
-                <button onClick={() => setDefault(character.id)} title="Đặt làm nhân vật mặc định">
-                    <svg className={`w-6 h-6 transition-colors ${character.isDefault ? 'text-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                </button>
-            </div>
-
-            <textarea
-                placeholder="Mô tả ngắn gọn (VD: Tóc vàng, mắt xanh, áo khoác da...)"
-                value={character.description}
-                onChange={e => updateCharacter(character.id, { description: e.target.value })}
-                rows={2}
-                className="w-full bg-gray-700/50 text-white px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-sm mb-4"
-            />
-
-            {/* MASTER UPLOAD SECTION */}
-            <div className="mb-4">
-                <SingleImageSlot
-                    label="Ảnh Gốc (Master Reference)"
-                    image={character.masterImage}
-                    onUpload={(img) => onMasterUpload(character.id, img)}
-                    onDelete={() => updateCharacter(character.id, { masterImage: null })}
-                    onEdit={character.masterImage ? () => onEditImage(character.id, character.masterImage!, 'master') : undefined}
-                    onGenerate={() => onOpenCharGen(character.id)}
-                    aspect="square"
-                    subLabel="Upload hoặc Tạo AI"
-                    isProcessing={character.isAnalyzing}
-                />
-
-                {/* Analyze Button - Show when master exists but no face/body */}
-                {character.masterImage && (!character.faceImage || !character.bodyImage) && !character.isAnalyzing && !character.workflowStatus && (
-                    <button
-                        onClick={() => onMasterUpload(character.id, character.masterImage!)}
-                        className="w-full mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-all flex items-center justify-center space-x-2"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>🔍 Phân tích → Tạo Face ID + Body</span>
-                    </button>
+                )}
+                {character.workflowStatus === 'active' && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                    </div>
                 )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
-                <SingleImageSlot
-                    label="Gương mặt (Face ID)"
-                    image={character.faceImage}
-                    onUpload={(img) => updateCharacter(character.id, { faceImage: img })}
-                    onDelete={() => updateCharacter(character.id, { faceImage: null })}
-                    onEdit={character.faceImage ? () => onEditImage(character.id, character.faceImage!, 'face') : undefined}
-                    subLabel="Chỉ khuôn mặt"
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+                <input
+                    onClick={(e) => e.stopPropagation()}
+                    type="text"
+                    value={character.name}
+                    onChange={(e) => onValuesChange(character.id, { name: e.target.value })}
+                    placeholder={`Character ${index + 1}`}
+                    className="bg-transparent font-bold text-brand-cream text-lg focus:outline-none focus:border-b border-brand-orange w-full truncate placeholder-gray-600"
                 />
-                <SingleImageSlot
-                    label="Dáng/Trang phục (Body)"
-                    image={character.bodyImage}
-                    onUpload={(img) => updateCharacter(character.id, { bodyImage: img })}
-                    onDelete={() => updateCharacter(character.id, { bodyImage: null })}
-                    onEdit={character.bodyImage ? () => onEditImage(character.id, character.bodyImage!, 'body') : undefined}
-                    aspect="portrait"
-                    subLabel="Toàn thân/Thiết kế"
-                />
+                <p className="text-xs text-gray-400 truncate mt-1">{character.description || "No description"}</p>
             </div>
 
-            <div className="mt-auto">
-                <span className="text-xs font-semibold text-gray-400 block mb-2">Đạo cụ (Props) & Tên gọi (Trigger Word)</span>
-                <div className="grid grid-cols-3 gap-2">
-                    {character.props.map((prop, i) => (
-                        <div key={prop.id} className="flex flex-col space-y-1">
-                            <SingleImageSlot
-                                label=""
-                                image={prop.image}
-                                onUpload={(img) => updateProp(i, 'image', img)}
-                                onDelete={() => updateProp(i, 'image', null)}
-                                onEdit={prop.image ? () => onEditImage(character.id, prop.image!, 'prop', i) : undefined}
-                            />
-                            <input
-                                type="text"
-                                placeholder="Tên (VD: Kiếm)"
-                                value={prop.name}
-                                onChange={(e) => updateProp(i, 'name', e.target.value)}
-                                className="w-full bg-gray-900 border border-gray-600 rounded px-1 py-0.5 text-[10px] text-center text-white focus:border-green-500 outline-none"
-                            />
-                        </div>
-                    ))}
+            {/* Action Buttons */}
+            <div className="flex items-center space-x-2">
+                <button
+                    onClick={(e) => { e.stopPropagation(); setDefault(character.id); }}
+                    className={`p-1 rounded-full hover:bg-gray-700 ${character.isDefault ? 'text-yellow-400' : 'text-gray-600'}`}
+                    title="Set Default"
+                >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                </button>
+                <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                    className="p-1 text-gray-600 hover:text-red-500 rounded-full hover:bg-gray-700"
+                    title="Delete Character"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+                <div className="text-gray-500">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                 </div>
             </div>
         </div>
     );
 };
+
+
 
 // --- Added Missing Components ---
 
@@ -1299,13 +1193,13 @@ const ImageViewerModal: React.FC<ImageViewerModalProps> = ({ isOpen, onClose, sc
                     </div>
 
                     <div className="mt-6 pt-6 border-t border-gray-700">
-                        <label className="text-xs font-bold text-green-400 uppercase mb-2 block">AI Refinement (Sửa ảnh)</label>
+                        <label className="text-xs font-bold text-brand-orange uppercase mb-2 block">AI Refinement (Sửa ảnh)</label>
                         <textarea
                             value={refinePrompt}
                             onChange={(e) => setRefinePrompt(e.target.value)}
                             placeholder="VD: Làm cho trời tối hơn, thêm mưa..."
                             rows={3}
-                            className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-sm text-white focus:border-green-500 mb-3"
+                            className="w-full bg-brand-dark/50 border border-gray-600 rounded p-2 text-sm text-brand-cream focus:border-brand-orange mb-3"
                         />
                         <button
                             onClick={() => onRegenerate(currentScene.id, refinePrompt)}
@@ -1516,6 +1410,7 @@ const App: React.FC = () => {
     const [isCoffeeModalOpen, setCoffeeModalOpen] = useState(false);
     const [isScriptModalOpen, setScriptModalOpen] = useState(false);
     const [genyuModalOpen, setGenyuModalOpen] = useState(false); // New State
+    const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null);
 
     // Initialize API Key from LocalStorage
     const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
@@ -1647,6 +1542,41 @@ const App: React.FC = () => {
         }));
     };
 
+    const addCharacter = () => {
+        const newChar: Character = {
+            id: generateId(),
+            name: '',
+            description: '',
+            masterImage: null,
+            faceImage: null,
+            bodyImage: null,
+            props: [
+                { id: generateId(), name: '', image: null },
+                { id: generateId(), name: '', image: null },
+                { id: generateId(), name: '', image: null },
+            ],
+            isDefault: false,
+            isAnalyzing: false,
+        };
+        updateStateAndRecord(s => ({
+            ...s,
+            characters: [...s.characters, newChar]
+        }));
+    };
+
+    const deleteCharacter = (id: string) => {
+        if (state.characters.length <= 1) {
+            alert("Bạn cần ít nhất 1 nhân vật.");
+            return;
+        }
+        if (confirm("Bạn có chắc muốn xóa nhân vật này?")) {
+            updateStateAndRecord(s => ({
+                ...s,
+                characters: s.characters.filter(c => c.id !== id)
+            }));
+        }
+    };
+
     // --- Polling for Google Labs Workflow (Character Images) ---
     const pollCharacterWorkflows = async (
         charId: string,
@@ -1729,6 +1659,211 @@ const App: React.FC = () => {
                     workflowStatus: 'failed' as const
                 } : c)
             }));
+        }
+    };
+
+    // --- Product Handlers ---
+    const [editingProductId, setEditingProductId] = useState<string | null>(null);
+
+    const addProduct = () => {
+        const newProduct: Product = {
+            id: generateId(),
+            name: '',
+            description: '',
+            masterImage: null,
+            views: { front: null, back: null, left: null, right: null, top: null },
+            isAnalyzing: false
+        };
+        updateStateAndRecord(s => ({ ...s, products: [...(s.products || []), newProduct] }));
+    };
+
+    const deleteProduct = (id: string) => {
+        if (window.confirm('Delete this product?')) {
+            updateStateAndRecord(s => ({ ...s, products: s.products.filter(p => p.id !== id) }));
+        }
+    };
+
+    const updateProduct = (id: string, updates: Partial<Product>) => {
+        updateStateAndRecord(s => ({
+            ...s,
+            products: s.products.map(p => p.id === id ? { ...p, ...updates } : p)
+        }));
+    };
+
+    // Product Image Analysis & Multi-View Generation
+    const handleProductMasterImageUpload = async (id: string, image: string) => {
+        const apiKey = userApiKey || process.env.API_KEY;
+        updateProduct(id, { masterImage: image, isAnalyzing: true });
+
+        if (!apiKey && !state.genyuToken) {
+            updateProduct(id, { isAnalyzing: false });
+            setApiKeyModalOpen(true);
+            return;
+        }
+
+        try {
+            // 1. Analyze Product with Gemini
+            let productName = "";
+            let productDescription = "";
+
+            if (apiKey) {
+                const ai = new GoogleGenAI({ apiKey });
+                let data: string;
+                let mimeType: string = 'image/jpeg';
+
+                if (image.startsWith('data:')) {
+                    const [header, b64] = image.split(',');
+                    mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                    data = b64;
+                } else {
+                    const response = await fetch(image);
+                    const blob = await response.blob();
+                    mimeType = blob.type;
+                    data = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                        reader.readAsDataURL(blob);
+                    });
+                }
+
+                const analyzePrompt = `
+                Analyze this PRODUCT/PROP image. Return JSON:
+                {"name": "Product Name (e.g., Vintage Camera, Magic Sword)", "description": "Detailed physical description: material, color, texture, shape, distinctive features."}
+                `;
+                const analysisRes = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: { parts: [{ inlineData: { data, mimeType } }, { text: analyzePrompt }] },
+                    config: { responseMimeType: "application/json" }
+                });
+                const text = analysisRes.text || '{}';
+                let json = { name: "", description: "" };
+                try {
+                    json = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
+                } catch (e) { console.error("JSON parse error", e); }
+
+                productName = json.name;
+                productDescription = json.description;
+                updateProduct(id, { name: json.name, description: json.description });
+            }
+
+            // 2. Generate 5 Views using Genyu Proxy
+            const genyuToken = state.genyuToken;
+            if (genyuToken) {
+                const viewPrompts = [
+                    { key: 'front', prompt: `Product photography, FRONT VIEW of ${productDescription || 'this product'}. Studio lighting, white background, 8K detail, centered, straight-on angle.` },
+                    { key: 'back', prompt: `Product photography, BACK VIEW of ${productDescription || 'this product'}. Studio lighting, white background, 8K detail, centered, rear angle showing back side.` },
+                    { key: 'left', prompt: `Product photography, LEFT SIDE VIEW of ${productDescription || 'this product'}. Studio lighting, white background, 8K detail, centered, 90-degree left profile.` },
+                    { key: 'right', prompt: `Product photography, RIGHT SIDE VIEW of ${productDescription || 'this product'}. Studio lighting, white background, 8K detail, centered, 90-degree right profile.` },
+                    { key: 'top', prompt: `Product photography, TOP-DOWN VIEW of ${productDescription || 'this product'}. Studio lighting, white background, 8K detail, bird's eye view from directly above.` },
+                ];
+
+                const callProxy = async (prompt: string): Promise<string | null> => {
+                    const res = await fetch('http://localhost:3001/api/proxy/genyu/image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            token: genyuToken,
+                            recaptchaToken: state.recaptchaToken,
+                            prompt: prompt,
+                            aspect: "IMAGE_ASPECT_RATIO_SQUARE", // Square for product views
+                            style: "Product Photography"
+                        })
+                    });
+                    const d = await res.json();
+                    if (!res.ok) { console.error("Proxy Error:", d); return null; }
+
+                    let imgUrl = null;
+                    if (d.media && d.media.length > 0) {
+                        const m = d.media[0];
+                        imgUrl = m.fifeUrl || m.url || m.image?.fifeUrl || m.image?.url;
+                        if (!imgUrl && m.image?.generatedImage?.encodedImage) {
+                            imgUrl = `data:image/jpeg;base64,${m.image.generatedImage.encodedImage}`;
+                        }
+                    }
+                    return imgUrl;
+                };
+
+                // Generate all 5 views in parallel
+                const results = await Promise.all(viewPrompts.map(v => callProxy(v.prompt)));
+
+                const newViews = {
+                    front: results[0],
+                    back: results[1],
+                    left: results[2],
+                    right: results[3],
+                    top: results[4]
+                };
+
+                updateProduct(id, { views: newViews, isAnalyzing: false });
+                console.log("Product Views Generated:", newViews);
+
+            } else {
+                // No Genyu token - just save master and description
+                updateProduct(id, { isAnalyzing: false });
+                alert("Cần Genyu Token để tạo các góc nhìn sản phẩm.");
+            }
+
+        } catch (error) {
+            console.error("Product Analysis Error:", error);
+            updateProduct(id, { isAnalyzing: false });
+        }
+    };
+
+    // Generate Product from Prompt (No Master Image - AI Creates Everything)
+    const handleGenerateProductFromPrompt = async (id: string) => {
+        const product = state.products?.find(p => p.id === id);
+        if (!product || !product.description) {
+            alert("Vui lòng nhập mô tả sản phẩm trước.");
+            return;
+        }
+
+        const genyuToken = state.genyuToken;
+        if (!genyuToken) {
+            alert("Cần Genyu Token để tạo sản phẩm.");
+            setGenyuModalOpen(true);
+            return;
+        }
+
+        updateProduct(id, { isAnalyzing: true });
+
+        try {
+            // Step 1: Generate Master Image from description
+            const masterPrompt = `Professional product photography of ${product.description}. Studio lighting, white background, 8K detail, centered, front view, high quality product shot.`;
+
+            const res = await fetch('http://localhost:3001/api/proxy/genyu/image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token: genyuToken,
+                    recaptchaToken: state.recaptchaToken,
+                    prompt: masterPrompt,
+                    aspect: "IMAGE_ASPECT_RATIO_SQUARE",
+                    style: "Product Photography"
+                })
+            });
+            const d = await res.json();
+
+            let masterImage = null;
+            if (d.media && d.media.length > 0) {
+                const m = d.media[0];
+                masterImage = m.fifeUrl || m.url || m.image?.fifeUrl || m.image?.url;
+                if (!masterImage && m.image?.generatedImage?.encodedImage) {
+                    masterImage = `data:image/jpeg;base64,${m.image.generatedImage.encodedImage}`;
+                }
+            }
+
+            if (masterImage) {
+                updateProduct(id, { masterImage: masterImage });
+                // Trigger 5-view generation
+                await handleProductMasterImageUpload(id, masterImage);
+            } else {
+                updateProduct(id, { isAnalyzing: false });
+                alert("Không thể tạo ảnh sản phẩm. Vui lòng thử lại.");
+            }
+
+        } catch (error) {
+            console.error("Product Generation Error:", error);
+            updateProduct(id, { isAnalyzing: false });
         }
     };
 
@@ -1822,8 +1957,29 @@ const App: React.FC = () => {
                 console.log("Using Google Labs Proxy for Character Gen...");
                 // alert("DEBUG: Starting Google Labs Gen..."); // Temporary Alert
 
-                const facePrompt = `Close up portrait face of ${json.description}. High quality, photorealistic, 8k, neutral background.`;
-                const bodyPrompt = `Full body character view of ${json.description}. Head to toe, high quality, photorealistic, 8k, neutral background.`;
+                const facePrompt = `
+                (STRICT REFERENCE ADHERENCE)
+                Create an extreme close-up Face ID portrait of this character: ${json.description}.
+                
+                STYLE GUIDE:
+                - VISUAL STYLE: Unreal Engine 5 Render, 8K Ultra HD, hyper-detailed texture.
+                - LIGHTING: Studio rim lighting, soft fill, professional photography.
+                - FRAMING: Center frame, neutral expression, looking straight at camera (Passport style).
+                - BACKGROUND: Pure solid dark grey or white background (Clean for masking).
+                - DETAILS: Focus purely on facial features, eyes, skin texture, and hair. Must look exactly like the description.
+                `.trim();
+
+                const bodyPrompt = `
+                (STRICT CHARACTER SHEET)
+                Create a full-body character design sheet for: ${json.description}.
+                
+                STYLE GUIDE:
+                - VISUAL STYLE: Same as Face ID (Unreal Engine 5 Render, 8K).
+                - POSE: Static A-Pose or T-Pose (Best for 3D modeling/Reference).
+                - FRAMING: Full body from head to toe, shoes visible.
+                - BACKGROUND: Solid white studio background. NO complex environment.
+                - OUTFIT: Complete, detailed outfit as described.
+                `.trim();
 
                 // Helper to=call Proxy
                 const callProxy = async (prompt: string, aspect: string): Promise<string | { workflowId: string } | null> => {
@@ -1835,7 +1991,7 @@ const App: React.FC = () => {
                             recaptchaToken: state.recaptchaToken, // Pass dynamic Recaptcha
                             prompt: prompt,
                             aspect: aspect,
-                            style: "Photorealistic"
+                            style: "3D Model / Character Sheet" // Specialized style signal
                         })
                     });
                     const d = await res.json();
@@ -2153,7 +2309,7 @@ const App: React.FC = () => {
         document.getElementById('script-upload-input')?.click();
     };
 
-    const handleGenerateScript = async (idea: string, count: number) => {
+    const handleGenerateScript = async (idea: string, count: number, selectedCharacterIds: string[]) => {
         const apiKey = userApiKey || process.env.API_KEY;
         if (!apiKey) {
             alert("Vui lòng nhập API Key để sử dụng tính năng này.");
@@ -2170,8 +2326,11 @@ const App: React.FC = () => {
                 throw new Error("Preset not found");
             }
 
-            // Build prompt using preset
-            const prompt = buildScriptPrompt(idea, activePreset, state.characters, count);
+            // Filter selected characters
+            const activeCharacters = state.characters.filter(c => selectedCharacterIds.includes(c.id));
+
+            // Build prompt using preset and active characters
+            const prompt = buildScriptPrompt(idea, activePreset, activeCharacters, count);
 
             console.log('🎬 Generating script with preset:', activePreset.name);
             console.log('Prompt:', prompt);
@@ -2289,7 +2448,19 @@ const App: React.FC = () => {
         const styleInstruction = selectedStyle ? selectedStyle.prompt : '';
 
         // Construct basic prompt
-        const finalPrompt = `${styleInstruction}. ${sceneToUpdate.contextDescription}`.trim();
+        let finalPrompt = `${styleInstruction}. ${sceneToUpdate.contextDescription}`.trim();
+
+        // APPEND BASIC CHARACTER & PROP INFO (Fallback for No-API-Key Users)
+        const currentStateSnapshot = stateRef.current;
+        const selectedCharsForPrompt = currentStateSnapshot.characters.filter(c => sceneToUpdate.characterIds.includes(c.id));
+        if (selectedCharsForPrompt.length > 0) {
+            const charDesc = selectedCharsForPrompt.map((c) => {
+                const propsText = c.props?.filter(p => p.image).map((p, idx) => p.name || `Accessory #${idx + 1}`).join(', ');
+                return `[${c.name}: ${c.description}${propsText ? `. WITH PROPS: ${propsText}` : ''}]`;
+            }).join(' ');
+            finalPrompt += `\n\nAppearing Characters: ${charDesc}`;
+            console.log("Updated Base Prompt with Props:", finalPrompt);
+        }
 
         if (!finalPrompt && !refinementPrompt) {
             alert("Vui lòng nhập mô tả bối cảnh.");
@@ -2321,7 +2492,9 @@ const App: React.FC = () => {
                     const selectedChars = currentState.characters.filter(c => sceneToUpdate.characterIds.includes(c.id));
 
                     const characterInstructions = selectedChars.map((c, i) => {
-                        return `- Character ${i + 1} (${c.name}): ${c.description}.`;
+                        const propsText = c.props?.filter(p => p.image).map((p, idx) => p.name || `Accessory #${idx + 1}`).join(', ');
+                        const propsSegment = propsText ? `\n  - equipped with PROPS: ${propsText}` : '';
+                        return `- Character ${i + 1} (${c.name}): ${c.description}.${propsSegment}`;
                     }).join('\n');
 
                     const charNames = selectedChars.map(c => c.name).join(', ') || 'None';
@@ -2343,12 +2516,58 @@ const App: React.FC = () => {
                     ${continuityInstruction}
                     ${refinementPrompt ? `REFINEMENT REQUEST: ${refinementPrompt}` : ''}
 
+                    CRITICAL INSTRUCTION: 
+                    I have provided visual references for the characters and their props. 
+                    Look at the images provided (Face, Body, Props). 
+                    describe the PROPS in extreme detail based on the visual reference. 
+                    If the user uploaded a specific LEGO car, describe it as a "Lego technic car with blue stripes..." etc. matching the image.
+                    Ensure the prompt enforces the presence of these specific props.
+
                     OUTPUT: A single, high-quality, descriptive English prompt for the AI image generator. Focus on visual details, lighting, composition, and mood.
                     `;
 
+                    // Collect Multimodal Parts (Text + Images)
+                    const directorParts: any[] = [{ text: directorPrompt }];
+
+                    selectedChars.forEach((c) => {
+                        if (c.faceImage) {
+                            const [h, d] = c.faceImage.split(',');
+                            const m = h.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                            directorParts.push({ text: `[Visual Ref: ${c.name} Face]` });
+                            directorParts.push({ inlineData: { data: d, mimeType: m } });
+                        }
+                        if (c.bodyImage) {
+                            const [h, d] = c.bodyImage.split(',');
+                            const m = h.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                            directorParts.push({ text: `[Visual Ref: ${c.name} Outfit]` });
+                            directorParts.push({ inlineData: { data: d, mimeType: m } });
+                        }
+                        if (c.props) {
+                            c.props.forEach(p => {
+                                if (p.image) {
+                                    const [h, d] = p.image.split(',');
+                                    const m = h.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                                    directorParts.push({ text: `[Visual Ref: ${c.name} Prop - ${p.name}]` });
+                                    directorParts.push({ inlineData: { data: d, mimeType: m } });
+                                }
+                            });
+                        }
+                    });
+
+                    // Add Previous Scene for Continuity if available
+                    if (isContinuityMode && currentSceneIndex > 0 && currentState.scenes[currentSceneIndex - 1].generatedImage) {
+                        const prevImg = currentState.scenes[currentSceneIndex - 1].generatedImage;
+                        if (prevImg) {
+                            const [h, d] = prevImg.split(',');
+                            const m = h.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                            directorParts.push({ text: `[Visual Ref: Previous Scene Context]` });
+                            directorParts.push({ inlineData: { data: d, mimeType: m } });
+                        }
+                    }
+
                     const enhancementResp = await ai.models.generateContent({
                         model: 'gemini-2.5-flash',
-                        contents: { parts: [{ text: directorPrompt }] }
+                        contents: { parts: directorParts }
                     });
                     finalImagePrompt = enhancementResp.text || finalPrompt;
                 } catch (e) {
@@ -2374,15 +2593,23 @@ const App: React.FC = () => {
                 if (currentState.aspectRatio === "1:1") genyuAspect = "IMAGE_ASPECT_RATIO_SQUARE";
                 if (currentState.aspectRatio === "4:3") genyuAspect = "IMAGE_ASPECT_RATIO_LANDSCAPE"; // Map 4:3 to Landscape
 
+                // Build request body (matching old working code)
+                const requestBody: any = {
+                    token: genyuToken,
+                    prompt: finalImagePrompt,
+                    aspect: genyuAspect,
+                    style: styleInstruction
+                };
+
+                // Only add recaptchaToken if it exists (fallback to server default)
+                if (currentState.recaptchaToken) {
+                    requestBody.recaptchaToken = currentState.recaptchaToken;
+                }
+
                 const response = await fetch('http://localhost:3001/api/proxy/genyu/image', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token: genyuToken,
-                        prompt: finalImagePrompt,
-                        aspect: genyuAspect,
-                        style: styleInstruction
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {
@@ -2489,6 +2716,17 @@ const App: React.FC = () => {
                         const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
                         parts.push({ text: `Reference for ${char.name}'s OUTFIT:` });
                         parts.push({ inlineData: { data, mimeType } });
+                    }
+                    // Inject PROPS references
+                    if (char.props && char.props.length > 0) {
+                        for (const prop of char.props) {
+                            if (prop.image) {
+                                const [header, data] = prop.image.split(',');
+                                const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                                parts.push({ text: `Reference for ${char.name}'s PROP (${prop.name || 'Accessory'}):` });
+                                parts.push({ inlineData: { data, mimeType } });
+                            }
+                        }
                     }
                 }
 
@@ -3012,10 +3250,10 @@ const App: React.FC = () => {
     }, []);
 
     return (
-        <div className="h-screen w-screen bg-gray-900 text-gray-200 overflow-hidden relative">
+        <div className="h-screen w-screen bg-brand-dark text-brand-cream overflow-hidden relative">
             <div className="absolute inset-0 z-0 pointer-events-none">
-                <div className="absolute top-0 left-1/4 w-1/2 h-1/2 bg-green-500/20 rounded-full filter blur-3xl animate-pulse-slow"></div>
-                <div className="absolute bottom-0 right-1/4 w-1/3 h-1/3 bg-green-500/10 rounded-full filter blur-3xl animate-pulse-slow delay-1000"></div>
+                <div className="absolute top-0 left-1/4 w-1/2 h-1/2 bg-brand-orange/20 rounded-full filter blur-3xl animate-pulse-slow"></div>
+                <div className="absolute bottom-0 right-1/4 w-1/3 h-1/3 bg-brand-red/10 rounded-full filter blur-3xl animate-pulse-slow delay-1000"></div>
             </div>
 
             <Header
@@ -3044,13 +3282,103 @@ const App: React.FC = () => {
                                         key={char.id}
                                         character={char}
                                         index={index}
-                                        updateCharacter={updateCharacter}
                                         setDefault={setDefaultCharacter}
-                                        onMasterUpload={handleMasterImageUpload}
-                                        onEditImage={openEditor}
-                                        onOpenCharGen={(id) => setCharGenState({ isOpen: true, charId: id })}
+                                        onDelete={() => deleteCharacter(char.id)}
+                                        onValuesChange={updateCharacter}
+                                        onEdit={() => setEditingCharacterId(char.id)}
                                     />
                                 ))}
+                                {/* Add Character Button */}
+                                <button
+                                    onClick={addCharacter}
+                                    className="bg-gray-800/50 p-6 rounded-lg border-2 border-dashed border-gray-700 hover:border-green-500 hover:bg-gray-800 flex flex-col items-center justify-center min-h-[200px] transition-all group"
+                                >
+                                    <div className="w-16 h-16 rounded-full bg-gray-700 group-hover:bg-brand-orange/20 flex items-center justify-center mb-4 transition-colors">
+                                        <svg className="w-8 h-8 text-gray-500 group-hover:text-brand-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                    </div>
+                                    <span className="text-gray-400 group-hover:text-white font-medium">Thêm Nhân Vật</span>
+                                </button>
+                            </div>
+                        </div>
+
+
+                        {/* --- PRODUCTS & PROPS SECTION --- */}
+                        <div className="my-16">
+                            <SectionTitle>Sản phẩm & Đạo cụ đặc biệt (Product/Props)</SectionTitle>
+                            <p className="text-gray-400 mb-6 text-center">Upload hoặc tạo AI → Tự động sinh 5 góc nhìn (Front, Back, Left, Right, Top).</p>
+                            <div className="grid md:grid-cols-3 gap-6">
+                                {state.products?.map((prod, index) => (
+                                    <div
+                                        key={prod.id}
+                                        className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 hover:border-brand-orange cursor-pointer transition-all relative group"
+                                        onClick={() => setEditingProductId(prod.id)}
+                                    >
+                                        {/* Loading Overlay */}
+                                        {prod.isAnalyzing && (
+                                            <div className="absolute inset-0 bg-black/60 z-10 flex items-center justify-center rounded-lg">
+                                                <div className="bg-gray-800 p-4 rounded-lg shadow-xl flex items-center space-x-3 border border-brand-orange/50">
+                                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-orange"></div>
+                                                    <span className="text-brand-orange font-medium animate-pulse">Đang tạo 5 góc...</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Header */}
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-bold text-brand-cream text-lg truncate flex-1 mr-2">
+                                                {prod.name || `Product ${index + 1}`}
+                                            </h3>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); deleteProduct(prod.id); }}
+                                                className="text-gray-500 hover:text-red-500 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500/10 rounded"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+
+                                        {/* Master Image */}
+                                        <div className="aspect-square bg-gray-900 border border-gray-600 rounded-lg overflow-hidden mb-4 relative">
+                                            {prod.masterImage ? (
+                                                <img src={prod.masterImage} alt={prod.name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex flex-col items-center justify-center text-gray-600">
+                                                    <span className="text-4xl mb-2">📦</span>
+                                                    <span className="text-xs">Click để thêm ảnh</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Description */}
+                                        <p className="text-sm text-gray-400 line-clamp-2 mb-4">{prod.description || "Chưa có mô tả..."}</p>
+
+                                        {/* Mini View Preview */}
+                                        <div className="grid grid-cols-5 gap-1">
+                                            {['front', 'back', 'left', 'right', 'top'].map(key => (
+                                                <div key={key} className="aspect-square bg-gray-900 rounded overflow-hidden border border-gray-700">
+                                                    {prod.views[key as keyof typeof prod.views] ? (
+                                                        <img src={prod.views[key as keyof typeof prod.views]!} alt={key} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-gray-600 text-[8px]">—</div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {/* Add Product Button */}
+                                <button
+                                    onClick={addProduct}
+                                    className="bg-gray-800/50 p-6 rounded-lg border-2 border-dashed border-gray-700 hover:border-brand-orange hover:bg-gray-800/80 flex flex-col items-center justify-center min-h-[300px] transition-all group"
+                                >
+                                    <div className="w-16 h-16 rounded-full bg-gray-700 group-hover:bg-brand-orange/20 flex items-center justify-center mb-4 transition-colors">
+                                        <Plus size={28} className="text-gray-500 group-hover:text-brand-orange" />
+                                    </div>
+                                    <span className="text-gray-400 group-hover:text-white font-medium">Thêm Sản Phẩm / Đạo Cụ</span>
+                                    <span className="text-xs text-gray-500 mt-2">Upload ảnh hoặc tạo bằng AI</span>
+                                </button>
                             </div>
                         </div>
 
@@ -3164,29 +3492,29 @@ const App: React.FC = () => {
 
                         <div className="my-16">
                             <div className="flex justify-between items-center mb-8">
-                                <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-green-200">Bảng trình bày Kịch bản</h2>
+                                <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-orange to-brand-red">Bảng trình bày Kịch bản</h2>
                                 <div className="flex items-center space-x-2">
-                                    <button onClick={handleGenerateAllImages} disabled={isBatchGenerating} className={`px-4 py-2 font-semibold text-white rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed`}>
+                                    <button onClick={handleGenerateAllImages} disabled={isBatchGenerating} className={`px-4 py-2 font-semibold text-brand-cream rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed`}>
                                         {isBatchGenerating ? 'Đang tạo (Tuần tự)...' : '1. Tạo ảnh hàng loạt'}
                                     </button>
-                                    <button onClick={handleGenerateAllVeoPrompts} disabled={isVeoGenerating} className={`px-4 py-2 font-semibold text-white rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 transition-all duration-300 transform hover:scale-105 disabled:opacity-50`}>
+                                    <button onClick={handleGenerateAllVeoPrompts} disabled={isVeoGenerating} className={`px-4 py-2 font-semibold text-brand-cream rounded-lg bg-gradient-to-r from-brand-red to-brand-brown hover:from-brand-orange hover:to-brand-red shadow-lg shadow-brand-red/20 transition-all duration-300 transform hover:scale-105 disabled:opacity-50`}>
                                         {isVeoGenerating ? 'Đang tạo Prompt...' : '2. Tạo Veo Prompts'}
                                     </button>
-                                    <button onClick={handleGenerateAllVideos} disabled={isVideoGenerating} className={`px-4 py-2 font-semibold text-white rounded-lg bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-400 hover:to-orange-400 transition-all duration-300 transform hover:scale-105 disabled:opacity-50`}>
+                                    <button onClick={handleGenerateAllVideos} disabled={isVideoGenerating} className={`px-4 py-2 font-semibold text-brand-cream rounded-lg bg-gradient-to-r from-brand-brown to-brand-orange hover:from-brand-red hover:to-brand-orange shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-105 disabled:opacity-50`}>
                                         {isVideoGenerating ? 'Đang tạo Video...' : '3. Tạo Video (Veo)'}
                                     </button>
                                     <button onClick={() => {
                                         const s = state.scenes;
                                         alert(`Debug Info:\nToken Len: ${state.genyuToken?.length || 0}\nScenes: ${s.length}\nHas MediaId: ${s.filter(x => x.mediaId).length}\nHas Prompt: ${s.filter(x => x.veoPrompt).length}\nHas Video: ${s.filter(x => x.generatedVideo).length}`);
                                         console.log('Scenes:', s);
-                                    }} className="px-2 py-2 text-gray-400 hover:text-white border border-gray-600 rounded">
+                                    }} className="px-2 py-2 text-brand-orange hover:text-brand-cream border border-brand-brown hover:bg-brand-brown/50 rounded transition-colors">
                                         🐞
                                     </button>
-                                    <button onClick={addScene} className={`px-4 py-2 font-semibold text-white rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} transition-all duration-300 transform hover:scale-105`}>+ Thêm Phân đoạn</button>
+                                    <button onClick={addScene} className={`px-4 py-2 font-semibold text-brand-cream rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-105`}>+ Thêm Phân đoạn</button>
                                 </div>
                             </div>
                             <div className="hidden md:grid grid-cols-12 gap-4 px-4 pb-2 text-sm font-bold text-gray-400 border-b-2 border-gray-700">
-                                <div className="col-span-1 text-center relative group">Scene <span className="text-green-400">(?)</span><Tooltip text="Số thứ tự phân cảnh. Tên file ảnh sẽ được đặt theo cột này." /></div>
+                                <div className="col-span-1 text-center relative group">Scene <span className="text-brand-orange">(?)</span><Tooltip text="Số thứ tự phân cảnh. Tên file ảnh sẽ được đặt theo cột này." /></div>
                                 <div className="col-span-2">Script (Lang 1/Viet)</div>
                                 <div className="col-span-2">Tên/Bối cảnh</div>
                                 <div className="col-span-3">Veo Video Prompt <span className="text-blue-400">(New)</span></div>
@@ -3213,7 +3541,7 @@ const App: React.FC = () => {
             </main >
 
             <footer className="absolute bottom-0 left-0 right-0 p-4 text-center text-xs text-gray-600 z-10">
-                Created by <a href="https://ai.fibusvideo.com" target="_blank" rel="noopener noreferrer" className="hover:text-green-400">@Mrsonic30</a>
+                Created by <a href="https://ai.fibusvideo.com" target="_blank" rel="noopener noreferrer" className="hover:text-brand-orange">@Mrsonic30</a>
             </footer>
 
             {
@@ -3261,6 +3589,18 @@ const App: React.FC = () => {
                 activePresetId={state.activeScriptPreset}
                 customPresets={state.customScriptPresets}
                 onPresetChange={(presetId) => updateStateAndRecord(s => ({ ...s, activeScriptPreset: presetId }))}
+                characters={state.characters}
+            />
+            <CharacterDetailModal
+                isOpen={!!editingCharacterId}
+                onClose={() => setEditingCharacterId(null)}
+                character={state.characters.find(c => c.id === editingCharacterId) || null}
+                updateCharacter={updateCharacter}
+                setDefault={setDefaultCharacter}
+                onMasterUpload={handleMasterImageUpload}
+                onEditImage={openEditor}
+                onOpenCharGen={(id) => setCharGenState({ isOpen: true, charId: id })}
+                onDelete={deleteCharacter}
             />
             <CharacterGeneratorModal
                 isOpen={charGenState.isOpen}
@@ -3278,6 +3618,7 @@ const App: React.FC = () => {
                 sourceImage={editingImage?.image || ''}
                 onSave={handleEditorSave}
                 apiKey={userApiKey || process.env.API_KEY || ''}
+                genyuToken={state.genyuToken}
             />
             <ImageViewerModal
                 isOpen={isImageViewerOpen}
@@ -3286,6 +3627,15 @@ const App: React.FC = () => {
                 currentIndex={currentImageIndex}
                 onNavigate={setCurrentImageIndex}
                 onRegenerate={performImageGeneration}
+            />
+            <ProductDetailModal
+                isOpen={!!editingProductId}
+                onClose={() => setEditingProductId(null)}
+                product={state.products?.find(p => p.id === editingProductId) || null}
+                updateProduct={updateProduct}
+                onMasterImageUpload={handleProductMasterImageUpload}
+                onDelete={deleteProduct}
+                onGenerateProduct={handleGenerateProductFromPrompt}
             />
         </div >
     );

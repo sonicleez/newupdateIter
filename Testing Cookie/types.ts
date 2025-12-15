@@ -127,5 +127,21 @@ export interface ProjectState {
   customScriptPresets: ScriptPreset[]; // User-created presets
 
   characters: Character[];
+  products: Product[]; // New: List of Products/Props
   scenes: Scene[];
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  description: string;
+  masterImage: string | null;
+  views: {
+    front: string | null;
+    back: string | null;
+    left: string | null;
+    right: string | null;
+    top: string | null;
+  };
+  isAnalyzing: boolean;
 }

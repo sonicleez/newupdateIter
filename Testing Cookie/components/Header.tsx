@@ -34,7 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="text-xs font-semibold text-gray-300">Khóa Bối Cảnh (Continuity):</span>
                     <button
                         onClick={toggleContinuityMode}
-                        className={`w-10 h-5 flex items-center rounded-full p-1 duration-300 ease-in-out ${isContinuityMode ? 'bg-green-500' : 'bg-gray-600'}`}
+                        className={`w-10 h-5 flex items-center rounded-full p-1 duration-300 ease-in-out ${isContinuityMode ? 'bg-brand-orange' : 'bg-gray-600'}`}
                     >
                         <div className={`bg-white w-3 h-3 rounded-full shadow-md transform duration-300 ease-in-out ${isContinuityMode ? 'translate-x-5' : ''}`}></div>
                     </button>

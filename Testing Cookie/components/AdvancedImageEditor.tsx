@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { DetectedObject, EditHistory, EditingMode } from '../types';
-import { GoogleGenAI, Type } from "@google/genai";
+import React, { useState, useRef, useEffect } from 'react';
+import { Type, GoogleGenAI } from "@google/genai";
+import { X, Undo, Eraser, Brush, Download, Wand2, Image as ImageIcon, History } from 'lucide-react';
+import MaskCanvas, { MaskCanvasHandle } from './MaskCanvas';
 
 interface AdvancedImageEditorProps {
     isOpen: boolean;
@@ -8,6 +9,7 @@ interface AdvancedImageEditorProps {
     sourceImage: string;
     onSave: (editedImage: string) => void;
     apiKey: string;
+    genyuToken?: string;
 }
 
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -17,509 +19,363 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
     onClose,
     sourceImage,
     onSave,
-    apiKey
+    apiKey,
+    genyuToken: genyuTokenProp
 }) => {
-    // State
-    const [editMode, setEditMode] = useState<EditingMode>('remove');
-    const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [isEditing, setIsEditing] = useState(false);
-    const [editPrompt, setEditPrompt] = useState('');
-    const [referenceImage, setReferenceImage] = useState<string | null>(null);
-    const [currentImage, setCurrentImage] = useState(sourceImage);
-    const [history, setHistory] = useState<EditHistory[]>([
-        { id: generateId(), image: sourceImage, timestamp: Date.now(), operation: 'Original' }
-    ]);
+    // Canvas State
+    const canvasRef = useRef<MaskCanvasHandle>(null);
+    const [brushSize, setBrushSize] = useState(20);
+    const [isEraser, setIsEraser] = useState(false);
+    const [prompt, setPrompt] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [maskOpacity, setMaskOpacity] = useState(0.5); // Added based on instruction
+    const [brushRadius, setBrushRadius] = useState(20); // Added based on instruction
 
-    // Object Detection
-    const handleAnalyzeImage = async () => {
-        if (!apiKey) {
-            setError('API Key required');
-            return;
+    // Image State
+    const [currentImage, setCurrentImage] = useState(sourceImage);
+    const [history, setHistory] = useState<{ id: string, image: string, prompt: string }[]>([
+        { id: generateId(), image: sourceImage, prompt: 'Original' }
+    ]);
+
+    // Dimensions for the canvas
+    const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [containerSize, setContainerSize] = useState({ width: 0, height: 0 }); // Added based on instruction
+    const [genyuToken, setGenyuToken] = useState<string | null>(null); // Added based on instruction
+
+    // Load Token from localStorage
+    useEffect(() => {
+        const t = localStorage.getItem('genyuToken');
+        if (t) setGenyuToken(t);
+    }, []);
+
+    // Initial Load & CORS Handling
+    useEffect(() => {
+        if (isOpen && sourceImage) {
+            // Check if image is URL (not base64)
+            if (!sourceImage.startsWith('data:')) {
+                // Preload with CORS to ensure Canvas doesn't get tainted
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.src = sourceImage;
+                img.onload = () => {
+                    // Update state to use this loaded URL (or original if it works)
+                    // We just need to warm the cache or ensure browser accepts it
+                    setCurrentImage(sourceImage);
+                };
+                img.onerror = () => {
+                    // Fallback: Convert to Base64 via Proxy if direct load fails
+                    console.log("Direct load failed, trying proxy for CORS...");
+                    fetch(`http://localhost:3001/api/proxy/fetch-image?url=${encodeURIComponent(sourceImage)}`)
+                        .then(res => res.blob())
+                        .then(blob => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => setCurrentImage(reader.result as string);
+                            reader.readAsDataURL(blob);
+                        })
+                        .catch(err => console.error("Proxy fetch failed:", err));
+                }
+            } else {
+                setCurrentImage(sourceImage);
+            }
+            setHistory([{ id: 'original', image: sourceImage, prompt: 'Original' }]);
+            setMaskOpacity(0.5);
+            setBrushRadius(20);
         }
+    }, [isOpen, sourceImage]);
 
-        setIsAnalyzing(true);
+    // Initial Load & Resize Handler
+    useEffect(() => {
+        if (isOpen && containerRef.current) {
+            const updateDimensions = () => {
+                const { clientWidth, clientHeight } = containerRef.current!;
+                // Maintain aspect ratio of the source image if possible, but fit within container
+                const img = new Image();
+                img.src = currentImage;
+                img.onload = () => {
+                    const aspect = img.width / img.height;
+                    let newWidth = clientWidth;
+                    let newHeight = clientWidth / aspect;
+
+                    if (newHeight > clientHeight) {
+                        newHeight = clientHeight;
+                        newWidth = clientHeight * aspect;
+                    }
+
+                    setDimensions({ width: newWidth, height: newHeight });
+                };
+            };
+
+            updateDimensions();
+            window.addEventListener('resize', updateDimensions);
+            return () => window.removeEventListener('resize', updateDimensions);
+        }
+    }, [isOpen, currentImage]);
+
+    const handleGenerate = async () => {
+        if (!prompt.trim()) return;
+        setIsGenerating(true);
         setError(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey });
+            // 1. Get Mask
+            const maskBase64 = await canvasRef.current?.getMaskDataURL();
+            if (!maskBase64) throw new Error("Failed to generate mask");
 
-            // Extract base64 from data URL
-            const base64Data = currentImage.split(',')[1];
+            const cleanSource = currentImage.split(',')[1];
+            const cleanMask = maskBase64.split(',')[1];
 
-            const prompt = `
-Analyze this image and detect ALL visible objects, people, and elements.
+            // 2. Decide API Route
+            // If valid genyuToken exists, use the Proxy (FX Flow)
+            // Otherwise fallback to Gemini API Key
+            // We verify token format simply here, server does real check
+            const useProxy = !!genyuToken && genyuToken.length > 20;
 
-For each object, provide:
-- name: Object type (person, car, tree, building, etc.)
-- description: Brief visual description  
-- position: Location in image (left/center/right, top/middle/bottom)
+            if (useProxy) {
+                console.log("🚀 Using Genyu API Proxy (FX Flow)...");
+                const response = await fetch('http://localhost:3001/api/proxy/genyu/image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: genyuToken,
+                        prompt: prompt,
+                        image: currentImage, // Send full data URL, server cleans it
+                        mask: maskBase64
+                    })
+                });
 
-Return as JSON array. Be thorough and detect even background objects.
-            `.trim();
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Proxy Error: ${errorText}`);
+                }
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.0-flash-exp',
-                contents: {
-                    parts: [
-                        { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
-                        { text: prompt }
-                    ]
-                },
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                name: { type: Type.STRING },
-                                description: { type: Type.STRING },
-                                position: { type: Type.STRING }
-                            }
-                        }
+                const data = await response.json();
+                console.log("✅ Proxy Response:", data);
+
+                let newImageBase64 = data.image;
+
+                // Handle legacy or direct return fallback
+                if (!newImageBase64) {
+                    // Try old paths just in case server logic missed something or direct pass-through
+                    if (data.images && data.images[0]) {
+                        newImageBase64 = typeof data.images[0] === 'string' ? data.images[0] : data.images[0].imageInput?.content;
+                    } else if (Array.isArray(data) && data[0]) {
+                        newImageBase64 = data[0];
                     }
                 }
-            });
 
-            const objects = JSON.parse(response.text || '[]');
-            const detectedWithIds = objects.map((obj: any) => ({
-                id: generateId(),
-                ...obj,
-                selected: false
-            }));
-
-            setDetectedObjects(detectedWithIds);
-            console.log('✅ Detected objects:', detectedWithIds);
-        } catch (err: any) {
-            console.error('Object detection failed:', err);
-            setError(err.message || 'Failed to analyze image');
-        } finally {
-            setIsAnalyzing(false);
-        }
-    };
-
-    // Object Removal
-    const handleRemoveObjects = async () => {
-        const selectedObjects = detectedObjects.filter(obj => obj.selected);
-
-        if (selectedObjects.length === 0) {
-            setError('Please select objects to remove');
-            return;
-        }
-
-        setIsEditing(true);
-        setError(null);
-
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const base64Data = currentImage.split(',')[1];
-
-            const objectList = selectedObjects.map(obj => `${obj.name} (${obj.description})`).join(', ');
-
-            const prompt = `
-TASK: Remove the following objects from this image:
-${objectList}
-
-REQUIREMENTS:
-- Seamlessly inpaint/fill the removed areas with appropriate background
-- Maintain consistent lighting, shadows, and perspective
-- Preserve all other objects exactly as they are
-- Make the removal look completely natural
-- Keep the same image composition and style
-
-Generate the edited image with specified objects cleanly removed.
-            `.trim();
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: {
-                    parts: [
-                        { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
-                        { text: prompt }
-                    ]
+                if (newImageBase64) {
+                    if (!newImageBase64.startsWith('data:image')) {
+                        newImageBase64 = `data:image/jpeg;base64,${newImageBase64}`;
+                    }
+                    console.log("Setting new image for chain editing...");
+                    setCurrentImage(newImageBase64);
+                    setHistory(prev => [...prev, { id: generateId(), image: newImageBase64!, prompt }]);
+                    // IMPORTANT: Clear the mask so user sees the new image clearly
+                    canvasRef.current?.clear();
+                } else {
+                    console.warn("Could not find image in proxy response", data);
+                    throw new Error("AI generated something, but I couldn't find the image in the response.");
                 }
-            });
 
-            const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-            if (imagePart?.inlineData) {
-                const newImage = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
-                setCurrentImage(newImage);
-
-                // Add to history
-                const newHistoryEntry: EditHistory = {
-                    id: generateId(),
-                    image: newImage,
-                    timestamp: Date.now(),
-                    operation: `Removed: ${selectedObjects.map(o => o.name).join(', ')}`
-                };
-                setHistory([...history, newHistoryEntry]);
-
-                // Clear selection
-                setDetectedObjects(detectedObjects.map(obj => ({ ...obj, selected: false })));
             } else {
-                throw new Error('No image returned from AI');
-            }
-        } catch (err: any) {
-            console.error('Remove failed:', err);
-            setError(err.message || 'Failed to remove objects');
-        } finally {
-            setIsEditing(false);
-        }
-    };
+                // FALLBACK: Pure Gemini API
+                console.log("Using Standard Gemini API...");
+                const ai = new GoogleGenAI({ apiKey });
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash-image',
+                    contents: {
+                        parts: [
+                            { inlineData: { data: cleanSource, mimeType: 'image/jpeg' } },
+                            { inlineData: { data: cleanMask, mimeType: 'image/png' } },
+                            { text: prompt }
+                        ]
+                    }
+                });
 
-    // Style Transfer
-    const handleStyleTransfer = async () => {
-        if (!referenceImage) {
-            setError('Please upload a reference image');
-            return;
-        }
-
-        setIsEditing(true);
-        setError(null);
-
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const sourceBase64 = currentImage.split(',')[1];
-            const refBase64 = referenceImage.split(',')[1];
-
-            const prompt = `
-Apply the artistic style from the reference image (second image) to the source image (first image).
-
-REQUIREMENTS:
-- Transfer visual style, color palette, lighting, and artistic treatment
-- Preserve the content and composition of the source image
-- Match texture and rendering technique
-- Keep all objects and subjects recognizable
-- Apply style consistently across entire image
-
-Generate the source image with the reference image's style applied.
-            `.trim();
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: {
-                    parts: [
-                        { inlineData: { data: sourceBase64, mimeType: 'image/jpeg' } },
-                        { inlineData: { data: refBase64, mimeType: 'image/jpeg' } },
-                        { text: prompt }
-                    ]
+                const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                if (imagePart?.inlineData) {
+                    const newImage = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+                    setCurrentImage(newImage);
+                    setHistory(prev => [...prev, { id: generateId(), image: newImage, prompt }]);
+                    canvasRef.current?.clear(); // Clear mask after successful edit
+                } else {
+                    throw new Error("No image generated from Gemini");
                 }
-            });
-
-            const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-            if (imagePart?.inlineData) {
-                const newImage = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
-                setCurrentImage(newImage);
-
-                const newHistoryEntry: EditHistory = {
-                    id: generateId(),
-                    image: newImage,
-                    timestamp: Date.now(),
-                    operation: 'Style transfer applied'
-                };
-                setHistory([...history, newHistoryEntry]);
-            } else {
-                throw new Error('No image returned from AI');
             }
+
         } catch (err: any) {
-            console.error('Style transfer failed:', err);
-            setError(err.message || 'Failed to apply style');
+            console.error("Edit failed:", err);
+            setError(err.message || "Generation failed");
         } finally {
-            setIsEditing(false);
+            setIsGenerating(false);
         }
     };
 
-    // Text-based editing
-    const handleTextEdit = async () => {
-        if (!editPrompt.trim()) {
-            setError('Please describe what you want to change');
-            return;
-        }
-
-        setIsEditing(true);
-        setError(null);
-
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const base64Data = currentImage.split(',')[1];
-
-            const prompt = `
-Edit this image based on the following instruction:
-"${editPrompt}"
-
-REQUIREMENTS:
-- Follow the instruction precisely
-- Maintain overall image quality and style
-- Make changes look natural and seamless
-- Preserve unaffected areas exactly as they are
-
-Generate the edited image.
-            `.trim();
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: {
-                    parts: [
-                        { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
-                        { text: prompt }
-                    ]
-                }
-            });
-
-            const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-            if (imagePart?.inlineData) {
-                const newImage = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
-                setCurrentImage(newImage);
-
-                const newHistoryEntry: EditHistory = {
-                    id: generateId(),
-                    image: newImage,
-                    timestamp: Date.now(),
-                    operation: editPrompt
-                };
-                setHistory([...history, newHistoryEntry]);
-                setEditPrompt('');
-            } else {
-                throw new Error('No image returned from AI');
-            }
-        } catch (err: any) {
-            console.error('Text edit failed:', err);
-            setError(err.message || 'Failed to edit image');
-        } finally {
-            setIsEditing(false);
-        }
+    const handleUndo = () => {
+        canvasRef.current?.undo();
     };
 
-    // Reference image upload
-    const handleReferenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = () => {
-            setReferenceImage(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-    };
-
-    // Toggle object selection
-    const toggleObject = (id: string) => {
-        setDetectedObjects(detectedObjects.map(obj =>
-            obj.id === id ? { ...obj, selected: !obj.selected } : obj
-        ));
-    };
-
-    // Restore from history
-    const restoreFromHistory = (historyEntry: EditHistory) => {
-        setCurrentImage(historyEntry.image);
-    };
-
-    // Execute edit based on mode
-    const handleExecuteEdit = () => {
-        switch (editMode) {
-            case 'remove':
-                handleRemoveObjects();
-                break;
-            case 'style':
-                handleStyleTransfer();
-                break;
-            case 'text-edit':
-                handleTextEdit();
-                break;
-            default:
-                setError('This editing mode is not yet implemented');
-        }
+    const handleRestoreHistory = (scan: typeof history[0]) => {
+        setCurrentImage(scan.image);
     };
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 rounded-xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-700">
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60]">
+            <div className="bg-[#121212] w-full h-full md:w-[95vw] md:h-[90vh] md:rounded-2xl flex flex-col overflow-hidden relative shadow-2xl border border-gray-800">
+
                 {/* Header */}
-                <div className="flex justify-between items-center p-6 border-b border-gray-700">
-                    <h2 className="text-2xl font-bold text-white">🎨 Advanced Image Editor</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">×</button>
+                <div className="h-16 border-b border-gray-800 flex items-center justify-between px-6 bg-[#1a1a1a]">
+                    <div className="flex items-center space-x-2 text-purple-400">
+                        <Wand2 size={24} />
+                        <span className="font-bold text-lg tracking-wide text-white">CyberMask Studio</span>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                        <button onClick={handleUndo} className="p-2 text-gray-400 hover:text-white transition-colors" title="Undo Mask (Ctrl+Z)">
+                            <Undo size={20} />
+                        </button>
+                        <div className="h-6 w-px bg-gray-700 mx-2"></div>
+                        <button onClick={onClose} className="p-2 text-gray-400 hover:text-red-400 transition-colors">
+                            <X size={24} />
+                        </button>
+                    </div>
                 </div>
 
-                {/* Main Content */}
+                {/* Main Workspace */}
                 <div className="flex-1 flex overflow-hidden">
-                    {/* Left Sidebar - Tools */}
-                    <div className="w-80 bg-gray-800/50 p-4 overflow-y-auto border-r border-gray-700">
-                        <div className="space-y-4">
-                            {/* Mode Selector */}
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-300 mb-2">Editing Mode</label>
-                                <select
-                                    value={editMode}
-                                    onChange={(e) => setEditMode(e.target.value as EditingMode)}
-                                    className="w-full bg-gray-700 text-white px-3 py-2 rounded-md border border-gray-600"
+
+                    {/* Left: History & Reference */}
+                    <div className="w-20 md:w-64 bg-[#151515] border-r border-gray-800 flex flex-col">
+                        <div className="p-4 border-b border-gray-800 text-gray-400 text-xs font-bold uppercase tracking-wider">History</div>
+                        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                            {history.map((scan, i) => (
+                                <div
+                                    key={scan.id}
+                                    onClick={() => handleRestoreHistory(scan)}
+                                    className={`p-2 rounded-lg cursor-pointer transition-all border ${currentImage === scan.image ? 'border-purple-500 bg-purple-500/10' : 'border-transparent hover:bg-gray-800'}`}
                                 >
-                                    <option value="remove">🗑️ Remove Objects</option>
-                                    <option value="text-edit">✏️ Text Edit</option>
-                                    <option value="style">🎨 Style Transfer</option>
-                                    <option value="add">➕ Add Objects (Soon)</option>
-                                    <option value="inpaint">🖌️ Inpaint (Soon)</option>
-                                </select>
-                            </div>
-
-                            {/* Object Detection */}
-                            {editMode === 'remove' && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <label className="text-sm font-semibold text-gray-300">Detected Objects</label>
-                                        <button
-                                            onClick={handleAnalyzeImage}
-                                            disabled={isAnalyzing}
-                                            className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded disabled:opacity-50"
-                                        >
-                                            {isAnalyzing ? 'Analyzing...' : '🔍 Analyze'}
-                                        </button>
-                                    </div>
-
-                                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                                        {detectedObjects.length === 0 ? (
-                                            <p className="text-sm text-gray-500 italic">Click "Analyze" to detect objects</p>
-                                        ) : (
-                                            detectedObjects.map(obj => (
-                                                <label key={obj.id} className="flex items-start space-x-2 p-2 bg-gray-700/50 rounded cursor-pointer hover:bg-gray-700">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={obj.selected || false}
-                                                        onChange={() => toggleObject(obj.id)}
-                                                        className="mt-1"
-                                                    />
-                                                    <div className="flex-1">
-                                                        <div className="text-sm font-medium text-white">{obj.name}</div>
-                                                        <div className="text-xs text-gray-400">{obj.description}</div>
-                                                        <div className="text-xs text-gray-500">{obj.position}</div>
-                                                    </div>
-                                                </label>
-                                            ))
-                                        )}
-                                    </div>
+                                    <img src={scan.image} className="w-full h-24 object-cover rounded mb-2 bg-black" />
+                                    <div className="hidden md:block text-xs text-gray-400 truncate">{i === 0 ? 'Original' : scan.prompt}</div>
                                 </div>
-                            )}
+                            ))}
+                        </div>
+                    </div>
 
-                            {/* Text Edit Input */}
-                            {editMode === 'text-edit' && (
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-300 mb-2">Describe Changes</label>
-                                    <textarea
-                                        value={editPrompt}
-                                        onChange={(e) => setEditPrompt(e.target.value)}
-                                        placeholder="E.g., Change sky to sunset, remove watermark, make colors more vibrant..."
-                                        rows={4}
-                                        className="w-full bg-gray-700 text-white px-3 py-2 rounded-md border border-gray-600"
-                                    />
-                                </div>
-                            )}
+                    {/* Center: Canvas */}
+                    <div className="flex-1 bg-[#0a0a0a] flex flex-col relative">
 
-                            {/* Reference Image Upload */}
-                            {editMode === 'style' && (
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-300 mb-2">Reference Image</label>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleReferenceUpload}
-                                        className="hidden"
-                                        id="ref-upload"
-                                    />
-                                    <label
-                                        htmlFor="ref-upload"
-                                        className="block w-full p-4 border-2 border-dashed border-gray-600 rounded-lg text-center cursor-pointer hover:border-purple-500"
-                                    >
-                                        {referenceImage ? (
-                                            <img src={referenceImage} alt="Reference" className="w-full h-32 object-cover rounded" />
-                                        ) : (
-                                            <div className="text-gray-400">
-                                                <div className="text-2xl mb-1">📤</div>
-                                                <div className="text-sm">Click to upload reference</div>
-                                            </div>
-                                        )}
-                                    </label>
-                                    {referenceImage && (
-                                        <button
-                                            onClick={() => setReferenceImage(null)}
-                                            className="w-full mt-2 px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-sm rounded"
-                                        >
-                                            Clear Reference
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Execute Button */}
+                        {/* Floating Toolbar */}
+                        <div className="absolute top-6 left-1/2 transform -translate-x-1/2 bg-[#1a1a1a]/90 backdrop-blur border border-gray-700 rounded-full px-6 py-3 flex items-center space-x-6 shadow-2xl z-20">
                             <button
-                                onClick={handleExecuteEdit}
-                                disabled={isEditing}
-                                className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-lg disabled:opacity-50"
+                                onClick={() => setIsEraser(false)}
+                                className={`flex flex-col items-center space-y-1 ${!isEraser ? 'text-purple-400' : 'text-gray-500 hover:text-gray-300'}`}
                             >
-                                {isEditing ? '⏳ Processing...' : '✨ Apply Edit'}
+                                <Brush size={20} />
+                                <span className="text-[10px] font-bold">Brush</span>
                             </button>
 
-                            {/* Error Display */}
-                            {error && (
-                                <div className="p-3 bg-red-900/50 border border-red-500 rounded text-red-200 text-sm">
-                                    {error}
-                                </div>
-                            )}
+                            <button
+                                onClick={() => canvasRef.current?.clear()}
+                                className="flex flex-col items-center space-y-1 text-gray-500 hover:text-red-400"
+                            >
+                                <Eraser size={20} />
+                                <span className="text-[10px] font-bold">Clear</span>
+                            </button>
 
-                            {/* History */}
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-300 mb-2">📚 Edit History ({history.length})</label>
-                                <div className="space-y-2 max-h-48 overflow-y-auto">
-                                    {history.slice().reverse().map((entry, index) => (
-                                        <button
-                                            key={entry.id}
-                                            onClick={() => restoreFromHistory(entry)}
-                                            className="w-full flex items-center space-x-2 p-2 bg-gray-700/50 rounded hover:bg-gray-700 text-left"
-                                        >
-                                            <img src={entry.image} alt="" className="w-12 h-12 object-cover rounded" />
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-xs font-medium text-white truncate">{entry.operation}</div>
-                                                <div className="text-xs text-gray-500">{new Date(entry.timestamp).toLocaleTimeString()}</div>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
+                            <div className="w-px h-8 bg-gray-700"></div>
+
+                            <div className="flex items-center space-x-3">
+                                <span className="text-xs text-gray-400">Size</span>
+                                <input
+                                    type="range"
+                                    min="5"
+                                    max="100"
+                                    value={brushSize}
+                                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                                    className="w-24 accent-purple-500"
+                                />
+                                <span className="text-xs w-6 text-right text-gray-500">{brushSize}</span>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Center - Image Preview */}
-                    <div className="flex-1 p-6 flex flex-col items-center justify-center bg-gray-900">
-                        <div className="max-w-full max-h-full flex items-center justify-center">
-                            <img
-                                src={currentImage}
-                                alt="Current"
-                                className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl"
+                        {/* Canvas Container */}
+                        <div className="flex-1 flex items-center justify-center p-8 overflow-hidden" ref={containerRef}>
+                            <MaskCanvas
+                                ref={canvasRef}
+                                image={currentImage}
+                                width={dimensions.width}
+                                height={dimensions.height}
+                                brushRadius={brushSize / 2}
+                                brushColor={isEraser ? "#00000000" : "rgba(168, 85, 247, 0.6)"} // Transparent for eraser (hacky), purple opacity for brush
+                            // Note: react-canvas-draw eraser mode is handled via props usually, but we might check docs
+                            // Actually, react-canvas-draw doesn't support 'eraser' mode easily without a specific prop.
+                            // Workaround: We might need to implement eraser by drawing with destination-out globalCompositeOperation if we built raw canvas.
+                            // For react-canvas-draw, we can just "Undo" for now or use white brush then filter? 
+                            // Proper Fix: CanvasDraw has no eraser. Use Undo.
+                            // BETTER: We can just support Undo for MVP. 
+                            // OR: Pass `brushColor="#000000"` to paint black (which is 'no mask') IF we treat black as transparent.
+                            // BUT: Our mask is white = edit. So painting black = erase mask.
+                            // Yes: Painting black in the mask layer effectively removes the mask.
+                            // So Eraser = Brush with black color.
                             />
+                            {/* Eraser Logic Patch: If isEraser, set brushColor to transparent? No, that draws nothing.
+                                We want to ERASE the purple strokes.
+                                React-canvas-draw is additive.
+                                We will stick to Undo for now or implement a 'Clear' button.
+                                For user fidelity, let's change eraser button to 'Clear Mask' for MVP.
+                             */}
                         </div>
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="flex justify-end space-x-3 p-4 border-t border-gray-700">
+                {/* Bottom Bar: Prompt */}
+                <div className="p-6 bg-[#1a1a1a] border-t border-gray-800 flex items-center justify-center space-x-4">
+                    <div className="max-w-3xl w-full relative">
+                        <input
+                            type="text"
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+                            placeholder="Describe what to change in the highlighted area..."
+                            className="w-full bg-[#0d0d0d] border border-gray-700 rounded-lg py-4 pl-6 pr-32 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-inner text-lg"
+                        />
+                        <div className="absolute right-2 top-2 bottom-2">
+                            <button
+                                onClick={handleGenerate}
+                                disabled={isGenerating || !prompt}
+                                className="h-full px-6 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-md shadow-lg transform transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                            >
+                                {isGenerating ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        <span>Working...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Wand2 size={18} />
+                                        <span>Generate</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
                     <button
-                        onClick={onClose}
-                        className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+                        onClick={() => { onSave(currentImage); onClose(); }}
+                        className="h-14 px-6 bg-brand-orange hover:bg-brand-red text-brand-cream font-bold rounded-lg shadow flex items-center space-x-2"
                     >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={() => {
-                            onSave(currentImage);
-                            onClose();
-                        }}
-                        className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-bold rounded-lg"
-                    >
-                        ✅ Save & Apply
+                        <Download size={20} />
+                        <span>Save</span>
                     </button>
                 </div>
+
+                {error && (
+                    <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 bg-red-500/90 text-white px-6 py-3 rounded-full shadow-xl animate-bounce">
+                        ⚠️ {error}
+                    </div>
+                )}
             </div>
         </div>
     );

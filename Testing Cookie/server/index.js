@@ -73,8 +73,51 @@ app.post('/api/proxy/genyu/image', async (req, res) => {
     // Use provided Recaptcha or fallback
     const RECAPTCHA_TOKEN = recaptchaToken || "0cAFcWeA72-Q4udY92nSYo5u7IrOT_j0i95CNLsnp95Hd44041WFn15bVYwTLWS5HKeolnilFX1a0I90OQ1MTMDI31DlNl8d1yCBi8rGlPxyDIfAXDIzcoBj2j7dm8DFGldWYV7yaL0FhSIwWDUa8akadIFSefpdf6JNHgCdnoUgh3bP9zAmycGKhcQV1X8QSOGEz4OjU6HBBbpMqCozYtFVD8YIhb94ze6reOvjmcjPI9XaJXWyxbsYuHO6CPUd1ezZLQ6hHPbj0st3IPL1dsSaLeeltBzMifUA8QS5Ckw_0xemsOgk4ckJd7CRZIiF-x5fPgKlQtDMOtjba_zIxCh1UiltIBxwBe722koxfUm92G0Rl8D4-kp-q8Ja6J-KFGmIWm9Y82SlrmTLBD7sIsOmkUn6gNZjdw6maIA5dDxjdER99Wad3Uqyb-zagDLcZMBXsVfTozC2vTLTze1M2loblwQT_gFWKHMWTpPw2vZ9Msf1YU7HkyrPzJFizms8eUn3gclsPJj-wCzRRDlj7zWfaKyR3lFOFs8U8h_02vXPqsi7gCnBp8bGkoEgiekJCkIESdayQtWM0UK2Xn00jiWBWUQ-NMR_v-JRgHMrNKbucmogDUUTICPvVjbbdTnFjzgz2VUuOrpeEw8ivYrO3zksPXRdsEy_hhN1RYWd46VXfITnZvNfsCLvyJVOYkYoaaJa12j3UI4zaVfVDwxBzvU8r8EIszHVFkTFYhvVVp0dGJKEeV75bISm90Ba2KKr_-NBZC5gdQUebN_twYI2SmKitmO3CKU7ll0TgYykqc8JyR4jbbxBx-DeyopNbCkZa8rJovkA1JTHooyhxJ-kzmyikK7R_lKcL7KLoZNtPF1m9pdwArA0km-Un8nEzzUA42fDrdDtyIZ-lLvBLBT7qDTYitbHKi_8zdUsrH9ziUJgdo5HN3YI5eW4E-2dYAdvAiQwUhiJS0v98MP6c1VAbHfazwX0kUB-dL4KjPFLUKbxfYwuLGRjRPRyRriwcj5D5uivxrFWWVrgFBUHl3C11-DD31KlkiouExuM4ivadmtYeVgZV7hgwJECdGy5sdpzswh2hf10N-RFmuBuHo54UNQLEvScUlPVd9lfgWNojX_HyAgWFCRQnaHBn37fwvSkhkIwamjxDfbJCNNv-mbpqCejVsNyz3LPcUYF2vcRWZumt391u1iaewEKtWDwEIxoegznjaU34QzVAl0cCEfKVbftzkj91V53EZggNcfigFXhTpf2dCOHxW0TFPKCT3Ik4yfu4T2bW_PCvU9UpHPr3RPxmrOtmoZVHw97DlHQ9gVU7tjgJhvWIbVf_7VaneOD2pk9X3SgdkdsdCtA2lX4s-1iEeavQynj1c8NNTRaSenzBZXUFjJGv-H4OX682RW5ZyJZ40I65sLfBht40SeVfzIvld3Ufk4JER63mgo2R4ZRNbPQjvoXh5JkLIuS6EpN2ohfweorDl3Obcm3Cj1UqM8z5Cs6ih0vfQyn5uy6MBJFMSYPhrx4yEEnnAHEEVFzg9fHDmeH3Hw-w2-gFOFpl4tBI_MPKB2eMAdXeVFiHyFhx1XFpOmBbuGwxmor20FF8jXhwEYoX2KLxP";
 
-    // Construct Complex Payload for Google Labs
-    const fullPrompt = prompt + (style ? `, ${style}` : "");
+    // Construct Image Inputs if provided
+    const imageInputs = [];
+
+    // Helper to clean base64
+    const cleanBase64 = (str) => str.includes(',') ? str.split(',')[1] : str;
+
+    if (req.body.image) {
+        imageInputs.push({
+            "imageInput": {
+                "content": cleanBase64(req.body.image),
+                "mimeType": "image/jpeg" // Assumption
+            }
+        });
+    }
+
+    if (req.body.mask) {
+        // Assuming Pinhole expects the mask as a separate input or part of imageInput?
+        // Based on similar APIs, usually it's a separate input mapped to 'mask' role or similar.
+        // However, without exact docs, let's try pushing it as another input or check if 'maskInput' key exists.
+        // Let's try appending to the first input if it supports it, OR separate input.
+        // Given "imageInputs" is an array, let's try adding it as a second item for now, 
+        // but logic suggests it might need to be paired.
+        // Let's TRY generic approach:
+        imageInputs.push({
+            "imageInput": { // Using imageInput key for mask as well often works if they are just ordered inputs
+                "content": cleanBase64(req.body.mask),
+                "mimeType": "image/png"
+            }
+        });
+    }
+
+    // Process Props (Reference Images)
+    if (req.body.props && Array.isArray(req.body.props)) {
+        req.body.props.forEach(propBase64 => {
+            if (propBase64) {
+                imageInputs.push({
+                    "imageInput": {
+                        "content": cleanBase64(propBase64),
+                        "mimeType": "image/jpeg"
+                    }
+                });
+            }
+        });
+    }
+
     const googlePayload = {
         "clientContext": {
             "recaptchaToken": RECAPTCHA_TOKEN,
@@ -93,8 +136,8 @@ app.post('/api/proxy/genyu/image', async (req, res) => {
                 "seed": Math.floor(Math.random() * 1000000),
                 "imageModelName": "GEM_PIX_2",
                 "imageAspectRatio": aspect,
-                "prompt": fullPrompt,
-                "imageInputs": []
+                "prompt": prompt,
+                "imageInputs": imageInputs
             }
         ]
     };
@@ -115,14 +158,51 @@ app.post('/api/proxy/genyu/image', async (req, res) => {
         // Labs Google Response format logic
         console.log("Google Labs Response:", JSON.stringify(response.data, null, 2));
 
-        // Expected structure from Fx Flow is usually base64 or a weird list. 
-        // We log it to find out.
+        // EXTRACT IMAGE LOGIC (Normalize Response)
+        let foundBase64 = null;
+
+        // Pattern 1: { responses: [ { image: { content: "..." } } ] } (Common Pinhole)
+        if (response.data.responses?.[0]?.image?.content) {
+            foundBase64 = response.data.responses[0].image.content;
+        }
+        // Pattern 2: { generatedImages: [ { image: { content: "..." } } ] }
+        else if (response.data.generatedImages?.[0]?.image?.content) {
+            foundBase64 = response.data.generatedImages[0].image.content;
+        }
+        // Pattern 3: { images: [ "..." ] }
+        else if (response.data.images?.[0]) {
+            foundBase64 = typeof response.data.images[0] === 'string'
+                ? response.data.images[0]
+                : response.data.images[0].content;
+        }
+        // Pattern 4: Direct image object
+        else if (response.data.image?.content) {
+            foundBase64 = response.data.image.content;
+        }
+
+        if (foundBase64) {
+            // Ensure Data URI Prefix
+            const finalImage = foundBase64.startsWith('data:image')
+                ? foundBase64
+                : `data:image/jpeg;base64,${foundBase64}`;
+
+            return res.json({ image: finalImage });
+        }
+
+        // If we can't find an image, return raw data for debug, but log warning
+        console.warn("❌ Could not extract image from response.");
         res.json(response.data);
 
     } catch (error) {
-        console.error("Labs Google Proxy Error:", error.response?.data || error.message);
+        console.error("❌ Labs Google Proxy Error:");
+        console.error("   Status:", error.response?.status);
+        console.error("   Status Text:", error.response?.statusText);
+        console.error("   Error Data:", JSON.stringify(error.response?.data, null, 2));
+        console.error("   Error Message:", error.message);
+
         res.status(500).json({
             error: "Labs Google API Failed",
+            status: error.response?.status,
             details: error.response?.data || error.message
         });
     }

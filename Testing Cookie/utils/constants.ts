@@ -2,8 +2,8 @@ import type { ProjectState } from '../types';
 
 // --- APP CONFIG ---
 export const APP_NAME = "Khung Ứng Dụng";
-export const PRIMARY_GRADIENT = "from-green-500 to-green-300";
-export const PRIMARY_GRADIENT_HOVER = "from-green-400 to-green-200";
+export const PRIMARY_GRADIENT = "from-brand-orange to-brand-red";
+export const PRIMARY_GRADIENT_HOVER = "from-brand-orange/80 to-brand-red/80";
 
 // --- GLOBAL STYLES ---
 export const GLOBAL_STYLES = [
@@ -96,5 +96,8 @@ export const createInitialState = (): ProjectState => ({
         isDefault: false,
         isAnalyzing: false,
     })),
+    products: [], // Initialize empty product list
     scenes: [],
+    activeScriptPreset: 'film-director', // Default preset
+    customScriptPresets: [],
 });
