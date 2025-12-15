@@ -1,4 +1,4 @@
-import { ScriptPreset, Character } from '../types';
+import { ScriptPreset, Character, Product } from '../types';
 
 /**
  * Build AI prompt for script generation based on selected preset
@@ -7,6 +7,7 @@ export function buildScriptPrompt(
     userIdea: string,
     preset: ScriptPreset,
     characters: Character[],
+    products: Product[],
     sceneCount: number
 ): string {
     // Filter characters with names
@@ -18,9 +19,23 @@ export function buildScriptPrompt(
         ? JSON.stringify(availableCharacters, null, 2)
         : 'Không có nhân vật được định nghĩa.';
 
+    // Filter products with names
+    const availableProducts = products
+        .filter(p => p.name.trim() !== '')
+        .map(p => ({ name: p.name, id: p.id, description: p.description }));
+
+    const productListString = availableProducts.length > 0
+        ? JSON.stringify(availableProducts, null, 2)
+        : null;
+
     // Build character instructions based on preset
     const characterInstructions = preset.outputFormat.hasDialogue && availableCharacters.length > 0
         ? `\n**AVAILABLE CHARACTERS:**\n${characterListString}\n\nSử dụng các nhân vật này trong script. Trả về 'character_ids' cho nhân vật XUẤT HIỆN trong cảnh.`
+        : '';
+
+    // Build product instructions
+    const productInstructions = productListString
+        ? `\n**AVAILABLE PRODUCTS/PROPS:**\n${productListString}\n\nĐây là các sản phẩm/đạo cụ có thể xuất hiện trong cảnh. Trả về 'product_ids' cho sản phẩm XUẤT HIỆN trong cảnh. Mô tả chi tiết cách sản phẩm xuất hiện trong visual_context.`
         : '';
 
     // Build output format instructions based on preset
@@ -42,10 +57,11 @@ export function buildScriptPrompt(
     }
 
     outputFormatInstructions += `
-- "visual_context": "Mô tả hình ảnh chi tiết cho AI image generation"
+- "visual_context": "Mô tả hình ảnh chi tiết cho AI image generation (bao gồm cả sản phẩm/đạo cụ nếu có)"
 - "scene_number": "1", "2", "3", ...
 - "prompt_name": "Tiêu đề ngắn gọn của cảnh"
 - "character_ids": ["id1", "id2"] (array of character IDs visible in scene, empty [] if no characters)
+- "product_ids": ["id1"] (array of product IDs visible in scene, empty [] if no products)
 `;
 
     // Full prompt construction
@@ -58,6 +74,7 @@ ${preset.systemPrompt}
 "${userIdea}"
 
 ${characterInstructions}
+${productInstructions}
 
 ---
 

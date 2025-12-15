@@ -1036,35 +1036,30 @@ interface CharacterCardProps {
     index: number;
     setDefault: (id: string) => void;
     onDelete: () => void;
-    onValuesChange: (id: string, updates: Partial<Character>) => void; // For quick name edit
-    onEdit: () => void; // Opens detail modal
+    onValuesChange: (id: string, updates: Partial<Character>) => void;
+    onEdit: () => void;
 }
 
 const CharacterCard: React.FC<CharacterCardProps> = ({ character, index, setDefault, onDelete, onValuesChange, onEdit }) => {
     return (
         <div
             onClick={onEdit}
-            className="bg-brand-dark/80 p-4 rounded-lg border border-gray-700 hover:border-brand-orange cursor-pointer transition-all flex items-center space-x-4 relative group animate-fadeIn"
+            className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 hover:border-brand-orange cursor-pointer transition-all flex items-center space-x-4 relative group"
         >
             {/* Avatar Preview */}
-            <div className="w-16 h-16 rounded-md bg-gray-900 border border-gray-600 overflow-hidden flex-shrink-0 relative">
+            <div className="w-14 h-14 rounded-lg bg-gray-900 border border-gray-600 overflow-hidden flex-shrink-0 relative">
                 {character.masterImage ? (
                     <img src={character.masterImage} alt={character.name} className="w-full h-full object-cover" />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-600 text-2xl font-bold">
-                        {character.name.charAt(0) || '?'}
+                    <div className="w-full h-full flex items-center justify-center text-gray-600 text-xl font-bold">
+                        {character.name.charAt(0) || '👤'}
                     </div>
                 )}
 
-                {/* Status Indicators */}
-                {character.isAnalyzing && (
+                {/* Loading Indicator */}
+                {(character.isAnalyzing || character.workflowStatus === 'active') && (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-orange"></div>
-                    </div>
-                )}
-                {character.workflowStatus === 'active' && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
                     </div>
                 )}
             </div>
@@ -1077,30 +1072,27 @@ const CharacterCard: React.FC<CharacterCardProps> = ({ character, index, setDefa
                     value={character.name}
                     onChange={(e) => onValuesChange(character.id, { name: e.target.value })}
                     placeholder={`Character ${index + 1}`}
-                    className="bg-transparent font-bold text-brand-cream text-lg focus:outline-none focus:border-b border-brand-orange w-full truncate placeholder-gray-600"
+                    className="bg-transparent font-bold text-brand-cream focus:outline-none focus:border-b border-brand-orange w-full truncate placeholder-gray-600"
                 />
-                <p className="text-xs text-gray-400 truncate mt-1">{character.description || "No description"}</p>
+                <p className="text-xs text-gray-400 truncate mt-0.5">{character.description || "No description"}</p>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
                 <button
                     onClick={(e) => { e.stopPropagation(); setDefault(character.id); }}
-                    className={`p-1 rounded-full hover:bg-gray-700 ${character.isDefault ? 'text-yellow-400' : 'text-gray-600'}`}
+                    className={`p-1.5 rounded hover:bg-gray-700 transition-colors ${character.isDefault ? 'text-yellow-400' : 'text-gray-600 opacity-0 group-hover:opacity-100'}`}
                     title="Set Default"
                 >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                    className="p-1 text-gray-600 hover:text-red-500 rounded-full hover:bg-gray-700"
-                    title="Delete Character"
+                    className="p-1.5 text-gray-600 hover:text-red-500 rounded hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
                 >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    <Trash2 size={14} />
                 </button>
-                <div className="text-gray-500">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                </div>
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
             </div>
         </div>
     );
@@ -1221,17 +1213,19 @@ const ImageViewerModal: React.FC<ImageViewerModalProps> = ({ isOpen, onClose, sc
     );
 };
 
+
 interface SceneRowProps {
     scene: Scene;
     index: number;
     characters: Character[];
+    products: Product[];
     updateScene: (id: string, updates: Partial<Scene>) => void;
     removeScene: (id: string) => void;
     generateImage: () => void;
     openImageViewer: () => void;
 }
 
-const SceneRow: React.FC<SceneRowProps> = ({ scene, index, characters, updateScene, removeScene, generateImage, openImageViewer }) => {
+const SceneRow: React.FC<SceneRowProps> = ({ scene, index, characters, products, updateScene, removeScene, generateImage, openImageViewer }) => {
     return (
         <div className="grid md:grid-cols-12 gap-4 items-start bg-gray-800/30 p-4 rounded-lg border border-gray-700 hover:border-gray-500 transition-all group/row">
             {/* Scene Number */}
@@ -1293,11 +1287,13 @@ const SceneRow: React.FC<SceneRowProps> = ({ scene, index, characters, updateSce
                 />
             </div>
 
-            {/* Characters */}
-            <div className="md:col-span-1 h-[160px] overflow-y-auto space-y-1 bg-gray-900/50 p-2 rounded border border-gray-700 custom-scrollbar">
-                {characters.map(char => (
-                    <label key={char.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-800 p-1 rounded group/char">
-                        <div className="relative flex items-center">
+            {/* Characters & Products */}
+            <div className="md:col-span-1 h-[160px] flex flex-col space-y-1 overflow-hidden">
+                {/* Characters Section */}
+                <div className="flex-1 overflow-y-auto space-y-0.5 bg-gray-900/50 p-1.5 rounded border border-gray-700 custom-scrollbar">
+                    <div className="text-[8px] text-gray-500 font-semibold mb-0.5 sticky top-0 bg-gray-900/90 px-1">👤 Nhân vật</div>
+                    {characters.map(char => (
+                        <label key={char.id} className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-800 p-0.5 rounded">
                             <input
                                 type="checkbox"
                                 checked={scene.characterIds.includes(char.id)}
@@ -1307,15 +1303,36 @@ const SceneRow: React.FC<SceneRowProps> = ({ scene, index, characters, updateSce
                                         : scene.characterIds.filter(id => id !== char.id);
                                     updateScene(scene.id, { characterIds: newIds });
                                 }}
-                                className="peer h-3 w-3 cursor-pointer appearance-none rounded border border-gray-600 bg-gray-700 checked:border-green-500 checked:bg-green-500 transition-all"
+                                className="h-2.5 w-2.5 cursor-pointer appearance-none rounded border border-gray-600 bg-gray-700 checked:border-green-500 checked:bg-green-500 transition-all"
                             />
-                            <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 pointer-events-none opacity-0 peer-checked:opacity-100 text-white" viewBox="0 0 14 14" fill="none">
-                                <path d="M3 8L6 11L11 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </div>
-                        <span className="text-[10px] truncate text-gray-400 peer-checked:text-white group-hover/char:text-gray-200">{char.name || 'No Name'}</span>
-                    </label>
-                ))}
+                            <span className="text-[9px] truncate text-gray-400">{char.name || '?'}</span>
+                        </label>
+                    ))}
+                </div>
+
+                {/* Products Section */}
+                <div className="flex-1 overflow-y-auto space-y-0.5 bg-gray-900/50 p-1.5 rounded border border-brand-orange/30 custom-scrollbar">
+                    <div className="text-[8px] text-gray-500 font-semibold mb-0.5 sticky top-0 bg-gray-900/90 px-1">📦 Sản phẩm</div>
+                    {products.length > 0 ? products.map(prod => (
+                        <label key={prod.id} className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-800 p-0.5 rounded">
+                            <input
+                                type="checkbox"
+                                checked={(scene.productIds || []).includes(prod.id)}
+                                onChange={(e) => {
+                                    const currentIds = scene.productIds || [];
+                                    const newIds = e.target.checked
+                                        ? [...currentIds, prod.id]
+                                        : currentIds.filter(id => id !== prod.id);
+                                    updateScene(scene.id, { productIds: newIds });
+                                }}
+                                className="h-2.5 w-2.5 cursor-pointer appearance-none rounded border border-gray-600 bg-gray-700 checked:border-brand-orange checked:bg-brand-orange transition-all"
+                            />
+                            <span className="text-[9px] truncate text-gray-400">{prod.name || '?'}</span>
+                        </label>
+                    )) : (
+                        <span className="text-[8px] text-gray-600 italic">Chưa có</span>
+                    )}
+                </div>
             </div>
 
             {/* Image & Actions */}
@@ -2228,6 +2245,7 @@ const App: React.FC = () => {
             promptName: '',
             contextDescription: '',
             characterIds: defaultCharacter ? [defaultCharacter.id] : [],
+            productIds: [],
             generatedImage: null,
             veoPrompt: '',
             isGenerating: false,
@@ -2287,6 +2305,7 @@ const App: React.FC = () => {
                             promptName: String(row[3] || ''),
                             contextDescription: String(row[4] || ''),
                             characterIds: characterIds,
+                            productIds: [],
                             generatedImage: null,
                             veoPrompt: '',
                             isGenerating: false,
@@ -2329,8 +2348,11 @@ const App: React.FC = () => {
             // Filter selected characters
             const activeCharacters = state.characters.filter(c => selectedCharacterIds.includes(c.id));
 
-            // Build prompt using preset and active characters
-            const prompt = buildScriptPrompt(idea, activePreset, activeCharacters, count);
+            // Get all products for reference
+            const allProducts = state.products || [];
+
+            // Build prompt using preset, characters and products
+            const prompt = buildScriptPrompt(idea, activePreset, activeCharacters, allProducts, count);
 
             console.log('🎬 Generating script with preset:', activePreset.name);
             console.log('Prompt:', prompt);
@@ -2343,6 +2365,10 @@ const App: React.FC = () => {
                 prompt_name: { type: Type.STRING },
                 visual_description: { type: Type.STRING },
                 character_ids: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                },
+                product_ids: {
                     type: Type.ARRAY,
                     items: { type: Type.STRING }
                 }
@@ -2412,6 +2438,7 @@ const App: React.FC = () => {
                 visualDescription: item.visual_description || item.visual_context,
 
                 characterIds: item.character_ids || [],
+                productIds: item.product_ids || [],
                 generatedImage: null,
                 veoPrompt: '',
                 isGenerating: false,
@@ -2459,7 +2486,15 @@ const App: React.FC = () => {
                 return `[${c.name}: ${c.description}${propsText ? `. WITH PROPS: ${propsText}` : ''}]`;
             }).join(' ');
             finalPrompt += `\n\nAppearing Characters: ${charDesc}`;
-            console.log("Updated Base Prompt with Props:", finalPrompt);
+            console.log("Updated Base Prompt with Chars:", finalPrompt);
+        }
+
+        // APPEND PRODUCT/PROPS INFO (NEW)
+        const selectedProdsForPrompt = (currentStateSnapshot.products || []).filter(p => (sceneToUpdate.productIds || []).includes(p.id));
+        if (selectedProdsForPrompt.length > 0) {
+            const prodDesc = selectedProdsForPrompt.map(p => `[Product: ${p.name} - ${p.description}]`).join(' ');
+            finalPrompt += `\n\nFeatured Products: ${prodDesc}`;
+            console.log("Updated Base Prompt with Products:", finalPrompt);
         }
 
         if (!finalPrompt && !refinementPrompt) {
@@ -3291,12 +3326,10 @@ const App: React.FC = () => {
                                 {/* Add Character Button */}
                                 <button
                                     onClick={addCharacter}
-                                    className="bg-gray-800/50 p-6 rounded-lg border-2 border-dashed border-gray-700 hover:border-green-500 hover:bg-gray-800 flex flex-col items-center justify-center min-h-[200px] transition-all group"
+                                    className="bg-gray-800/50 p-4 rounded-lg border-2 border-dashed border-gray-700 hover:border-brand-orange hover:bg-gray-800/80 flex items-center justify-center space-x-3 transition-all group"
                                 >
-                                    <div className="w-16 h-16 rounded-full bg-gray-700 group-hover:bg-brand-orange/20 flex items-center justify-center mb-4 transition-colors">
-                                        <svg className="w-8 h-8 text-gray-500 group-hover:text-brand-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                        </svg>
+                                    <div className="w-10 h-10 rounded-full bg-gray-700 group-hover:bg-brand-orange/20 flex items-center justify-center transition-colors">
+                                        <Plus size={18} className="text-gray-500 group-hover:text-brand-orange" />
                                     </div>
                                     <span className="text-gray-400 group-hover:text-white font-medium">Thêm Nhân Vật</span>
                                 </button>
@@ -3307,63 +3340,46 @@ const App: React.FC = () => {
                         {/* --- PRODUCTS & PROPS SECTION --- */}
                         <div className="my-16">
                             <SectionTitle>Sản phẩm & Đạo cụ đặc biệt (Product/Props)</SectionTitle>
-                            <p className="text-gray-400 mb-6 text-center">Upload hoặc tạo AI → Tự động sinh 5 góc nhìn (Front, Back, Left, Right, Top).</p>
                             <div className="grid md:grid-cols-3 gap-6">
                                 {state.products?.map((prod, index) => (
                                     <div
                                         key={prod.id}
-                                        className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 hover:border-brand-orange cursor-pointer transition-all relative group"
+                                        className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 hover:border-brand-orange cursor-pointer transition-all flex items-center space-x-4 relative group"
                                         onClick={() => setEditingProductId(prod.id)}
                                     >
-                                        {/* Loading Overlay */}
-                                        {prod.isAnalyzing && (
-                                            <div className="absolute inset-0 bg-black/60 z-10 flex items-center justify-center rounded-lg">
-                                                <div className="bg-gray-800 p-4 rounded-lg shadow-xl flex items-center space-x-3 border border-brand-orange/50">
-                                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-orange"></div>
-                                                    <span className="text-brand-orange font-medium animate-pulse">Đang tạo 5 góc...</span>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Header */}
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="font-bold text-brand-cream text-lg truncate flex-1 mr-2">
-                                                {prod.name || `Product ${index + 1}`}
-                                            </h3>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); deleteProduct(prod.id); }}
-                                                className="text-gray-500 hover:text-red-500 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500/10 rounded"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-
-                                        {/* Master Image */}
-                                        <div className="aspect-square bg-gray-900 border border-gray-600 rounded-lg overflow-hidden mb-4 relative">
+                                        {/* Thumbnail */}
+                                        <div className="w-14 h-14 rounded-lg bg-gray-900 border border-gray-600 overflow-hidden flex-shrink-0 relative">
                                             {prod.masterImage ? (
                                                 <img src={prod.masterImage} alt={prod.name} className="w-full h-full object-cover" />
                                             ) : (
-                                                <div className="w-full h-full flex flex-col items-center justify-center text-gray-600">
-                                                    <span className="text-4xl mb-2">📦</span>
-                                                    <span className="text-xs">Click để thêm ảnh</span>
+                                                <div className="w-full h-full flex items-center justify-center text-gray-600 text-xl">
+                                                    📦
+                                                </div>
+                                            )}
+
+                                            {/* Loading Indicator */}
+                                            {prod.isAnalyzing && (
+                                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-orange"></div>
                                                 </div>
                                             )}
                                         </div>
 
-                                        {/* Description */}
-                                        <p className="text-sm text-gray-400 line-clamp-2 mb-4">{prod.description || "Chưa có mô tả..."}</p>
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-bold text-brand-cream truncate">{prod.name || `Product ${index + 1}`}</h3>
+                                            <p className="text-xs text-gray-400 truncate mt-0.5">{prod.description || "No description"}</p>
+                                        </div>
 
-                                        {/* Mini View Preview */}
-                                        <div className="grid grid-cols-5 gap-1">
-                                            {['front', 'back', 'left', 'right', 'top'].map(key => (
-                                                <div key={key} className="aspect-square bg-gray-900 rounded overflow-hidden border border-gray-700">
-                                                    {prod.views[key as keyof typeof prod.views] ? (
-                                                        <img src={prod.views[key as keyof typeof prod.views]!} alt={key} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-gray-600 text-[8px]">—</div>
-                                                    )}
-                                                </div>
-                                            ))}
+                                        {/* Action Buttons */}
+                                        <div className="flex items-center space-x-1">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); deleteProduct(prod.id); }}
+                                                className="p-1.5 text-gray-600 hover:text-red-500 rounded hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                                         </div>
                                     </div>
                                 ))}
@@ -3371,13 +3387,12 @@ const App: React.FC = () => {
                                 {/* Add Product Button */}
                                 <button
                                     onClick={addProduct}
-                                    className="bg-gray-800/50 p-6 rounded-lg border-2 border-dashed border-gray-700 hover:border-brand-orange hover:bg-gray-800/80 flex flex-col items-center justify-center min-h-[300px] transition-all group"
+                                    className="bg-gray-800/50 p-4 rounded-lg border-2 border-dashed border-gray-700 hover:border-brand-orange hover:bg-gray-800/80 flex items-center justify-center space-x-3 transition-all group"
                                 >
-                                    <div className="w-16 h-16 rounded-full bg-gray-700 group-hover:bg-brand-orange/20 flex items-center justify-center mb-4 transition-colors">
-                                        <Plus size={28} className="text-gray-500 group-hover:text-brand-orange" />
+                                    <div className="w-10 h-10 rounded-full bg-gray-700 group-hover:bg-brand-orange/20 flex items-center justify-center transition-colors">
+                                        <Plus size={18} className="text-gray-500 group-hover:text-brand-orange" />
                                     </div>
-                                    <span className="text-gray-400 group-hover:text-white font-medium">Thêm Sản Phẩm / Đạo Cụ</span>
-                                    <span className="text-xs text-gray-500 mt-2">Upload ảnh hoặc tạo bằng AI</span>
+                                    <span className="text-gray-400 group-hover:text-white font-medium">Thêm Sản Phẩm</span>
                                 </button>
                             </div>
                         </div>
@@ -3528,6 +3543,7 @@ const App: React.FC = () => {
                                         scene={scene}
                                         index={index}
                                         characters={state.characters}
+                                        products={state.products || []}
                                         updateScene={updateScene}
                                         removeScene={removeScene}
                                         generateImage={() => performImageGeneration(scene.id)}

@@ -47,6 +47,7 @@ export interface Scene {
   promptName: string;
   contextDescription: string;
   characterIds: string[];
+  productIds: string[]; // NEW: Referenced Products/Props in this scene
   generatedImage: string | null;
 
   // Video generation
