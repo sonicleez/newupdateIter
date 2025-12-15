@@ -125,6 +125,20 @@ const DEFAULT_META_TOKENS: Record<string, string> = {
     'custom': 'professional photography, detailed textures, balanced composition, thoughtful lighting'
 };
 
+const TRANSITION_TYPES = [
+    { value: '', label: 'Auto', hint: 'AI decides transition' },
+    { value: 'cut', label: 'Cut', hint: 'Direct cut - instant change' },
+    { value: 'match-cut', label: 'Match Cut', hint: 'Visual similarity between scenes' },
+    { value: 'dissolve', label: 'Dissolve', hint: 'Gradual blend between scenes' },
+    { value: 'fade-black', label: 'Fade to Black', hint: 'Scene ends with black' },
+    { value: 'fade-white', label: 'Fade to White', hint: 'Scene ends with white' },
+    { value: 'wipe', label: 'Wipe', hint: 'Directional reveal' },
+    { value: 'jump-cut', label: 'Jump Cut', hint: 'Jarring time skip' },
+    { value: 'smash-cut', label: 'Smash Cut', hint: 'Sudden dramatic contrast' },
+    { value: 'l-cut', label: 'L-Cut', hint: 'Audio continues over next scene' },
+    { value: 'j-cut', label: 'J-Cut', hint: 'Audio precedes visual' },
+];
+
 const IMAGE_MODELS = [
     { value: 'gemini-2.5-flash-image', label: 'Google Nano Banana (Fast)' },
     { value: 'gemini-3-pro-image-preview', label: 'Google Nano Banana Pro (High Quality)' },
@@ -1362,11 +1376,11 @@ const SceneRow: React.FC<SceneRowProps> = ({ scene, index, characters, products,
                     className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-xs text-white focus:border-green-500 resize-none"
                 />
                 {/* Per-Scene Cinematography Overrides */}
-                <div className="grid grid-cols-2 gap-1">
+                <div className="grid grid-cols-3 gap-1">
                     <select
                         value={scene.cameraAngleOverride || ''}
                         onChange={(e) => updateScene(scene.id, { cameraAngleOverride: e.target.value })}
-                        className="bg-gray-900 text-[10px] text-gray-400 border border-gray-700 rounded px-1 py-0.5 focus:border-brand-orange truncate"
+                        className="bg-gray-900 text-[9px] text-gray-400 border border-gray-700 rounded px-1 py-0.5 focus:border-brand-orange truncate"
                         title="Camera Angle"
                     >
                         {CAMERA_ANGLES.map(angle => (
@@ -1376,11 +1390,21 @@ const SceneRow: React.FC<SceneRowProps> = ({ scene, index, characters, products,
                     <select
                         value={scene.lensOverride || ''}
                         onChange={(e) => updateScene(scene.id, { lensOverride: e.target.value })}
-                        className="bg-gray-900 text-[10px] text-gray-400 border border-gray-700 rounded px-1 py-0.5 focus:border-brand-orange truncate"
-                        title="Lens Override"
+                        className="bg-gray-900 text-[9px] text-gray-400 border border-gray-700 rounded px-1 py-0.5 focus:border-brand-orange truncate"
+                        title="Lens"
                     >
                         {LENS_OPTIONS.map(lens => (
                             <option key={lens.value} value={lens.value}>{lens.label}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={scene.transitionType || ''}
+                        onChange={(e) => updateScene(scene.id, { transitionType: e.target.value })}
+                        className="bg-gray-900 text-[9px] text-purple-400 border border-purple-900/50 rounded px-1 py-0.5 focus:border-purple-500 truncate"
+                        title="Transition to Next Scene"
+                    >
+                        {TRANSITION_TYPES.map(t => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
                         ))}
                     </select>
                 </div>
@@ -2633,6 +2657,24 @@ const App: React.FC = () => {
             const prodDesc = selectedProdsForPrompt.map(p => `[Product: ${p.name} - ${p.description}]`).join(' ');
             finalPrompt += `\n\nFeatured Products: ${prodDesc}`;
             console.log("Updated Base Prompt with Products:", finalPrompt);
+        }
+
+        // --- 3. FILM CONTINUITY: Include Previous Scene Context ---
+        const previousSceneIndex = currentSceneIndex - 1;
+        if (previousSceneIndex >= 0) {
+            const previousScene = currentState.scenes[previousSceneIndex];
+            if (previousScene && previousScene.contextDescription) {
+                // Get transition type from previous scene
+                const transitionInfo = previousScene.transitionType
+                    ? TRANSITION_TYPES.find(t => t.value === previousScene.transitionType)
+                    : null;
+                const transitionHint = transitionInfo?.hint || 'smooth visual continuity';
+
+                // Build continuity prompt
+                const continuityPrompt = `\n\n[FILM CONTINUITY: Previous scene "${previousScene.promptName || 'Scene ' + previousSceneIndex}" showed: ${previousScene.contextDescription.slice(0, 150)}... Transition: ${transitionHint}. Ensure visual coherence and narrative flow.]`;
+                finalPrompt += continuityPrompt;
+                console.log("🎞️ Film Continuity applied from scene:", previousSceneIndex);
+            }
         }
 
         console.log("🎬 Cinematography applied:", { cameraPrompt, lensPrompt, anglePrompt, metaTokens });
