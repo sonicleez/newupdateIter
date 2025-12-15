@@ -81,6 +81,11 @@ const INITIAL_STATE: ProjectState = {
     genyuToken: '',
     resolution: '1K', // Default resolution
     scriptLanguage: 'vietnamese',
+
+    // Script Preset System
+    activeScriptPreset: 'film-animation', // Default to Film preset
+    customScriptPresets: [],
+
     characters: Array.from({ length: 3 }).map(() => ({
         id: generateId(),
         name: '',

@@ -24,22 +24,74 @@ export interface Character {
   workflowStatus?: 'pending' | 'active' | 'succeeded' | 'failed';
 }
 
+export interface SceneDialogue {
+  characterName: string;
+  line: string;
+}
+
 export interface Scene {
   id: string;
   sceneNumber: string;
+
+  // Legacy fields (backward compatibility)
   language1: string;
   vietnamese: string;
+
+  // Structured Script Output Fields (New)
+  voiceover?: string; // Narration/voiceover text
+  dialogues?: SceneDialogue[]; // Array of character dialogues
+  cameraAngle?: string; // Camera position and movement
+  visualDescription?: string; // Visual/environment description
+
+  // Generation metadata
   promptName: string;
   contextDescription: string;
   characterIds: string[];
   generatedImage: string | null;
+
+  // Video generation
   mediaId?: string; // Google Labs Media ID for Video Gen
   generatedVideo?: string; // URL of generated video
   videoOperationName?: string; // Operation Name for Polling
   videoStatus?: string; // Status: 'active', 'succeeded', 'failed'
   veoPrompt: string; // Prompt tối ưu cho Google Veo
+
+  // UI state
   isGenerating: boolean;
   error: string | null;
+}
+
+// Script Preset System
+export type ScriptCategory = 'film' | 'documentary' | 'commercial' | 'music-video' | 'custom';
+export type SceneStructure = 'traditional' | 'documentary' | 'commercial' | 'montage';
+
+export interface OutputFormat {
+  hasDialogue: boolean;
+  hasNarration: boolean;
+  hasCameraAngles: boolean;
+  sceneStructure: SceneStructure;
+}
+
+export interface ScriptPreset {
+  id: string;
+  name: string;
+  category: ScriptCategory;
+  description: string;
+  icon: string;
+
+  // AI Configuration
+  systemPrompt: string;
+  outputFormat: OutputFormat;
+
+  // Guidelines
+  toneKeywords: string[];
+  sceneGuidelines: string;
+  exampleOutput: string;
+
+  // Metadata
+  isDefault: boolean;
+  isCustom: boolean;
+  createdAt: string;
 }
 
 export interface ProjectState {
@@ -51,6 +103,11 @@ export interface ProjectState {
   genyuToken?: string; // Optional: For Genyu.io API
   recaptchaToken?: string; // Optional: For Google Labs Recaptcha
   scriptLanguage: 'vietnamese' | 'language1'; // Ngôn ngữ chính để tạo Veo prompt
+
+  // Script Preset System
+  activeScriptPreset: string; // ID of currently selected preset
+  customScriptPresets: ScriptPreset[]; // User-created presets
+
   characters: Character[];
   scenes: Scene[];
 }
