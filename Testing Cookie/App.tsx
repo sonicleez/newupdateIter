@@ -432,9 +432,11 @@ interface CharacterGeneratorModalProps {
     apiKey: string;
     genyuToken?: string;
     model: string;
+    charId: string | null;
+    updateCharacter: (id: string, updates: Partial<Character>) => void;
 }
 
-const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = ({ isOpen, onClose, onSave, apiKey, genyuToken, model }) => {
+const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = ({ isOpen, onClose, onSave, apiKey, genyuToken, model, charId, updateCharacter }) => {
     const [prompt, setPrompt] = useState('');
     const [style, setStyle] = useState('pixar');
     const [resolution, setResolution] = useState('1K'); // Added resolution state
@@ -591,6 +593,11 @@ const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = ({ isOpe
             alert(`❌ ${errorMsg}`);
         } finally {
             setIsGenerating(false);
+
+            // Clear loading state on character card
+            if (charId) {
+                updateCharacter(charId, { isAnalyzing: false });
+            }
         }
     };
 
@@ -697,6 +704,11 @@ const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = ({ isOpe
                                 if (!apiKey && !genyuToken) {
                                     setError("Vui lòng nhập API Key (Gemini) hoặc Token (Genyu).");
                                     return;
+                                }
+
+                                // Set loading state on character card
+                                if (charId) {
+                                    updateCharacter(charId, { isAnalyzing: true });
                                 }
 
                                 // Close modal immediately
@@ -3217,6 +3229,8 @@ const App: React.FC = () => {
                 apiKey={userApiKey || process.env.API_KEY || ''}
                 genyuToken={state.genyuToken}
                 model={state.imageModel || 'gemini-2.5-flash-image'}
+                charId={charGenState.charId}
+                updateCharacter={updateCharacter}
             />
             <ImageEditorModal
                 isOpen={isEditorOpen}
