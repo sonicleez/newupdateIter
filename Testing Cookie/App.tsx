@@ -139,6 +139,19 @@ const TRANSITION_TYPES = [
     { value: 'j-cut', label: 'J-Cut', hint: 'Audio precedes visual' },
 ];
 
+// Veo 3.1 Mode Options
+const VEO_MODES = [
+    { value: 'image-to-video', label: '🎬 Image → Video', hint: 'Một ảnh tạo video' },
+    { value: 'start-end-frame', label: '🎞️ Start/End Frame', hint: 'Hai ảnh làm điểm đầu & cuối' },
+];
+
+const IMAGE_ROLES = [
+    { value: 'single', label: '📷 Single Image', color: 'gray' },
+    { value: 'start-frame', label: '🟢 Start Frame', color: 'green' },
+    { value: 'end-frame', label: '🔴 End Frame', color: 'red' },
+];
+
+
 const IMAGE_MODELS = [
     { value: 'gemini-2.5-flash-image', label: 'Google Nano Banana (Fast)' },
     { value: 'gemini-3-pro-image-preview', label: 'Google Nano Banana Pro (High Quality)' },
@@ -1573,27 +1586,83 @@ const SceneRow: React.FC<SceneRowProps> = ({ scene, index, characters, products,
 
             {/* Image & Actions */}
             <div className="md:col-span-3 flex flex-col space-y-2">
-                {/* Image Display */}
-                <div
-                    className="relative w-full aspect-video bg-black rounded border border-gray-600 overflow-hidden group cursor-pointer hover:border-green-500 transition-colors"
-                    onClick={() => scene.generatedImage && openImageViewer()}
-                >
-                    {scene.isGenerating && !scene.videoStatus ? (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/80 z-10">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mb-2"></div>
-                            <span className="text-[10px] text-green-400 animate-pulse">Rendering Image...</span>
-                        </div>
-                    ) : scene.generatedImage ? (
-                        <>
-                            <img src={scene.generatedImage} alt="Generated" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <span className="text-white text-xs font-bold border border-white px-3 py-1 rounded-full backdrop-blur-sm">🔍 Phóng to</span>
+                {/* Veo Mode Selection */}
+                <div className="flex items-center gap-2 bg-gray-900/60 p-1.5 rounded border border-gray-700/50">
+                    <span className="text-[9px] text-gray-500 font-semibold">🎥 Veo:</span>
+                    {VEO_MODES.map(mode => (
+                        <label key={mode.value} className="flex items-center gap-1 cursor-pointer">
+                            <input
+                                type="radio"
+                                name={`veo-mode-${scene.id}`}
+                                value={mode.value}
+                                checked={(scene.veoMode || 'image-to-video') === mode.value}
+                                onChange={() => updateScene(scene.id, {
+                                    veoMode: mode.value as 'image-to-video' | 'start-end-frame',
+                                    imageRole: mode.value === 'start-end-frame' ? 'start-frame' : 'single'
+                                })}
+                                className="w-3 h-3 accent-brand-orange"
+                            />
+                            <span className="text-[10px] text-gray-300">{mode.label}</span>
+                        </label>
+                    ))}
+                </div>
+
+                {/* Image Display with Role Badge */}
+                <div className="flex gap-2">
+                    {/* Main Image (Start Frame or Single) */}
+                    <div
+                        className={`relative flex-1 aspect-video bg-black rounded border overflow-hidden group cursor-pointer transition-colors ${scene.imageRole === 'start-frame' ? 'border-green-500' :
+                                scene.imageRole === 'end-frame' ? 'border-red-500' : 'border-gray-600 hover:border-green-500'
+                            }`}
+                        onClick={() => scene.generatedImage && openImageViewer()}
+                    >
+                        {/* Role Badge */}
+                        {scene.generatedImage && (
+                            <div className={`absolute top-1 left-1 z-20 px-1.5 py-0.5 rounded text-[8px] font-bold ${scene.imageRole === 'start-frame' ? 'bg-green-600 text-white' :
+                                    scene.imageRole === 'end-frame' ? 'bg-red-600 text-white' :
+                                        'bg-gray-700 text-gray-300'
+                                }`}>
+                                {scene.imageRole === 'start-frame' ? '🟢 START' :
+                                    scene.imageRole === 'end-frame' ? '🔴 END' : '📷'}
                             </div>
-                        </>
-                    ) : (
-                        <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-xs flex-col">
-                            <span className="text-2xl mb-1">🖼️</span>
-                            <span>Chưa có ảnh</span>
+                        )}
+
+                        {scene.isGenerating && !scene.videoStatus ? (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/80 z-10">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mb-2"></div>
+                                <span className="text-[10px] text-green-400 animate-pulse">Rendering Image...</span>
+                            </div>
+                        ) : scene.generatedImage ? (
+                            <>
+                                <img src={scene.generatedImage} alt="Generated" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <span className="text-white text-xs font-bold border border-white px-3 py-1 rounded-full backdrop-blur-sm">🔍 Phóng to</span>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-xs flex-col">
+                                <span className="text-2xl mb-1">🖼️</span>
+                                <span>{scene.veoMode === 'start-end-frame' ? 'Start Frame' : 'Image'}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* End Frame (only shown when Start/End Frame mode) */}
+                    {scene.veoMode === 'start-end-frame' && (
+                        <div className="relative w-24 aspect-video bg-black rounded border border-red-500/50 overflow-hidden group cursor-pointer hover:border-red-500 transition-colors">
+                            {/* End Frame Badge */}
+                            <div className="absolute top-1 left-1 z-20 px-1 py-0.5 rounded text-[7px] font-bold bg-red-600 text-white">
+                                🔴 END
+                            </div>
+
+                            {scene.endFrameImage ? (
+                                <img src={scene.endFrameImage} alt="End Frame" className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-[10px] flex-col">
+                                    <span className="text-lg mb-0.5">🎯</span>
+                                    <span>End</span>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
