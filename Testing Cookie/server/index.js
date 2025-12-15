@@ -10,6 +10,57 @@ app.use(express.json({ limit: '50mb' }));
 const GENYU_API = 'https://aisandbox-pa.googleapis.com/v1/projects/07c3d6ef-3305-4196-bcc2-7db5294be436/flowMedia:batchGenerateImages';
 const VIDEO_API = 'https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoStartImage';
 
+// --- Test Token Validation Endpoint ---
+app.post('/api/test-token', async (req, res) => {
+    const { token: rawToken, recaptchaToken } = req.body;
+
+    console.log('\n=== 🔍 TOKEN VALIDATION TEST ===');
+
+    // 1. Validate Session Token
+    const token = rawToken?.includes('session-token=')
+        ? rawToken.split('session-token=')[1].split(';')[0].trim()
+        : rawToken;
+
+    const tokenCheck = {
+        provided: !!rawToken,
+        format: token?.startsWith('ya29.') ? '✅ Valid OAuth2' : '❌ Invalid',
+        length: token?.length || 0,
+        preview: token?.substring(0, 30) + '...',
+        valid: token?.length > 50 && token?.startsWith('ya29.')
+    };
+
+    // 2. Validate Recaptcha Token
+    const recaptchaCheck = {
+        provided: !!recaptchaToken,
+        format: recaptchaToken?.startsWith('0cAF') ? '✅ Valid' : '❌ Invalid',
+        length: recaptchaToken?.length || 0,
+        fresh: recaptchaToken?.length > 1500,
+        preview: recaptchaToken?.substring(0, 30) + '...'
+    };
+
+    const allGood = tokenCheck.valid && recaptchaCheck.provided && recaptchaCheck.fresh;
+
+    console.log('Session Token:', tokenCheck.valid ? '✅ OK' : '❌ FAIL', `(${tokenCheck.length} chars)`);
+    console.log('Recaptcha:', recaptchaCheck.fresh ? '✅ OK' : '❌ FAIL', `(${recaptchaCheck.length} chars)`);
+    console.log('Result:', allGood ? '✅ READY FOR VIDEO!' : '❌ FIX TOKENS FIRST');
+    console.log('===========================\n');
+
+    res.json({
+        ready: allGood,
+        sessionToken: tokenCheck,
+        recaptchaToken: recaptchaCheck,
+        message: allGood
+            ? '✅ All tokens valid! You can generate videos now!'
+            : '❌ Please check the issues above',
+        issues: [
+            !tokenCheck.provided && 'Session token missing',
+            !tokenCheck.valid && 'Session token invalid format',
+            !recaptchaCheck.provided && 'Recaptcha token missing',
+            !recaptchaCheck.fresh && 'Recaptcha token too short (expired?)',
+        ].filter(Boolean)
+    });
+});
+
 // --- Image Generation Proxy (Labs Google / Fx Flow) ---
 app.post('/api/proxy/genyu/image', async (req, res) => {
     const { token: rawToken, prompt, aspect = "IMAGE_ASPECT_RATIO_LANDSCAPE", style, recaptchaToken } = req.body;
