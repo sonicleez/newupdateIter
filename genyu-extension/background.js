@@ -1,13 +1,21 @@
-// Background v8.0 - Token Pool System
-console.log('[Genyu BG] Background v8.0 - Token Pool System');
+// Background v8.1 - Token Pool with UI Controls
+console.log('[Genyu BG] Background v8.1 - Token Pool with Controls');
 
-// ==================== TOKEN POOL ====================
+// ==================== CONFIGURATION ====================
+let IS_RUNNING = true; // Auto-start by default
+let GENERATE_INTERVAL = 5000; // Default 5 seconds
+let generationTimer = null;
+
 const TOKEN_POOL = [];
 const MAX_TOKEN_AGE = 90000; // 90 seconds
-const GENERATE_INTERVAL = 5000; // 5 seconds
 
-// Generate fresh reCAPTCHA token and add to pool
+// ==================== TOKEN GENERATION ====================
 async function generateAndPoolToken() {
+    if (!IS_RUNNING) {
+        console.log('[Token Pool] ⏸️ Generation paused');
+        return;
+    }
+
     try {
         const tabs = await chrome.tabs.query({});
         const labsTab = tabs.find(tab =>
@@ -67,7 +75,6 @@ function cleanTokenPool() {
     const now = Date.now();
     const before = TOKEN_POOL.length;
 
-    // Remove tokens older than MAX_TOKEN_AGE or already used
     for (let i = TOKEN_POOL.length - 1; i >= 0; i--) {
         const age = now - TOKEN_POOL[i].timestamp;
         if (age > MAX_TOKEN_AGE || TOKEN_POOL[i].used) {
@@ -84,7 +91,7 @@ function cleanTokenPool() {
 // Send pool to server
 async function syncPoolToServer() {
     try {
-        cleanTokenPool(); // Clean first
+        cleanTokenPool();
 
         const availableTokens = TOKEN_POOL.filter(t => !t.used);
 
@@ -105,88 +112,97 @@ async function syncPoolToServer() {
     }
 }
 
-// Get fresh token from pool
-function getTokenFromPool() {
-    cleanTokenPool(); // Clean first
-
-    // Find newest unused token
-    const availableTokens = TOKEN_POOL.filter(t => !t.used);
-
-    if (availableTokens.length === 0) {
-        console.log('[Token Pool] ⚠️ No tokens available in pool');
-        return null;
+// ==================== TIMER CONTROL ====================
+function startGeneration() {
+    if (generationTimer) {
+        clearInterval(generationTimer);
     }
 
-    // Get newest token
-    const newestToken = availableTokens.reduce((newest, current) =>
-        current.timestamp > newest.timestamp ? current : newest
-    );
+    IS_RUNNING = true;
+    generationTimer = setInterval(generateAndPoolToken, GENERATE_INTERVAL);
+    generateAndPoolToken(); // Generate immediately
 
-    // Mark as used
-    newestToken.used = true;
-
-    const age = Date.now() - newestToken.timestamp;
-    console.log(`[Token Pool] ✅ Retrieved token (age: ${Math.round(age / 1000)}s, remaining: ${availableTokens.length - 1})`);
-
-    return newestToken.token;
+    console.log(`[Token Pool] ▶️ Started (interval: ${GENERATE_INTERVAL / 1000}s)`);
 }
 
-// Start auto-generation
-setInterval(generateAndPoolToken, GENERATE_INTERVAL);
-generateAndPoolToken(); // Generate first token immediately
+function stopGeneration() {
+    IS_RUNNING = false;
 
-console.log(`[Token Pool] 🔄 Auto-generating tokens every ${GENERATE_INTERVAL / 1000}s`);
+    if (generationTimer) {
+        clearInterval(generationTimer);
+        generationTimer = null;
+    }
+
+    console.log('[Token Pool] ⏸️ Stopped');
+}
+
+function setInterval_custom(interval) {
+    GENERATE_INTERVAL = interval;
+
+    if (IS_RUNNING) {
+        // Restart with new interval
+        startGeneration();
+    }
+
+    console.log(`[Token Pool] ⏱️ Interval set to ${interval / 1000}s`);
+}
 
 // ==================== SESSION TOKEN AUTO-SEND ====================
 let lastSessionToken = null;
 
-async function checkAndSendSessionToken() {
-    try {
-        const cookie = await chrome.cookies.get({
-            url: 'https://labs.google.com',
-            name: '__Secure-next-auth.session-token'
-        });
+// Intercept requests to extract Bearer token
+chrome.webRequest.onBeforeSendHeaders.addListener(
+    (details) => {
+        const authHeader = details.requestHeaders?.find(h => h.name.toLowerCase() === 'authorization');
 
-        if (cookie && cookie.value && cookie.value !== lastSessionToken) {
-            lastSessionToken = cookie.value;
+        if (authHeader && authHeader.value) {
+            const token = authHeader.value.replace('Bearer ', '');
 
-            await fetch('http://localhost:3001/api/update-tokens', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionToken: cookie.value })
-            });
+            if (token && token.startsWith('ya29.') && token !== lastSessionToken) {
+                lastSessionToken = token;
 
-            console.log('[Session Token] ✅ Auto-sent to server');
+                // Send to server
+                fetch('http://localhost:3001/api/update-tokens', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: token })
+                }).then(() => {
+                    console.log('[Session Token] ✅ Intercepted and sent to server');
+                }).catch(() => {
+                    // Ignore
+                });
+            }
         }
-    } catch (e) {
-        // Ignore
-    }
-}
+    },
+    { urls: ['https://aisandbox-pa.googleapis.com/*'] },
+    ['requestHeaders']
+);
 
-setInterval(checkAndSendSessionToken, 5000);
-checkAndSendSessionToken();
+console.log('[Session Token] 🎯 Network interception enabled');
 
-// ==================== API FOR APP ====================
-// Listen for token requests from App
+// ==================== MESSAGE HANDLERS ====================
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'GET_RECAPTCHA_TOKEN') {
-        const token = getTokenFromPool();
-        sendResponse({ token });
-    }
-    return true; // Keep channel open for async response
-});
-
-// Endpoint to get pool status
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'GET_POOL_STATUS') {
-        const availableTokens = TOKEN_POOL.filter(t => !t.used).length;
+    if (message.type === 'GET_STATUS') {
         sendResponse({
-            totalTokens: TOKEN_POOL.length,
-            availableTokens: availableTokens,
-            maxAge: MAX_TOKEN_AGE / 1000
+            isRunning: IS_RUNNING,
+            interval: GENERATE_INTERVAL,
+            poolSize: TOKEN_POOL.filter(t => !t.used).length
         });
+    } else if (message.type === 'START_GENERATE') {
+        if (message.interval) {
+            setInterval_custom(message.interval);
+        }
+        startGeneration();
+        sendResponse({ success: true });
+    } else if (message.type === 'STOP_GENERATE') {
+        stopGeneration();
+        sendResponse({ success: true });
     }
+
     return true;
 });
 
-console.log('[Genyu BG] ✅ Ready - Token Pool + Session Token Auto-send');
+// ==================== STARTUP ====================
+startGeneration(); // Auto-start on load
+
+console.log('[Genyu BG] ✅ Ready - Token Pool with UI Controls');

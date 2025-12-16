@@ -1,13 +1,14 @@
 {
     "manifest_version": 3,
     "name": "Genyu Token Pool",
-    "version": "8.0",
-    "description": "Auto-generate and pool reCAPTCHA tokens",
+    "version": "8.1",
+    "description": "Auto-generate reCAPTCHA tokens with UI controls",
     "permissions": [
         "storage",
         "tabs",
         "scripting",
-        "cookies"
+        "cookies",
+        "webRequest"
     ],
     "host_permissions": [
         "https://*.google.com/*",

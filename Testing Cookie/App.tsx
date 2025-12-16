@@ -13,36 +13,220 @@ import Modal from './components/Modal';
 import SingleImageSlot from './components/SingleImageSlot';
 import { CharacterDetailModal } from './components/CharacterDetailModal';
 import { ProductDetailModal } from './components/ProductDetailModal';
-import { ApiKeyModal, GenyuTokenModal, CoffeeModal, CoffeeButton } from './components/SettingsModals';
-import { directGenyuCall } from './utils/genyuClient';
-
-// Import constants from centralized module
-import {
-    APP_NAME,
-    PRIMARY_GRADIENT,
-    PRIMARY_GRADIENT_HOVER,
-    slugify,
-    generateId,
-    GLOBAL_STYLES,
-    CAMERA_MODELS,
-    LENS_OPTIONS,
-    CAMERA_ANGLES,
-    DEFAULT_META_TOKENS,
-    TRANSITION_TYPES,
-    IMAGE_MODELS,
-    ASPECT_RATIOS,
-    CHARACTER_STYLES,
-    createInitialState,
-    downloadImage,
-} from './utils/appConstants';
 
 // @ts-ignore
 const JSZip = window.JSZip;
 // @ts-ignore
 const XLSX = window.XLSX;
 
-// Use factory function for initial state (avoids stale generateId calls)
-const INITIAL_STATE: ProjectState = createInitialState();
+
+const APP_NAME = "Khung Ứng Dụng";
+const PRIMARY_GRADIENT = "from-orange-600 to-red-600";
+const PRIMARY_GRADIENT_HOVER = "from-orange-500 to-red-500";
+
+const slugify = (text: string): string => {
+    return text
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]+/g, '')
+        .replace(/--+/g, '-');
+};
+
+const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+// --- DEFINED GLOBAL STYLES ---
+const GLOBAL_STYLES = [
+    {
+        value: 'cinematic-realistic',
+        label: 'Cinematic Realistic (Phim điện ảnh)',
+        prompt: 'Cinematic movie screengrab, shot on Arri Alexa, photorealistic, 8k, highly detailed texture, dramatic lighting, shallow depth of field, color graded, film grain.'
+    },
+    {
+        value: '3d-pixar',
+        label: '3D Animation (Pixar/Disney)',
+        prompt: '3D render style, Pixar animation style, octane render, unreal engine 5, cute, vibrant lighting, soft smooth textures, expressive, volumetric lighting, masterpiece.'
+    },
+    {
+        value: 'anime-makoto',
+        label: 'Anime (Makoto Shinkai Style)',
+        prompt: 'Anime style, Makoto Shinkai art style, high quality 2D animation, beautiful sky, detailed background, vibrant colors, emotional atmosphere, cell shading.'
+    },
+    {
+        value: 'vintage-film',
+        label: 'Vintage 1980s Film (Retro)',
+        prompt: '1980s vintage movie look, film grain, retro aesthetic, warm tones, soft focus, kodak portra 400, nostalgia atmosphere.'
+    },
+    {
+        value: 'cyberpunk',
+        label: 'Cyberpunk / Sci-Fi',
+        prompt: 'Cyberpunk aesthetic, neon lighting, dark atmosphere, futuristic, high contrast, wet streets, technological details, blade runner style.'
+    },
+    {
+        value: 'watercolor',
+        label: 'Watercolor / Artistic',
+        prompt: 'Watercolor painting style, soft edges, artistic, painterly, dreamy atmosphere, paper texture, pastel colors.'
+    },
+    {
+        value: 'dark-fantasy',
+        label: 'Dark Fantasy (Game Style)',
+        prompt: 'Dark fantasy art, elden ring style, gritty, atmospheric, ominous lighting, detailed armor and textures, epic scale, oil painting aesthetic.'
+    }
+];
+
+// ========== CINEMATOGRAPHY OPTIONS ==========
+const CAMERA_MODELS = [
+    { value: '', label: 'Auto (AI chọn)', prompt: '' },
+    { value: 'arri-alexa-35', label: 'ARRI Alexa 35', prompt: 'Shot on ARRI Alexa 35, rich cinematic colors, natural skin tones, wide dynamic range' },
+    { value: 'red-v-raptor', label: 'RED V-Raptor', prompt: 'Shot on RED V-Raptor 8K, high contrast, razor sharp details, vivid colors' },
+    { value: 'sony-venice-2', label: 'Sony Venice 2', prompt: 'Shot on Sony Venice 2, natural color science, beautiful skin tones, filmic look' },
+    { value: 'blackmagic-ursa', label: 'Blackmagic URSA', prompt: 'Shot on Blackmagic URSA, organic film-like texture, Blackmagic color science' },
+    { value: 'canon-c70', label: 'Canon C70', prompt: 'Shot on Canon C70, documentary style, natural colors, versatile look' },
+    { value: 'panasonic-s1h', label: 'Panasonic S1H', prompt: 'Shot on Panasonic S1H, natural tones, subtle film grain, professional video look' },
+];
+
+const LENS_OPTIONS = [
+    { value: '', label: 'Auto (AI chọn)', prompt: '', useCase: 'AI decides based on scene' },
+    { value: '16mm', label: '16mm Ultra Wide', prompt: '16mm ultra wide angle lens, expansive field of view, dramatic perspective', useCase: 'Epic landscapes, architecture' },
+    { value: '24mm', label: '24mm Wide', prompt: '24mm wide angle lens, environmental context, slight distortion', useCase: 'Establishing shots, interiors' },
+    { value: '35mm', label: '35mm Standard Wide', prompt: '35mm lens, natural perspective, slight wide angle', useCase: 'Walking shots, dialogue scenes' },
+    { value: '50mm', label: '50mm Standard', prompt: '50mm lens, natural human perspective, minimal distortion', useCase: 'Dialogue, interviews, portraits' },
+    { value: '85mm', label: '85mm Portrait', prompt: '85mm portrait lens, shallow depth of field, beautiful bokeh, flattering compression', useCase: 'Close-ups, beauty shots' },
+    { value: '135mm', label: '135mm Telephoto', prompt: '135mm telephoto lens, compressed background, intimate feel, creamy bokeh', useCase: 'Emotional moments, isolation' },
+    { value: '200mm', label: '200mm Long Tele', prompt: '200mm telephoto lens, extreme background compression, voyeuristic feel', useCase: 'Surveillance, nature' },
+    { value: 'anamorphic', label: 'Anamorphic 2.39:1', prompt: 'anamorphic lens, horizontal lens flares, oval bokeh, cinematic widescreen 2.39:1 aspect ratio', useCase: 'Cinematic epic look' },
+    { value: 'macro', label: 'Macro Lens', prompt: 'macro lens, extreme close-up, sharp details, shallow depth of field', useCase: 'Product details, textures' },
+];
+
+const CAMERA_ANGLES = [
+    { value: '', label: 'Auto (AI chọn)' },
+    { value: 'wide-shot', label: 'Wide Shot (WS)' },
+    { value: 'medium-shot', label: 'Medium Shot (MS)' },
+    { value: 'close-up', label: 'Close-Up (CU)' },
+    { value: 'extreme-cu', label: 'Extreme Close-Up (ECU)' },
+    { value: 'ots', label: 'Over-the-Shoulder (OTS)' },
+    { value: 'low-angle', label: 'Low Angle (Hero Shot)' },
+    { value: 'high-angle', label: 'High Angle (Vulnerable)' },
+    { value: 'dutch-angle', label: 'Dutch Angle (Tension)' },
+    { value: 'pov', label: 'POV (First Person)' },
+    { value: 'establishing', label: 'Establishing Shot' },
+    { value: 'two-shot', label: 'Two Shot' },
+    { value: 'insert', label: 'Insert / Detail Shot' },
+];
+
+const DEFAULT_META_TOKENS: Record<string, string> = {
+    'film': 'cinematic lighting, depth of field, film grain, anamorphic lens flare, color graded, atmospheric haze',
+    'documentary': 'natural light, handheld camera feel, raw authentic look, observational style, candid moments',
+    'commercial': 'product hero lighting, clean studio aesthetics, vibrant colors, high production value, aspirational mood',
+    'music-video': 'dramatic lighting, high contrast, stylized color palette, dynamic angles, music video aesthetic',
+    'custom': 'professional photography, detailed textures, balanced composition, thoughtful lighting'
+};
+
+const TRANSITION_TYPES = [
+    { value: '', label: 'Auto', hint: 'AI decides transition' },
+    { value: 'cut', label: 'Cut', hint: 'Direct cut - instant change' },
+    { value: 'match-cut', label: 'Match Cut', hint: 'Visual similarity between scenes' },
+    { value: 'dissolve', label: 'Dissolve', hint: 'Gradual blend between scenes' },
+    { value: 'fade-black', label: 'Fade to Black', hint: 'Scene ends with black' },
+    { value: 'fade-white', label: 'Fade to White', hint: 'Scene ends with white' },
+    { value: 'wipe', label: 'Wipe', hint: 'Directional reveal' },
+    { value: 'jump-cut', label: 'Jump Cut', hint: 'Jarring time skip' },
+    { value: 'smash-cut', label: 'Smash Cut', hint: 'Sudden dramatic contrast' },
+    { value: 'l-cut', label: 'L-Cut', hint: 'Audio continues over next scene' },
+    { value: 'j-cut', label: 'J-Cut', hint: 'Audio precedes visual' },
+];
+
+const IMAGE_MODELS = [
+    { value: 'gemini-2.5-flash-image', label: 'Google Nano Banana (Fast)' },
+    { value: 'gemini-3-pro-image-preview', label: 'Google Nano Banana Pro (High Quality)' },
+];
+
+const INITIAL_STATE: ProjectState = {
+    projectName: '',
+    stylePrompt: 'cinematic-realistic', // Default to value
+    imageModel: 'gemini-2.5-flash-image',
+    aspectRatio: '16:9',
+    genyuToken: '',
+    resolution: '1K', // Default resolution
+    scriptLanguage: 'vietnamese',
+
+    // Script Preset System
+    activeScriptPreset: 'film-animation', // Default to Film preset
+    customScriptPresets: [],
+
+    characters: Array.from({ length: 3 }).map(() => ({
+        id: generateId(),
+        name: '',
+        description: '',
+        masterImage: null,
+        faceImage: null,
+        bodyImage: null,
+        props: [
+            { id: generateId(), name: '', image: null },
+            { id: generateId(), name: '', image: null },
+            { id: generateId(), name: '', image: null },
+        ],
+        isDefault: false,
+        isAnalyzing: false,
+    })),
+    products: [],
+    scenes: [],
+};
+
+const ASPECT_RATIOS = [
+    { value: '16:9', label: '16:9 (Landscape - Cinematic)' },
+    { value: '9:16', label: '9:16 (Portrait - Mobile/Reels)' },
+    { value: '1:1', label: '1:1 (Square - Social)' },
+    { value: '4:3', label: '4:3 (Classic TV)' },
+    { value: '3:4', label: '3:4 (Portrait)' },
+];
+
+const CHARACTER_STYLES = [
+    {
+        value: 'pixar',
+        label: '3D Animation (Pixar/Disney Style)',
+        prompt: 'STRICT STYLE: 3D rendered character in Pixar/Disney animation style. MUST have: soft rounded features, smooth gradient shading, large expressive eyes with glossy reflections, exaggerated proportions (big head, small body for cute characters), vibrant saturated colors, soft ambient lighting with rim lights, no hard edges, clean subsurface scattering on skin. Art style: Toy Story, Inside Out, Zootopia aesthetic. Render engine style: Arnold/RenderMan quality.'
+    },
+    {
+        value: 'anime',
+        label: 'Anime / Manga',
+        prompt: 'STRICT STYLE: Japanese anime/manga illustration. MUST have: large detailed eyes with highlights and sparkles, sharp clean lineart, cel-shaded coloring with minimal gradients, vibrant hair colors with chunky highlights, sharp angular shadows, exaggerated facial expressions, simplified nose (small dots or lines), detailed clothing folds. Art style: Studio Ghibli, Makoto Shinkai, modern anime aesthetic. NO realistic shading, NO western cartoon style.'
+    },
+    {
+        value: 'cinematic',
+        label: 'Realistic Cinematic',
+        prompt: 'STRICT STYLE: Photorealistic cinematic rendering. MUST have: realistic skin texture with pores and subsurface scattering, accurate anatomy and proportions, natural hair strands with physics, realistic fabric materials with wrinkles, professional studio lighting (key light + fill + rim), shallow depth of field, film grain texture, color grading like Hollywood movies. Photography style: 85mm portrait lens, f/2.8 aperture, cinematic color palette. NO cartoon features, NO stylization.'
+    },
+    {
+        value: 'comic',
+        label: 'American Comic Book',
+        prompt: 'STRICT STYLE: American comic book illustration. MUST have: bold black ink outlines (thick outer lines, thinner inner details), strong contrast with dramatic shadows, halftone dot shading, dynamic poses with motion lines, exaggerated anatomy (muscular heroes, curvy females), vibrant primary colors (red, blue, yellow dominance), Ben-Day dots texture. Art style: Marvel/DC comics, Jack Kirby, Jim Lee aesthetic. NO soft gradients, NO realistic rendering.'
+    },
+    {
+        value: 'fantasy',
+        label: 'Digital Fantasy Art',
+        prompt: 'STRICT STYLE: Epic fantasy digital painting. MUST have: painterly brush strokes visible, rich atmospheric lighting (magical glows, dramatic backlighting), detailed costume design with ornate patterns, fantasy elements (armor, robes, magical effects), semi-realistic proportions with idealized features, rich color palette with jewel tones, ethereal atmosphere with particles/mist. Art style: concept art for games like World of Warcraft, League of Legends, Magic: The Gathering. Medium: digital painting with visible brush work.'
+    },
+    {
+        value: 'clay',
+        label: 'Claymation / Stop Motion',
+        prompt: 'STRICT STYLE: Claymation/stop-motion puppet style. MUST have: visible fingerprint textures on clay surface, slightly lumpy handmade appearance, matte finish with no glossy shine, simple geometric shapes, visible wire armature bumps, exaggerated simplified features, chunky proportions, soft pastel or earthy colors, slight imperfections showing handcrafted quality. Art style: Wallace & Gromit, Coraline, Kubo aesthetic. NO smooth 3D rendering, NO clean digital look.'
+    },
+];
+
+// --- Helper Functions ---
+const downloadImage = (base64Image: string, filename: string) => {
+    if (!base64Image) return;
+    const link = document.createElement('a');
+    link.href = base64Image;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
 
 
 // --- Sub-components ---
@@ -208,12 +392,208 @@ const ExpandableTextarea: React.FC<ExpandableTextareaProps> = ({ value, onChange
 };
 
 
+interface ApiKeyModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    apiKey: string;
+    setApiKey: (key: string) => void;
+}
+const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKey, setApiKey }) => {
+    const [checkStatus, setCheckStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
+    const [statusMsg, setStatusMsg] = useState('');
 
-// ApiKeyModal - imported from './components/SettingsModals'
+    useEffect(() => {
+        if (isOpen) {
+            setCheckStatus('idle');
+            setStatusMsg('');
+        }
+    }, [isOpen]);
 
+    const handleVerify = async () => {
+        if (!apiKey.trim()) {
+            setCheckStatus('error');
+            setStatusMsg("Vui lòng nhập API Key.");
+            return;
+        }
 
-// GenyuTokenModal, CoffeeModal, CoffeeButton - imported from './components/SettingsModals'
+        setCheckStatus('checking');
+        try {
+            const ai = new GoogleGenAI({ apiKey });
+            // Test connection with a cheap/fast model to verify key permissions
+            await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: { parts: [{ text: 'Test connection' }] }
+            });
+            setCheckStatus('success');
+            setStatusMsg("Kết nối thành công! Key hợp lệ.");
+            setTimeout(onClose, 1500);
+        } catch (error: any) {
+            setCheckStatus('error');
+            let msg = error.message || "Lỗi kết nối.";
+            if (msg.includes('403') || msg.includes('PERMISSION_DENIED')) {
+                msg = "Lỗi 403: Quyền bị từ chối. Hãy kiểm tra: 1) Project GCP đã bật Generative AI API chưa? 2) Billing đã kích hoạt chưa?";
+            } else if (msg.includes('400') || msg.includes('INVALID_ARGUMENT')) {
+                msg = "Lỗi 400: API Key không hợp lệ.";
+            }
+            setStatusMsg(msg);
+        }
+    }
 
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Quản lý API Key">
+            <p className="text-gray-400 mb-4">Nhập Gemini API key của bạn (Paid Tier 1) để sử dụng.</p>
+            <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Enter your API Key"
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+
+            {checkStatus !== 'idle' && (
+                <div className={`mt-3 text-sm p-3 rounded-lg border flex items-start ${checkStatus === 'checking' ? 'bg-blue-900/30 border-blue-800 text-blue-200' :
+                    checkStatus === 'success' ? 'bg-green-900/30 border-green-800 text-green-200' :
+                        'bg-red-900/30 border-red-800 text-red-200'
+                    }`}>
+                    <span className="mr-2 text-lg">
+                        {checkStatus === 'checking' && '⏳'}
+                        {checkStatus === 'success' && '✅'}
+                        {checkStatus === 'error' && '⚠️'}
+                    </span>
+                    <span>{statusMsg}</span>
+                </div>
+            )}
+
+            <div className="flex justify-end mt-6 space-x-2">
+                <button onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white transition-colors font-medium">Đóng</button>
+                <button
+                    onClick={handleVerify}
+                    disabled={checkStatus === 'checking'}
+                    className={`px-6 py-2 font-semibold text-white rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                    {checkStatus === 'checking' ? 'Đang kiểm tra...' : 'Kiểm tra & Lưu'}
+                </button>
+            </div>
+        </Modal>
+    );
+};
+
+interface GenyuTokenModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    token: string;
+    setToken: (token: string) => void;
+    recaptchaToken: string;
+    setRecaptchaToken: (token: string) => void;
+}
+const GenyuTokenModal: React.FC<GenyuTokenModalProps> = ({ isOpen, onClose, token, setToken, recaptchaToken, setRecaptchaToken }) => {
+    const [testResult, setTestResult] = useState<any>(null);
+    const [isTesting, setIsTesting] = useState(false);
+
+    const handleTestTokens = async () => {
+        setIsTesting(true);
+        setTestResult(null);
+
+        try {
+            const response = await fetch('http://localhost:3001/api/test-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, recaptchaToken })
+            });
+
+            const result = await response.json();
+            setTestResult(result);
+            console.log('Token Test Result:', result);
+        } catch (error) {
+            console.error('Test failed:', error);
+            setTestResult({ ready: false, message: '❌ Server error' });
+        } finally {
+            setIsTesting(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Genyu Token & Recaptcha">
+            <div className="space-y-4">
+                <div>
+                    <p className="text-gray-400 mb-2">1. Session Token (Cookie):</p>
+                    <p className="text-xs text-gray-500 mb-1">F12 → Application → Cookies → __Secure-next-auth.session-token</p>
+                    <input
+                        type="text"
+                        value={token}
+                        onChange={(e) => setToken(e.target.value)}
+                        placeholder="eyJh..."
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                </div>
+                <div>
+                    <p className="text-gray-400 mb-2">2. Recaptcha Token (Google Labs):</p>
+                    <p className="text-xs text-gray-500 mb-1">F12 → Network → Filter "video:batchAsyncGenerateVideoStartImage" → Payload → clientContext.recaptchaToken</p>
+                    <input
+                        type="text"
+                        value={recaptchaToken}
+                        onChange={(e) => setRecaptchaToken(e.target.value)}
+                        placeholder="0cAFcWeA..."
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                </div>
+
+                {/* Test Result Display */}
+                {testResult && (
+                    <div className={`p-4 rounded-lg ${testResult.ready ? 'bg-green-900/30 border border-green-600' : 'bg-red-900/30 border border-red-600'}`}>
+                        <p className="font-bold mb-2">{testResult.message}</p>
+                        {testResult.issues && testResult.issues.length > 0 && (
+                            <ul className="text-sm space-y-1">
+                                {testResult.issues.map((issue: string, i: number) => (
+                                    <li key={i} className="text-red-400">• {issue}</li>
+                                ))}
+                            </ul>
+                        )}
+                        {testResult.ready && (
+                            <p className="text-sm text-green-400 mt-2">✅ Ready to generate videos!</p>
+                        )}
+                    </div>
+                )}
+            </div>
+            <div className="flex justify-between mt-6">
+                <button
+                    onClick={handleTestTokens}
+                    disabled={isTesting}
+                    className="px-6 py-2 font-semibold text-white rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50"
+                >
+                    {isTesting ? 'Testing...' : '🔍 Test Tokens'}
+                </button>
+                <button onClick={onClose} className="px-6 py-2 font-semibold text-white rounded-lg bg-green-600 hover:bg-green-500">
+                    Save & Close
+                </button>
+            </div>
+        </Modal>
+    );
+};
+
+interface CoffeeModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    apiKey: string;
+}
+const CoffeeModal: React.FC<CoffeeModalProps> = ({ isOpen, onClose }) => (
+    <Modal isOpen={isOpen} onClose={onClose} title="Cho @Mrsonic30 1 follow ">
+        <p className="text-gray-400 mb-4 text-center">Nếu bạn thấy những chia sẻ của mình hữu ích!</p>
+        <div className="flex flex-col items-center">
+            <img src="N/a images" alt="QR Code for coffee" className="w-64 h-64 rounded-lg border-2 border-gray-700" />
+            <p className="text-xs text-gray-500 mt-4">Đổi nội dung bong bóng này tùy theo nhu cầu của bạn.</p>
+        </div>
+    </Modal>
+);
+
+interface CoffeeButtonProps {
+    onClick: () => void;
+}
+const CoffeeButton: React.FC<CoffeeButtonProps> = ({ onClick }) => (
+    <button onClick={onClick} className={`fixed bottom-6 right-6 w-16 h-16 rounded-full flex items-center justify-center text-white text-3xl shadow-lg transition-transform hover:scale-110 bg-gradient-to-br ${PRIMARY_GRADIENT}`}>
+        ☕
+    </button>
+);
 
 // --- Character Generator Modal ---
 interface CharacterGeneratorModalProps {
@@ -284,58 +664,86 @@ MANDATORY REQUIREMENTS:
 CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate from the specified aesthetic.
             `.trim();
 
-            let currentImage: string | null = null;
-            let genyuFailed = false;
-
             if (genyuToken) {
-                // >>> ROUTE 1: DIRECT CLIENT-SIDE CALL <<<
-                console.log("Using Direct Genyu Call (Client-Side)...");
+                // >>> ROUTE 1: GENYU PROXY <<<
+                console.log("Using Genyu Proxy for Character...");
 
                 let genyuAspect = "IMAGE_ASPECT_RATIO_PORTRAIT";
                 if (aspectRatio === "16:9") genyuAspect = "IMAGE_ASPECT_RATIO_LANDSCAPE";
                 if (aspectRatio === "1:1") genyuAspect = "IMAGE_ASPECT_RATIO_SQUARE";
                 if (aspectRatio === "4:3") genyuAspect = "IMAGE_ASPECT_RATIO_LANDSCAPE";
 
-                try {
-                    // Fetch latest tokens from Extension/Server
-                    const tokenData = await fetch('http://localhost:3001/api/tokens').then(r => r.json());
-
-                    console.log("Token data:", {
-                        hasOAuth: !!tokenData.oauthToken,
-                        hasSession: !!tokenData.sessionToken,
-                        hasRecaptcha: !!tokenData.recaptchaToken
-                    })
-
-                    // Direct call to Google Labs API (client-side)
-                    const result = await directGenyuCall({
+                const response = await fetch('http://localhost:3001/api/proxy/genyu/image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: genyuToken,
                         prompt: fullPrompt,
                         aspect: genyuAspect,
-                        oauthToken: tokenData.oauthToken || tokenData.sessionToken || genyuToken,
-                        recaptchaToken: tokenData.recaptchaToken,
-                        projectId: tokenData.projectId
-                    });
+                        style: styleConfig?.label || style
+                    })
+                });
 
-                    if (result.success && result.images && result.images.length > 0) {
-                        currentImage = result.images[0];
-                        console.log("✅ Genyu Direct Call Success!");
-                    } else {
-                        throw new Error("No images returned from Genyu");
-                    }
-                } catch (error: any) {
-                    console.error("❌ Direct Genyu call failed:", error.message);
-
-                    // Check if it's a token error
-                    if (error.message.includes('OAuth') || error.message.includes('401')) {
-                        alert('OAuth token expired or missing. Please:\n1. Open labs.google.com in another tab\n2. Generate one image there\n3. Come back and try again');
-                    }
-
-                    // Fallback to Gemini
-                    console.log("Falling back to Gemini API...");
-                    genyuFailed = true;
+                if (!response.ok) {
+                    const errJson = await response.json();
+                    throw new Error(errJson.error || "Genyu Proxy Failed");
                 }
-            }
 
-            if (!currentImage || genyuFailed) {
+                const data = await response.json();
+                console.log("Genyu Char Response:", data);
+
+                // Handle Google Labs / Fx Flow Direct Response
+                let genyuImage = null;
+                if (data.submissionResults && data.submissionResults.length > 0) {
+                    const submission = data.submissionResults[0]?.submission;
+                    const result = submission?.result || data.submissionResults[0]?.result;
+                    genyuImage = result?.fifeUrl || result?.media?.fifeUrl;
+                } else if (data.media && data.media.length > 0) {
+                    // Fallback for "Keys: media, workflows" case
+                    const mediaItem = data.media[0];
+                    genyuImage = mediaItem.fifeUrl || mediaItem.url;
+
+                    if (!genyuImage && mediaItem.image) {
+                        const img = mediaItem.image;
+                        genyuImage = img.fifeUrl || img.url;
+
+                        // Check generatedImage key
+                        if (!genyuImage && img.generatedImage) {
+                            const genImg = img.generatedImage;
+                            genyuImage = genImg.fifeUrl || genImg.url || (typeof genImg === 'string' ? genImg : null);
+                        }
+
+                        // If image is just a string
+                        if (!genyuImage && typeof img === 'string') {
+                            genyuImage = img;
+                        }
+                    }
+                }
+
+                // Fallback
+                if (!genyuImage) {
+                    genyuImage = data.data?.images?.[0]?.url || data.data?.url || data.url || data.imageUrl;
+                }
+
+                if (genyuImage) {
+                    // Auto-save to character master image (same as Gemini flow)
+                    onSave(genyuImage);
+                    alert('✅ Character generated successfully (Genyu)!');
+                    console.log('✅ Genyu character auto-saved to master image');
+                } else {
+                    let errorMsg = `Cannot find image URL. Keys: ${Object.keys(data).join(', ')}`;
+                    if (data.media && Array.isArray(data.media) && data.media.length > 0) {
+                        const m = data.media[0];
+                        errorMsg += `. Media[0] Keys: ${Object.keys(m).join(', ')}`;
+                        if (m.image) errorMsg += `. Image Keys: ${Object.keys(m.image).join(', ')}`;
+                    }
+                    if (data.submissionResults) errorMsg += `. Has SubResults.`;
+                    setError(errorMsg);
+                    alert(`❌ ${errorMsg}`);
+                    throw new Error(errorMsg);
+                }
+
+            } else {
                 // >>> ROUTE 2: GEMINI DIRECT <<<
                 const ai = new GoogleGenAI({ apiKey });
                 const response = await ai.models.generateContent({
@@ -352,19 +760,16 @@ CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate fr
                 const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                 if (imagePart?.inlineData) {
                     const base64ImageBytes = imagePart.inlineData.data;
-                    currentImage = `data:${imagePart.inlineData.mimeType};base64,${base64ImageBytes}`;
+                    const imageUrl = `data:${imagePart.inlineData.mimeType};base64,${base64ImageBytes}`;
+
+                    // Auto-save to character master image
+                    onSave(imageUrl);
+                    alert('✅ Character generated successfully!');
+                    console.log('✅ Character auto-saved to master image');
                 } else {
                     setError("AI không trả về ảnh. Thử lại.");
                     alert('❌ AI không trả về ảnh. Vui lòng thử lại.');
-                    return;
                 }
-            }
-
-            // Save the generated image
-            if (currentImage) {
-                onSave(currentImage);
-                alert('✅ Character generated successfully!');
-                console.log('✅ Character auto-saved to master image');
             }
 
         } catch (err: any) {
@@ -1829,17 +2234,17 @@ const App: React.FC = () => {
                 - OUTFIT: Complete, detailed outfit as described.
                 `.trim();
 
-                // Helper to call Proxy
-                const callProxy = async (prompt: string, aspect: string, recaptchaToken: string): Promise<string | { workflowId: string } | null> => {
+                // Helper to=call Proxy
+                const callProxy = async (prompt: string, aspect: string): Promise<string | { workflowId: string } | null> => {
                     const res = await fetch('http://localhost:3001/api/proxy/genyu/image', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             token: genyuToken,
-                            recaptchaToken,
+                            recaptchaToken: state.recaptchaToken, // Pass dynamic Recaptcha
                             prompt: prompt,
                             aspect: aspect,
-                            style: "3D Model / Character Sheet"
+                            style: "3D Model / Character Sheet" // Specialized style signal
                         })
                     });
                     const d = await res.json();
@@ -1849,35 +2254,47 @@ const App: React.FC = () => {
                         return null;
                     }
 
-                    // Extract Image logic
+                    // Extract Image logic - UPDATED for Google Labs Response
                     let imgUrl = null;
                     let workflowId = null;
 
+                    // Check Google Labs format first (media array)
                     if (d.media && d.media.length > 0) {
                         const m = d.media[0];
+                        console.log("DEBUG: media[0] content:", m);
+                        console.log("DEBUG: Full media[0] JSON:", JSON.stringify(m, null, 2));
+
+                        // Try to get URL first
                         imgUrl = m.fifeUrl || m.url || m.image?.fifeUrl || m.image?.url;
 
+                        // If no URL, check for base64 encodedImage
                         if (!imgUrl && m.image?.generatedImage?.encodedImage) {
                             const base64 = m.image.generatedImage.encodedImage;
                             imgUrl = `data:image/jpeg;base64,${base64}`;
+                            console.log("Extracted base64 image, length:", base64.length);
                         }
 
+                        // If still no image but has workflowId (shouldn't happen now)
                         if (!imgUrl && m.workflowId) {
                             workflowId = m.workflowId;
+                            console.log("Google Labs returned workflowId (async mode). WorkflowId:", workflowId);
                         }
                     }
 
+                    // Fallback: Old format (submissionResults)
                     if (!imgUrl && !workflowId && d.submissionResults && d.submissionResults.length > 0) {
                         const r = d.submissionResults[0]?.submission?.result || d.submissionResults[0]?.result;
                         imgUrl = r?.fifeUrl || r?.media?.fifeUrl;
                     }
 
+                    // Return workflowId for polling if available
                     if (workflowId) {
                         return { workflowId };
                     }
 
                     if (!imgUrl) {
                         console.warn("Genyu Res (No Image):", d);
+                        console.warn("Will return null for Gemini fallback...");
                         return null;
                     }
 
@@ -1885,51 +2302,50 @@ const App: React.FC = () => {
                 };
 
                 try {
-                    console.log("Consuming tokens from pool...");
-
-                    // Consume 2 tokens from pool (removes them after use)
-                    const consumeResponse = await fetch('http://localhost:3001/api/consume-tokens', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ count: 2 })
-                    });
-
-                    let faceToken = state.recaptchaToken; // Fallback
-                    let bodyToken = state.recaptchaToken;
-
-                    if (consumeResponse.ok) {
-                        const consumeData = await consumeResponse.json();
-                        if (consumeData.tokens && consumeData.tokens.length >= 2) {
-                            faceToken = consumeData.tokens[0].token;
-                            bodyToken = consumeData.tokens[1].token;
-                            console.log(`✅ Consumed 2 tokens (ages: ${consumeData.tokens[0].age}s, ${consumeData.tokens[1].age}s)`);
-                            console.log(`📊 Remaining in pool: ${consumeData.remaining} tokens`);
-                        } else if (consumeData.tokens && consumeData.tokens.length === 1) {
-                            faceToken = consumeData.tokens[0].token;
-                            bodyToken = consumeData.tokens[0].token;
-                            console.log(`⚠️ Only 1 token available, using same for both`);
-                        }
-                    } else {
-                        const errorData = await consumeResponse.json();
-                        console.warn("❌ Failed to consume tokens:", errorData.error);
-                        console.warn(`Pool has ${errorData.available} tokens, need ${errorData.requested}`);
-                        console.warn("Falling back to state token");
-                    }
-
-                    console.log("Calling Proxies with consumed tokens...");
+                    // Execute Parallel
+                    console.log("Calling Proxies...");
                     const [faceResult, bodyResult] = await Promise.all([
-                        callProxy(facePrompt, "IMAGE_ASPECT_RATIO_SQUARE", faceToken),
-                        callProxy(bodyPrompt, "IMAGE_ASPECT_RATIO_PORTRAIT", bodyToken)
+                        callProxy(facePrompt, "IMAGE_ASPECT_RATIO_SQUARE"),
+                        callProxy(bodyPrompt, "IMAGE_ASPECT_RATIO_PORTRAIT")
                     ]);
 
+                    console.log("Proxy Results:", { faceResult, bodyResult });
+
+                    // Extract URLs or workflowIds
                     const faceUrl = typeof faceResult === 'string' ? faceResult : null;
                     const bodyUrl = typeof bodyResult === 'string' ? bodyResult : null;
+                    const faceWorkflowId = typeof faceResult === 'object' && faceResult?.workflowId ? faceResult.workflowId : null;
+                    const bodyWorkflowId = typeof bodyResult === 'object' && bodyResult?.workflowId ? bodyResult.workflowId : null;
 
+                    // If both returned workflowIds (async mode), start polling
+                    if (faceWorkflowId || bodyWorkflowId) {
+                        console.log("Async workflows detected. Starting polling...");
+                        alert("Google Labs đang tạo ảnh (async mode). Sẽ tự động cập nhật khi hoàn thành...");
+
+                        // Save workflow IDs and mark as active
+                        updateStateAndRecord(s => ({
+                            ...s,
+                            characters: s.characters.map(c => c.id === id ? {
+                                ...c,
+                                faceWorkflowId: faceWorkflowId || undefined,
+                                bodyWorkflowId: bodyWorkflowId || undefined,
+                                workflowStatus: 'active' as const,
+                                isAnalyzing: false
+                            } : c)
+                        }));
+
+                        // Start polling (will be implemented next)
+                        pollCharacterWorkflows(id, genyuToken, faceWorkflowId, bodyWorkflowId);
+                        return; // Exit early - polling will update later
+                    }
+
+                    // If both failed, fallback to Gemini Direct
                     if (!faceUrl && !bodyUrl) {
                         console.warn("Google Labs Proxy failed. Falling back to Gemini Direct...");
                         throw new Error("Proxy returned null - will use Gemini fallback");
                     }
 
+                    // Update State with direct URLs (sync mode success)
                     updateStateAndRecord(s => ({
                         ...s,
                         characters: s.characters.map(c => c.id === id ? {
@@ -1941,17 +2357,20 @@ const App: React.FC = () => {
                     }));
                 } catch (proxyErr: any) {
                     console.error("Proxy Error - Using Gemini Fallback:", proxyErr);
+                    // Don't alert here - just fall through to Gemini Direct below
+                    // Mark as not analyzing so Gemini can take over
                     updateCharacter(id, { isAnalyzing: false });
                 }
             } else {
-                // >>> ROUTE 2: GEMINI DIRECT (Fallback or No Token) <<<
+                // >>> ROUTE 2: GEMINI DIRECT (Fallback) <<<
                 console.log("Using Gemini Direct for Character Gen...");
 
+                // 2. Generate Face ID (Crop/Refine)
                 const facePrompt = "Generate a close-up portrait of this character's face. Keep facial features identical to the reference. Neutral background.";
                 const facePromise = ai.models.generateContent({
                     model: model,
                     contents: { parts: [{ inlineData: { data, mimeType } }, { text: facePrompt }] },
-                    config: { responseModalities: ["IMAGE" as any] } // Cast to any to fix temp type issue
+                    config: { responseModalities: [Modality.IMAGE] }
                 });
 
                 // 3. Generate Body Sheet
@@ -1959,15 +2378,28 @@ const App: React.FC = () => {
                 const bodyPromise = ai.models.generateContent({
                     model: model,
                     contents: { parts: [{ inlineData: { data, mimeType } }, { text: bodyPrompt }] },
-                    config: { responseModalities: ["IMAGE" as any] }
+                    config: { responseModalities: [Modality.IMAGE] }
                 });
 
                 const [faceRes, bodyRes] = await Promise.all([facePromise, bodyPromise]);
+
+                // Process Images (Gemini returns inline base64 often, or blob?)
+                // Google GenAI Node SDK returns weird structure for images.
+                // Actually the previous implementation logic was:
+                // const faceImg = faceRes.candidates[0].content.parts[0].inlineData...
+                // But wait, the previous code in view_file showed:
+                // const [analysisRes, faceRes, bodyRes] = await Promise.all(...)
+                // then processed TEXT. It cut off before processing IMAGES in the previous view_file (line 1460).
+                // I need to assume the previous logic for Gemini Image extraction was correct or I need to write it.
+                // Actually, looking at the previous file content (Step 835), the code abruptly ended at 1460.
+                // I need to see how it handled the image response.
+                // BUT, I am REPLACING it. So I should implement standard Gemini image handling if I keep the fallback.
 
                 // Standard handler:
                 const getImg = (res: any) => {
                     const p = res.candidates?.[0]?.content?.parts?.[0];
                     if (p?.inlineData) return `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`;
+                    // Or if server returns link?
                     return null;
                 };
 

@@ -1,121 +1,94 @@
-// Popup script for Genyu Extension
-const $ = id => document.getElementById(id);
-const logEl = $('log');
+// Popup.js - Control panel for Token Pool Extension
 
-function log(msg, type = 'info') {
-    const entry = document.createElement('div');
-    entry.className = `log-entry ${type}`;
-    entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    logEl.appendChild(entry);
-    logEl.scrollTop = logEl.scrollHeight;
-}
+let isRunning = false;
+let currentInterval = 5000; // Default 5 seconds
+let poolSize = 0;
 
-// Check server connection
-async function pingServer() {
-    $('serverStatus').textContent = 'Checking...';
-    $('serverStatus').className = 'value pending';
+// DOM elements
+const statusIndicator = document.getElementById('statusIndicator');
+const statusText = document.getElementById('statusText');
+const poolSizeEl = document.getElementById('poolSize');
+const currentIntervalEl = document.getElementById('currentInterval');
+const intervalInput = document.getElementById('intervalInput');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
 
+// Load current status from background
+async function loadStatus() {
     try {
-        const response = await fetch('http://localhost:3001/api/tokens', {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-        });
+        const response = await chrome.runtime.sendMessage({ type: 'GET_STATUS' });
 
-        if (response.ok) {
-            const data = await response.json();
-            $('serverStatus').textContent = '✅ Connected';
-            $('serverStatus').className = 'value ok';
+        isRunning = response.isRunning;
+        currentInterval = response.interval;
+        poolSize = response.poolSize || 0;
 
-            if (data.hasRecaptcha && data.recaptchaToken) {
-                $('tokenStatus').textContent = '✅ Has Token';
-                $('tokenStatus').className = 'value ok';
-                $('tokenLength').textContent = (data.recaptchaLength || 0) + ' chars';
-
-                if (data.tokenAgeSeconds !== null && data.tokenAgeSeconds !== undefined) {
-                    $('lastCapture').textContent = data.tokenAgeSeconds + 's ago';
-                }
-            } else {
-                $('tokenStatus').textContent = '❌ No Token';
-                $('tokenStatus').className = 'value error';
-            }
-
-            log(`Server OK. Token: ${data.hasRecaptcha ? 'Yes' : 'No'}`, 'success');
-            return data;
-        } else {
-            throw new Error(`HTTP ${response.status}`);
-        }
+        updateUI();
     } catch (e) {
-        $('serverStatus').textContent = '❌ Offline';
-        $('serverStatus').className = 'value error';
-        log(`Server error: ${e.message}`, 'error');
-        return null;
+        console.error('Failed to load status:', e);
     }
 }
 
-// Check local storage for captured tokens
-async function checkStoredToken() {
-    log('Checking chrome.storage.local...');
+// Update UI based on current status
+function updateUI() {
+    // Status indicator
+    if (isRunning) {
+        statusIndicator.className = 'status-indicator active';
+        statusText.textContent = 'Running';
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'block';
+    } else {
+        statusIndicator.className = 'status-indicator inactive';
+        statusText.textContent = 'Stopped';
+        startBtn.style.display = 'block';
+        stopBtn.style.display = 'none';
+    }
 
-    chrome.storage.local.get(['lastToken', 'lastCapture'], (result) => {
-        if (result.lastToken) {
-            log(`Stored token: ${result.lastToken.substring(0, 30)}...`, 'success');
-            log(`Captured at: ${result.lastCapture || 'unknown'}`, 'info');
-        } else {
-            log('No token in local storage', 'error');
-        }
+    // Pool size
+    poolSizeEl.textContent = `${poolSize} tokens`;
+
+    // Interval
+    const seconds = currentInterval / 1000;
+    currentIntervalEl.textContent = `${seconds}s`;
+    intervalInput.value = seconds;
+}
+
+// Start auto-generate
+startBtn.addEventListener('click', async () => {
+    const interval = parseInt(intervalInput.value) * 1000;
+
+    if (interval < 3000 || interval > 60000) {
+        alert('Interval must be between 3 and 60 seconds');
+        return;
+    }
+
+    await chrome.runtime.sendMessage({
+        type: 'START_GENERATE',
+        interval: interval
     });
-}
 
-// Clear storage
-function clearStorage() {
-    chrome.storage.local.clear(() => {
-        log('Storage cleared', 'info');
-        $('tokenStatus').textContent = '❌ Cleared';
-        $('tokenStatus').className = 'value error';
-        $('tokenLength').textContent = '-';
-        $('lastCapture').textContent = 'Never';
-    });
-}
-
-// Test manual capture (send fake token to server)
-async function testManualCapture() {
-    log('Sending test token to server...');
-
-    try {
-        const testToken = '0cAFcWeA_TEST_TOKEN_' + Date.now();
-        const response = await fetch('http://localhost:3001/api/update-tokens', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                recaptchaToken: testToken,
-                projectId: 'test-project-id'
-            })
-        });
-
-        if (response.ok) {
-            log('Test token sent successfully!', 'success');
-            await pingServer(); // Refresh status
-        } else {
-            throw new Error(`HTTP ${response.status}`);
-        }
-    } catch (e) {
-        log(`Failed to send: ${e.message}`, 'error');
-    }
-}
-
-// Event listeners
-$('pingServer').addEventListener('click', pingServer);
-$('checkToken').addEventListener('click', checkStoredToken);
-$('clearStorage').addEventListener('click', clearStorage);
-$('testCapture').addEventListener('click', testManualCapture);
-
-// Listen for messages from background
-chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === 'TOKEN_CAPTURED') {
-        log(`Token captured! Length: ${message.length}`, 'success');
-        pingServer();
-    }
+    isRunning = true;
+    currentInterval = interval;
+    updateUI();
 });
 
-// Initial check
-pingServer();
+// Stop auto-generate
+stopBtn.addEventListener('click', async () => {
+    await chrome.runtime.sendMessage({ type: 'STOP_GENERATE' });
+
+    isRunning = false;
+    updateUI();
+});
+
+// Update pool size periodically
+setInterval(async () => {
+    try {
+        const response = await chrome.runtime.sendMessage({ type: 'GET_STATUS' });
+        poolSize = response.poolSize || 0;
+        poolSizeEl.textContent = `${poolSize} tokens`;
+    } catch (e) {
+        // Ignore
+    }
+}, 2000);
+
+// Load status on popup open
+loadStatus();
