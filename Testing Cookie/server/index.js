@@ -294,6 +294,140 @@ app.post('/api/proxy/genyu/image', async (req, res) => {
     }
 });
 
+// ==================== GOOGLE VEO VIDEO PROXY ====================
+app.post('/api/proxy/google/video/start', async (req, res) => {
+    try {
+        const { token, recaptchaToken, prompt, mediaId, aspectRatio } = req.body;
+        console.log(`[Video] Starting gen... ID: ${mediaId?.substring(0, 10)}`);
+
+        if (!token) return res.status(400).json({ error: 'Token required' });
+        if (!mediaId) return res.status(400).json({ error: 'Media ID required for I2V' });
+
+        const projectId = '07c3d6ef-3305-4196-bcc2-7db5294be436'; // Standard for VideoFX
+        const apiUrl = `https://aisandbox-pa.googleapis.com/v1/projects/${projectId}/flowMedia:batchGenerateImages`;
+
+        const payload = {
+            "clientContext": {
+                "recaptchaToken": recaptchaToken,
+                "sessionId": `;${Date.now()}`,
+                "projectId": projectId,
+                "tool": "PINHOLE",
+                "userPaygateTier": "PAYGATE_TIER_TWO"
+            },
+            "requests": [{
+                "aspectRatio": aspectRatio || "VIDEO_ASPECT_RATIO_LANDSCAPE",
+                "seed": Math.floor(Math.random() * 1000000),
+                "textInput": { "prompt": prompt },
+                "videoModelKey": "veo_3_1_i2v_s_fast_ultra",
+                "startImage": { "mediaId": mediaId },
+                // "metadata": { "sceneId": "proxy-request" } // Optional
+            }]
+        };
+
+        const headers = {
+            'authorization': `Bearer ${token}`,
+            'content-type': 'application/json',
+            'origin': 'https://labs.google.com',
+            'x-browser-channel': 'stable',
+            'x-browser-year': '2025'
+        };
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('Veo Start Error:', data);
+            return res.status(response.status).json(data);
+        }
+
+        console.log('[Video] Started OK:', data.requests?.[0]?.operation?.name);
+        res.json(data);
+    } catch (error) {
+        console.error('Video Proxy error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/proxy/google/video/status', async (req, res) => {
+    try {
+        const { token, operations } = req.body;
+        if (!token || !operations) return res.status(400).json({ error: 'Invalid payload' });
+
+        // Retrieve status for each operation
+        // Labs API uses individual GETs usually, or batchGet if supported.
+        // Assuming we iterate or use a batch endpoint if known.
+        // Since we don't know the exact batch status endpoint for Veo, 
+        // we can try `google.longrunning.Operations.GetOperation` for each.
+        // URL: https://aisandbox-pa.googleapis.com/v1/{name}
+
+        const headers = {
+            'authorization': `Bearer ${token}`,
+            'content-type': 'application/json',
+            'origin': 'https://labs.google.com'
+        };
+
+        const results = await Promise.all(operations.map(async (op) => {
+            const opName = op.operation.name;
+            const url = `https://aisandbox-pa.googleapis.com/v1/${opName}`;
+
+            try {
+                const r = await fetch(url, { headers });
+                const d = await r.json();
+
+                // Map to frontend expected format
+                // App.tsx expects: { status: 'MEDIA_GENERATION_STATUS_SUCCEEDED', result: { video: { url: ... } } }
+                // Labs usually returns: { name: ..., done: true, response: { result: ... } } OR metadata: { status: ... }
+
+                // Helper to normalize Labs response to our App format
+                let status = 'MEDIA_GENERATION_STATUS_ACTIVE';
+                let result = null;
+
+                if (d.done) {
+                    if (d.error) {
+                        status = 'MEDIA_GENERATION_STATUS_FAILED';
+                    } else {
+                        status = 'MEDIA_GENERATION_STATUS_SUCCEEDED';
+                        // Extract video URL
+                        // Look inside d.response or d.metadata
+                        const media = d.response?.result?.video || d.metadata?.result?.video;
+                        /* 
+                           Warning: Veo response structure might differ.
+                           Commonly: d.response['@type'] ... 
+                           Let's dump the whole thing into 'result' so App.tsx can find it.
+                        */
+                        result = d.response?.result || d.metadata?.result;
+
+                        // If still not found, check top level text/image fields
+                        if (!result && d.response) result = d.response;
+                    }
+                }
+
+                return {
+                    sceneId: op.sceneId,
+                    status: status,
+                    result: result,
+                    original: d
+                };
+
+            } catch (e) {
+                console.error("Status fetch fail:", e);
+                return { sceneId: op.sceneId, status: 'MEDIA_GENERATION_STATUS_FAILED' };
+            }
+        }));
+
+        res.json({ operations: results });
+
+    } catch (error) {
+        console.error('Video Status Proxy error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ==================== SERVER START ====================
 const PORT = 3001;
 const server = app.listen(PORT, () => {

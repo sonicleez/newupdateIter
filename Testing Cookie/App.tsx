@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { ProjectState, Character, Scene, CharacterProp, ScriptPreset, Product } from './types';
-import { Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, Brush } from 'lucide-react';
 import { useHotkeys } from './hooks/useHotkeys';
 import { saveProject, openProject } from './utils/fileUtils';
 import { GoogleGenAI, Modality, Type } from "@google/genai";
@@ -903,6 +903,7 @@ CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate fr
                         </button>
                     ) : (
                         <>
+
                             <button
                                 onClick={handleGenerate}
                                 className="flex-1 py-3 font-semibold text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
@@ -1401,9 +1402,10 @@ interface ImageViewerModalProps {
     currentIndex: number;
     onNavigate: (index: number) => void;
     onRegenerate: (sceneId: string, prompt?: string) => void;
+    onEdit: (sceneId: string, image: string) => void;
 }
 
-const ImageViewerModal: React.FC<ImageViewerModalProps> = ({ isOpen, onClose, scenes, currentIndex, onNavigate, onRegenerate }) => {
+const ImageViewerModal: React.FC<ImageViewerModalProps> = ({ isOpen, onClose, scenes, currentIndex, onNavigate, onRegenerate, onEdit }) => {
     const [refinePrompt, setRefinePrompt] = useState('');
     const currentScene = scenes[currentIndex];
 
@@ -1483,7 +1485,19 @@ const ImageViewerModal: React.FC<ImageViewerModalProps> = ({ isOpen, onClose, sc
                             disabled={!currentScene.generatedImage}
                             className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
-                            ✨ Sửa ảnh này
+                            ✨ Sửa ảnh này (Prompt)
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (currentScene.generatedImage) {
+                                    onEdit(currentScene.id, currentScene.generatedImage);
+                                    onClose();
+                                }
+                            }}
+                            className="w-full mt-2 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded shadow-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Brush size={16} />
+                            Advanced Edit (Layers/Mask)
                         </button>
                         <button
                             onClick={() => onRegenerate(currentScene.id)}
@@ -2369,17 +2383,47 @@ const App: React.FC = () => {
     };
 
     // Generate Product from Prompt (No Master Image - AI Creates Everything)
-    const handleGenerateProductFromPrompt = async (id: string) => {
+    // Generate Product from Prompt (No Master Image - AI Creates Everything)
+    const handleGenerateProductFromPrompt = async (id: string, description: string) => {
         const product = state.products?.find(p => p.id === id);
-        if (!product || !product.description) {
+        if (!description.trim()) {
             alert("Vui lòng nhập mô tả sản phẩm trước.");
             return;
         }
 
+        // 1. Try Gemini API First
+        const apiKey = userApiKey || process.env.API_KEY;
+        if (apiKey) {
+            try {
+                console.log("[Product Gen] ✨ Generating Master Image with Gemini...");
+                const masterPrompt = `Professional product photography of ${description}. Studio lighting, white background, 8K detail, centered, front view, high quality product shot.`;
+
+                // Use image model defaults
+                const masterImage = await callGeminiAPI(masterPrompt, '1:1'); // Square for product
+
+                if (masterImage) {
+                    updateProduct(id, { masterImage: masterImage });
+                    // Trigger 5-view generation
+                    await handleProductMasterImageUpload(id, masterImage);
+                    return;
+                }
+            } catch (err) {
+                console.error("Gemini Product Gen Error:", err);
+                // Fallthrough to Genyu
+            }
+        }
+
+        // 2. Fallback to Genyu Proxy
         const genyuToken = state.genyuToken;
         if (!genyuToken) {
-            alert("Cần Genyu Token để tạo sản phẩm.");
-            setGenyuModalOpen(true);
+            updateProduct(id, { isAnalyzing: false });
+            // Only alert if we also failed Gemini or didn't have it
+            if (!apiKey) {
+                alert("Cần API Key (Gemini) hoặc Token (Genyu) để tạo sản phẩm.");
+                setApiKeyModalOpen(true);
+            } else {
+                alert("Không thể tạo ảnh sản phẩm bằng Gemini. Vui lòng thử lại.");
+            }
             return;
         }
 
@@ -2387,7 +2431,7 @@ const App: React.FC = () => {
 
         try {
             // Step 1: Generate Master Image from description
-            const masterPrompt = `Professional product photography of ${product.description}. Studio lighting, white background, 8K detail, centered, front view, high quality product shot.`;
+            const masterPrompt = `Professional product photography of ${description}. Studio lighting, white background, 8K detail, centered, front view, high quality product shot.`;
 
             const res = await fetch('http://localhost:3001/api/proxy/genyu/image', {
                 method: 'POST',
@@ -2814,12 +2858,12 @@ const App: React.FC = () => {
     };
 
     // --- Editing Logic ---
-    const openEditor = (id: string, image: string, type: 'master' | 'face' | 'body' | 'prop' | 'side' | 'back', propIndex?: number) => {
-        setEditingImage({ id, image, type, propIndex });
+    const openEditor = (id: string, image: string, type: 'master' | 'face' | 'body' | 'prop' | 'side' | 'back' | 'scene' | 'product', propIndex?: number, viewKey?: string) => {
+        setEditingImage({ id, image, type, propIndex, viewKey });
         setIsEditorOpen(true);
     };
 
-    const handleEditorSave = (newImage: string) => {
+    const handleEditorSave = (newImage: string, history: { id: string; image: string; prompt: string }[]) => {
         if (!editingImage) return;
         const { id, type, propIndex } = editingImage;
 
@@ -2831,15 +2875,29 @@ const App: React.FC = () => {
                 updateCharacter(id, { props: newProps });
             }
         } else if (type === 'master') {
-            updateCharacter(id, { masterImage: newImage });
+            updateCharacter(id, { masterImage: newImage, editHistory: history });
         } else if (type === 'face') {
-            updateCharacter(id, { faceImage: newImage });
+            updateCharacter(id, { faceImage: newImage, editHistory: history });
         } else if (type === 'body') {
-            updateCharacter(id, { bodyImage: newImage });
+            updateCharacter(id, { bodyImage: newImage, editHistory: history });
         } else if (type === 'side') {
-            updateCharacter(id, { sideImage: newImage });
+            updateCharacter(id, { sideImage: newImage, editHistory: history });
         } else if (type === 'back') {
-            updateCharacter(id, { backImage: newImage });
+            updateCharacter(id, { backImage: newImage, editHistory: history });
+        } else if (type === 'scene') {
+            updateScene(id, { generatedImage: newImage, editHistory: history });
+        } else if (type === 'product') {
+            if (editingImage.viewKey) {
+                // Updating a specific view
+                const product = state.products.find(p => p.id === id);
+                if (product) {
+                    const newViews = { ...product.views, [editingImage.viewKey]: newImage };
+                    updateProduct(id, { views: newViews }); // Note: History for sub-views is not deeply tracked yet in types, but the image updates
+                }
+            } else {
+                // Updating Master
+                updateProduct(id, { masterImage: newImage, editHistory: history });
+            }
         }
     };
 
@@ -3070,7 +3128,8 @@ const App: React.FC = () => {
             if (newScenes.length > 0) {
                 updateStateAndRecord(s => ({
                     ...s,
-                    scenes: [...s.scenes, ...newScenes]
+                    scenes: [...s.scenes, ...newScenes],
+                    detailedScript: detailedStory || s.detailedScript
                 }));
                 alert(`✨ Đã tạo ${newScenes.length} cảnh với preset "${activePreset.name}"!`);
             } else {
@@ -3170,7 +3229,7 @@ const App: React.FC = () => {
         const selectedProdsForPrompt = (currentStateSnapshot.products || []).filter(p => (sceneToUpdate.productIds || []).includes(p.id));
         if (selectedProdsForPrompt.length > 0) {
             const prodDesc = selectedProdsForPrompt.map(p => `[Product: ${p.name} - ${p.description}]`).join(' ');
-            finalPrompt += `\n\nFeatured Products: ${prodDesc}`;
+            finalPrompt += `\n\nFeatured Products: ${prodDesc}. STRICTLY FOLLOW REFERENCE IMAGES FOR THESE PRODUCTS. DO NOT hallucinate details.`;
             console.log("Updated Base Prompt with Products:", finalPrompt);
         }
 
@@ -3472,12 +3531,37 @@ const App: React.FC = () => {
                         parts.push({ inlineData: { data, mimeType } });
                     }
                     // Inject PROPS references
-                    if (char.props && char.props.length > 0) {
+                    if (char.props) {
                         for (const prop of char.props) {
                             if (prop.image) {
                                 const [header, data] = prop.image.split(',');
                                 const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
                                 parts.push({ text: `Reference for ${char.name}'s PROP (${prop.name || 'Accessory'}):` });
+                                parts.push({ inlineData: { data, mimeType } });
+                            }
+                        }
+                    }
+                }
+
+                // Add Reference Images for Products
+                const selectedProducts = currentState.products.filter(p => (sceneToUpdate.productIds || []).includes(p.id));
+                for (const prod of selectedProducts) {
+                    // Inject Master Image
+                    if (prod.masterImage) {
+                        const [header, data] = prod.masterImage.split(',');
+                        const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                        parts.push({ text: `Reference for PRODUCT ${prod.name} (MASTER VIEW):` });
+                        parts.push({ inlineData: { data, mimeType } });
+                    }
+                    // Inject Specific Views if available
+                    if (prod.views) {
+                        const views = prod.views;
+                        const viewKeys = ['front', 'back', 'left', 'right', 'top'] as const;
+                        for (const key of viewKeys) {
+                            if (views[key]) {
+                                const [header, data] = views[key]!.split(',');
+                                const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                                parts.push({ text: `Reference for PRODUCT ${prod.name} (${key.toUpperCase()} VIEW):` });
                                 parts.push({ inlineData: { data, mimeType } });
                             }
                         }
@@ -3597,6 +3681,10 @@ const App: React.FC = () => {
             const context = scene.contextDescription || '';
             const promptName = scene.promptName || '';
 
+            // Get Product Info
+            const sceneProducts = state.products.filter(p => (scene.productIds || []).includes(p.id));
+            const productContext = sceneProducts.map(p => `Product: ${p.name} (${p.description})`).join('; ');
+
             const prompt = `
              Role: Expert Video Prompt Engineer for Google Veo 3.1.
              
@@ -3605,6 +3693,7 @@ const App: React.FC = () => {
              - Context: "${context}"
              - Scene Intent: "${promptName}"
              - Dialogue: "${scriptText}"
+             - Featured Products: "${productContext}"
              
              **TASK:** 
              Analyze the scene and generate the OPTIMAL text-to-video prompt.
@@ -3823,7 +3912,7 @@ const App: React.FC = () => {
                 if (state.aspectRatio === "9:16" || state.aspectRatio === "3:4") videoAspect = "VIDEO_ASPECT_RATIO_PORTRAIT";
 
                 // DEBUG: Verify Tokens
-                alert(`Debug Request:\nRecaptcha: ${state.recaptchaToken?.substring(0, 10)}...\nToken: ${genyuToken.substring(0, 10)}...`);
+                // console.log(`Debug Request:\nRecaptcha: ${state.recaptchaToken?.substring(0, 10)}...\nToken: ${genyuToken.substring(0, 10)}...`);
 
                 const response = await fetch('http://localhost:3001/api/proxy/google/video/start', {
                     method: 'POST',
@@ -4520,6 +4609,19 @@ const App: React.FC = () => {
                 onSave={handleEditorSave}
                 apiKey={userApiKey || process.env.API_KEY || ''}
                 genyuToken={state.genyuToken}
+                initialHistory={(() => {
+                    if (!editingImage) return undefined;
+                    const { id, type } = editingImage;
+                    if (type === 'scene') return state.scenes.find(s => s.id === id)?.editHistory;
+                    if (['master', 'face', 'body', 'side', 'back'].includes(type)) {
+                        return state.characters.find(c => c.id === id)?.editHistory;
+                    }
+                    if (type === 'product') {
+                        // If checking product history, we ideally check if it's main or sub view - but for now simple check
+                        return state.products?.find(p => p.id === id)?.editHistory;
+                    }
+                    return undefined;
+                })()}
             />
             <ImageViewerModal
                 isOpen={isImageViewerOpen}
@@ -4528,6 +4630,7 @@ const App: React.FC = () => {
                 currentIndex={currentImageIndex}
                 onNavigate={setCurrentImageIndex}
                 onRegenerate={performImageGeneration}
+                onEdit={(id, img) => openEditor(id, img, 'scene')}
             />
             <ProductDetailModal
                 isOpen={!!editingProductId}
@@ -4537,6 +4640,7 @@ const App: React.FC = () => {
                 onMasterImageUpload={handleProductMasterImageUpload}
                 onDelete={deleteProduct}
                 onGenerateProduct={handleGenerateProductFromPrompt}
+                onEdit={(id, img, view) => openEditor(id, img, 'product', undefined, view)}
             />
         </div >
     );

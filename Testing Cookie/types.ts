@@ -24,6 +24,7 @@ export interface Character {
   faceWorkflowId?: string;
   bodyWorkflowId?: string;
   workflowStatus?: 'pending' | 'active' | 'succeeded' | 'failed';
+  editHistory?: { id: string; image: string; prompt: string }[];
 }
 
 export interface SceneDialogue {
@@ -59,6 +60,7 @@ export interface Scene {
   characterIds: string[];
   productIds: string[]; // Referenced Products/Props in this scene
   generatedImage: string | null;
+  editHistory?: { id: string; image: string; prompt: string }[];
 
   // Video generation - Veo 3.1
   mediaId?: string; // Google Labs Media ID for Video Gen
@@ -171,4 +173,5 @@ export interface Product {
     top: string | null;
   };
   isAnalyzing: boolean;
+  editHistory?: { id: string; image: string; prompt: string }[];
 }

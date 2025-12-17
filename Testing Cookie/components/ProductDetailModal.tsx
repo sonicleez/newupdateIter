@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import Modal from './Modal';
 import type { Product } from '../types';
+import { Brush } from 'lucide-react';
 
 interface ProductDetailModalProps {
     isOpen: boolean;
@@ -9,7 +10,8 @@ interface ProductDetailModalProps {
     updateProduct: (id: string, updates: Partial<Product>) => void;
     onMasterImageUpload: (id: string, image: string) => void;
     onDelete: (id: string) => void;
-    onGenerateProduct?: (id: string) => void; // NEW: AI Generate
+    onGenerateProduct?: (id: string, prompt: string) => void;
+    onEdit: (id: string, image: string, view?: 'front' | 'back' | 'left' | 'right' | 'top') => void;
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
@@ -19,7 +21,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     updateProduct,
     onMasterImageUpload,
     onDelete,
-    onGenerateProduct
+    onGenerateProduct,
+    onEdit
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [genPrompt, setGenPrompt] = useState('');
@@ -41,7 +44,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
     const handleGenerateClick = () => {
         if (onGenerateProduct) {
-            onGenerateProduct(product.id);
+            onGenerateProduct(product.id, genPrompt);
         }
     };
 
@@ -116,6 +119,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                                             Đổi ảnh
                                         </button>
                                         <button
+                                            onClick={(e) => { e.stopPropagation(); onEdit(product.id, product.masterImage!); }}
+                                            className="p-1.5 bg-purple-600 hover:bg-purple-500 rounded text-white text-xs flex items-center space-x-1"
+                                        >
+                                            <Brush size={12} />
+                                            <span>Sửa ảnh</span>
+                                        </button>
+                                        <button
                                             onClick={(e) => { e.stopPropagation(); updateProduct(product.id, { masterImage: null, views: { front: null, back: null, left: null, right: null, top: null } }); }}
                                             className="p-1.5 bg-red-600 hover:bg-red-500 rounded text-white text-xs"
                                         >
@@ -183,12 +193,23 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                                 <div className="text-[10px] text-gray-400 mb-1">{icon} {label}</div>
                                 <div className="aspect-square bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-brand-orange transition-colors">
                                     {product.views[key] ? (
-                                        <img
-                                            src={product.views[key]!}
-                                            alt={label}
-                                            className="w-full h-full object-cover cursor-pointer"
-                                            onClick={() => window.open(product.views[key]!, '_blank')}
-                                        />
+                                        <div className="relative w-full h-full group">
+                                            <img
+                                                src={product.views[key]!}
+                                                alt={label}
+                                                className="w-full h-full object-cover cursor-pointer"
+                                                onClick={() => window.open(product.views[key]!, '_blank')}
+                                            />
+                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); onEdit(product.id, product.views[key]!, key); }}
+                                                    className="p-1 bg-purple-600 hover:bg-purple-500 rounded text-white"
+                                                    title="Chỉnh sửa ảnh này"
+                                                >
+                                                    <Brush size={12} />
+                                                </button>
+                                            </div>
+                                        </div>
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center text-gray-600 text-[10px]">
                                             —
