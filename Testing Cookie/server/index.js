@@ -319,7 +319,7 @@ app.post('/api/proxy/google/video/start', async (req, res) => {
                 "seed": Math.floor(Math.random() * 1000000),
                 "textInput": { "prompt": prompt },
                 "videoModelKey": "veo_3_1_i2v_s_fast_ultra",
-                "startImage": { "mediaId": mediaId },
+                "startImage": mediaId ? { "mediaId": mediaId } : { "image": { "content": req.body.imageBase64 } },
                 // "metadata": { "sceneId": "proxy-request" } // Optional
             }]
         };

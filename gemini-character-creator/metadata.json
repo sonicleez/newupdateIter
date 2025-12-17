@@ -1,0 +1,5 @@
+{
+  "name": "Gemini Character Creator",
+  "description": "Create and edit unique character images using text prompts. Choose from various art styles and refine your creation with deep editing powered by Gemini.",
+  "requestFramePermissions": []
+}

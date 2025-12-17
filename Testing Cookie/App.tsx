@@ -3880,15 +3880,17 @@ const App: React.FC = () => {
         const genyuToken = cleanToken(rawToken);
         console.log("Video Gen - Token Cleaned:", genyuToken.substring(0, 10) + "...");
 
-        // Filter valid scenes: Has MediaID (Image source) + Veo Prompt + No Video yet
-        const scenesToProcess = state.scenes.filter(s => s.mediaId && s.veoPrompt && !s.generatedVideo);
+        // Filter valid scenes: Has Veo Prompt + (MediaID OR Generated Image) + No Video yet
+        const scenesToProcess = state.scenes.filter(s => (s.mediaId || s.generatedImage) && s.veoPrompt && !s.generatedVideo);
 
         console.log("Video Gen - Valid Scenes:", scenesToProcess.length);
         if (scenesToProcess.length === 0) {
-            const missingMediaId = state.scenes.filter(s => !s.mediaId && s.generatedImage).length;
-            const missingPrompt = state.scenes.filter(s => s.mediaId && !s.veoPrompt).length;
-
-            return alert(`Không tìm thấy phân cảnh nào đủ điều kiện!\n\n- Số ảnh chưa có Media ID: ${missingMediaId} (Cần tạo lại ảnh)\n- Số ảnh chưa có Veo Prompt: ${missingPrompt} (Cần tạo Prompt)`);
+            console.log("Video Gen - Valid Scenes:", scenesToProcess.length);
+            if (scenesToProcess.length === 0) {
+                const missingImage = state.scenes.filter(s => !s.generatedImage).length;
+                const missingPrompt = state.scenes.filter(s => s.generatedImage && !s.veoPrompt).length;
+                return alert(`Không tìm thấy phân cảnh nào đủ điều kiện!\n\n- Số cảnh chưa có ảnh: ${missingImage}\n- Số ảnh chưa có Veo Prompt: ${missingPrompt} (Cần tạo Prompt)`);
+            }
         }
 
         // Removed confirm for debugging
@@ -3911,6 +3913,13 @@ const App: React.FC = () => {
                 let videoAspect = "VIDEO_ASPECT_RATIO_LANDSCAPE";
                 if (state.aspectRatio === "9:16" || state.aspectRatio === "3:4") videoAspect = "VIDEO_ASPECT_RATIO_PORTRAIT";
 
+                // Extract Base64 if mediaId is missing
+                let imageBase64 = null;
+                if (!scene.mediaId && scene.generatedImage) {
+                    // Remove data:image/jpeg;base64, prefix if present
+                    imageBase64 = scene.generatedImage.replace(/^data:image\/\w+;base64,/, "");
+                }
+
                 // DEBUG: Verify Tokens
                 // console.log(`Debug Request:\nRecaptcha: ${state.recaptchaToken?.substring(0, 10)}...\nToken: ${genyuToken.substring(0, 10)}...`);
 
@@ -3921,7 +3930,8 @@ const App: React.FC = () => {
                         token: genyuToken,
                         recaptchaToken: state.recaptchaToken, // Send dynamic Recaptcha
                         prompt: scene.veoPrompt,
-                        mediaId: scene.mediaId, // This must be valid!
+                        mediaId: scene.mediaId, // Can be null now
+                        imageBase64: imageBase64, // Send base64 fallback
                         aspectRatio: videoAspect
                     })
                 });
