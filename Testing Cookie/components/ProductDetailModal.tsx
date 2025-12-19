@@ -26,7 +26,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [genPrompt, setGenPrompt] = useState('');
-    const [isGenerating, setIsGenerating] = useState(false);
 
     if (!product) return null;
 
@@ -164,10 +163,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                                         updateProduct(product.id, { description: genPrompt });
                                         handleGenerateClick();
                                     }}
-                                    disabled={isGenerating}
+                                    disabled={product.isAnalyzing}
                                     className="w-full px-4 py-2 bg-gradient-to-r from-brand-orange to-brand-red hover:from-brand-red hover:to-brand-orange text-white font-semibold rounded-lg text-sm transition-all disabled:opacity-50"
                                 >
-                                    ✨ Tạo bằng AI
+                                    {product.isAnalyzing ? '✨ Đang tạo...' : '✨ Tạo bằng AI'}
                                 </button>
                             </div>
                         )}

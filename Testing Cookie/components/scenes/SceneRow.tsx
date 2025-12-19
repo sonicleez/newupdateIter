@@ -1,0 +1,348 @@
+import React, { useRef } from 'react';
+import { GripVertical } from 'lucide-react';
+import { Scene, Character, Product } from '../../types';
+import { ExpandableTextarea } from '../common/ExpandableTextarea';
+import { CAMERA_ANGLES, LENS_OPTIONS, TRANSITION_TYPES, VEO_MODES } from '../../constants/presets';
+
+export interface SceneRowProps {
+    scene: Scene;
+    index: number;
+    characters: Character[];
+    products: Product[];
+    updateScene: (id: string, updates: Partial<Scene>) => void;
+    removeScene: (id: string) => void;
+    generateImage: () => void;
+    generateEndFrame: () => void;
+    openImageViewer: () => void;
+    onDragStart: (index: number) => void;
+    onDragOver: (index: number) => void;
+    onDrop: (index: number) => void;
+}
+
+export const SceneRow: React.FC<SceneRowProps> = ({
+    scene, index, characters, products, updateScene, removeScene,
+    generateImage, generateEndFrame, openImageViewer,
+    onDragStart, onDragOver, onDrop
+}) => {
+    const endFrameInputRef = useRef<HTMLInputElement>(null);
+
+    const handleEndFrameUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                updateScene(scene.id, { endFrameImage: reader.result as string });
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    return (
+        <div
+            draggable
+            onDragStart={() => onDragStart(index)}
+            onDragOver={(e) => { e.preventDefault(); onDragOver(index); }}
+            onDrop={() => onDrop(index)}
+            className={`grid md:grid-cols-12 gap-4 items-start bg-gray-800/30 p-4 rounded-lg border transition-all group/row relative overflow-visible ${index === (window as any).dragOverIndex ? 'border-brand-orange bg-brand-orange/10 scale-[1.01] shadow-2xl z-10' : 'border-gray-700 hover:border-gray-500'
+                }`}
+        >
+            {/* Drag Handle */}
+            <div className="absolute -left-8 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing text-gray-600 hover:text-brand-orange opacity-0 group-hover/row:opacity-100 transition-all p-2">
+                <GripVertical size={20} />
+            </div>
+
+            {/* Scene Number */}
+            <div className="md:col-span-1 flex flex-col items-center space-y-2">
+                <div className="bg-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold text-gray-300 text-sm">{index + 1}</div>
+                <input
+                    type="text"
+                    value={scene.sceneNumber}
+                    onChange={(e) => updateScene(scene.id, { sceneNumber: e.target.value })}
+                    className="w-full bg-gray-900 border border-gray-600 rounded p-1 text-center font-bold text-white focus:border-green-500 text-sm"
+                    placeholder="SC.."
+                />
+                <button onClick={() => removeScene(scene.id)} className="text-red-500 hover:text-red-400 text-xs opacity-0 group-hover/row:opacity-100 transition-opacity">Xóa</button>
+            </div>
+
+            {/* Script */}
+            <div className="md:col-span-2 space-y-2">
+                <ExpandableTextarea
+                    value={scene.language1}
+                    onChange={(val) => updateScene(scene.id, { language1: val })}
+                    placeholder="Script (Lang 1)..."
+                    rows={3}
+                    className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-xs text-gray-300 focus:border-green-500 resize-none"
+                    title="Script (Language 1)"
+                />
+                <ExpandableTextarea
+                    value={scene.vietnamese}
+                    onChange={(val) => updateScene(scene.id, { vietnamese: val })}
+                    placeholder="Lời thoại (Việt)..."
+                    rows={3}
+                    className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-xs text-white focus:border-green-500 resize-none"
+                    title="Lời thoại Tiếng Việt"
+                />
+            </div>
+
+            {/* Context + Cinematography */}
+            <div className="md:col-span-2 space-y-2">
+                <input
+                    type="text"
+                    value={scene.promptName}
+                    onChange={(e) => updateScene(scene.id, { promptName: e.target.value })}
+                    placeholder="Tên cảnh (VD: Rượt đuổi)"
+                    className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-xs font-bold text-white focus:border-green-500"
+                />
+                <ExpandableTextarea
+                    value={scene.contextDescription}
+                    onChange={(val) => updateScene(scene.id, { contextDescription: val })}
+                    placeholder="Mô tả bối cảnh để AI vẽ..."
+                    rows={2}
+                    className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-xs text-white focus:border-green-500 resize-none"
+                    title="Mô tả bối cảnh (Context Description)"
+                />
+                <div className="space-y-1.5 bg-gray-900/60 p-2 rounded border border-gray-700/50">
+                    <div className="text-[9px] text-gray-500 font-semibold">📹 Cinematography</div>
+                    <select
+                        value={scene.cameraAngleOverride || ''}
+                        onChange={(e) => updateScene(scene.id, { cameraAngleOverride: e.target.value })}
+                        className="w-full bg-gray-800 text-[11px] text-gray-300 border border-gray-600 rounded px-2 py-1.5 focus:border-brand-orange"
+                        title="Camera Angle"
+                    >
+                        {CAMERA_ANGLES.map(angle => (
+                            <option key={angle.value} value={angle.value}>🎬 {angle.label}</option>
+                        ))}
+                    </select>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <select
+                            value={scene.lensOverride || ''}
+                            onChange={(e) => updateScene(scene.id, { lensOverride: e.target.value })}
+                            className="w-full bg-gray-800 text-[11px] text-gray-300 border border-gray-600 rounded px-2 py-1 focus:border-brand-orange"
+                            title="Lens"
+                        >
+                            {LENS_OPTIONS.map(lens => (
+                                <option key={lens.value} value={lens.value}>🔭 {lens.label}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={scene.transitionType || ''}
+                            onChange={(e) => updateScene(scene.id, { transitionType: e.target.value })}
+                            className="w-full bg-gray-800 text-[11px] text-gray-300 border border-gray-600 rounded px-2 py-1 focus:border-brand-orange"
+                            title="Transition"
+                        >
+                            {TRANSITION_TYPES.map(t => (
+                                <option key={t.value} value={t.value}>✂️ {t.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            {/* Veo Prompt */}
+            <div className="md:col-span-3 h-full">
+                <ExpandableTextarea
+                    value={scene.veoPrompt}
+                    onChange={(val) => updateScene(scene.id, { veoPrompt: val })}
+                    placeholder="(00:00-00:05) Prompt cho Google Veo..."
+                    rows={7}
+                    className="w-full h-[160px] bg-gray-900 border border-blue-900/30 rounded p-2 text-[11px] text-blue-200 focus:border-blue-500 font-mono resize-none leading-relaxed"
+                    title="Veo Video Prompt"
+                />
+            </div>
+
+            {/* Characters & Products */}
+            <div className="md:col-span-1 h-[160px] flex flex-col space-y-1 overflow-hidden">
+                <div className="flex-1 overflow-y-auto space-y-0.5 bg-gray-900/50 p-1.5 rounded border border-gray-700 custom-scrollbar">
+                    <div className="text-[8px] text-gray-500 font-semibold mb-0.5 sticky top-0 bg-gray-900/90 px-1">👤 Nhân vật</div>
+                    {characters.map(char => (
+                        <label key={char.id} className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-800 p-0.5 rounded">
+                            <input
+                                type="checkbox"
+                                checked={scene.characterIds.includes(char.id)}
+                                onChange={(e) => {
+                                    const newIds = e.target.checked
+                                        ? [...scene.characterIds, char.id]
+                                        : scene.characterIds.filter(id => id !== char.id);
+                                    updateScene(scene.id, { characterIds: newIds });
+                                }}
+                                className="h-2.5 w-2.5 cursor-pointer appearance-none rounded border border-gray-600 bg-gray-700 checked:border-green-500 checked:bg-green-500 transition-all"
+                            />
+                            <span className="text-[9px] truncate text-gray-400">{char.name || '?'}</span>
+                        </label>
+                    ))}
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-0.5 bg-gray-900/50 p-1.5 rounded border border-brand-orange/30 custom-scrollbar">
+                    <div className="text-[8px] text-gray-500 font-semibold mb-0.5 sticky top-0 bg-gray-900/90 px-1">📦 Sản phẩm</div>
+                    {products.length > 0 ? products.map(prod => (
+                        <label key={prod.id} className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-800 p-0.5 rounded">
+                            <input
+                                type="checkbox"
+                                checked={(scene.productIds || []).includes(prod.id)}
+                                onChange={(e) => {
+                                    const currentIds = scene.productIds || [];
+                                    const newIds = e.target.checked
+                                        ? [...currentIds, prod.id]
+                                        : currentIds.filter(id => id !== prod.id);
+                                    updateScene(scene.id, { productIds: newIds });
+                                }}
+                                className="h-2.5 w-2.5 cursor-pointer appearance-none rounded border border-gray-600 bg-gray-700 checked:border-brand-orange checked:bg-brand-orange transition-all"
+                            />
+                            <span className="text-[9px] truncate text-gray-400">{prod.name || '?'}</span>
+                        </label>
+                    )) : (
+                        <span className="text-[8px] text-gray-600 italic">Chưa có</span>
+                    )}
+                </div>
+            </div>
+
+            {/* Image & Actions */}
+            <div className="md:col-span-3 flex flex-col space-y-2">
+                <div className="flex items-center gap-2 bg-gray-900/60 p-1.5 rounded border border-gray-700/50">
+                    <span className="text-[9px] text-gray-500 font-semibold">🎥 Veo:</span>
+                    {VEO_MODES.map(mode => (
+                        <label key={mode.value} className="flex items-center gap-1 cursor-pointer">
+                            <input
+                                type="radio"
+                                name={`veo-mode-${scene.id}`}
+                                value={mode.value}
+                                checked={(scene.veoMode || 'image-to-video') === mode.value}
+                                onChange={() => updateScene(scene.id, {
+                                    veoMode: mode.value as 'image-to-video' | 'start-end-frame',
+                                    imageRole: mode.value === 'start-end-frame' ? 'start-frame' : 'single'
+                                })}
+                                className="w-3 h-3 accent-brand-orange"
+                            />
+                            <span className="text-[10px] text-gray-300">{mode.label}</span>
+                        </label>
+                    ))}
+                </div>
+
+                <div className="flex gap-2">
+                    <div
+                        className={`relative flex-1 aspect-video bg-black rounded border overflow-hidden group cursor-pointer transition-colors ${scene.imageRole === 'start-frame' ? 'border-green-500' :
+                            scene.imageRole === 'end-frame' ? 'border-red-500' : 'border-gray-600 hover:border-green-500'
+                            }`}
+                        onClick={() => scene.generatedImage && openImageViewer()}
+                    >
+                        {scene.generatedImage && (
+                            <div className={`absolute top-1 left-1 z-20 px-1.5 py-0.5 rounded text-[8px] font-bold ${scene.imageRole === 'start-frame' ? 'bg-green-600 text-white' :
+                                scene.imageRole === 'end-frame' ? 'bg-red-600 text-white' :
+                                    'bg-gray-700 text-gray-300'
+                                }`}>
+                                {scene.imageRole === 'start-frame' ? '🟢 START' :
+                                    scene.imageRole === 'end-frame' ? '🔴 END' : '📷'}
+                            </div>
+                        )}
+
+                        {scene.isGenerating && !scene.videoStatus ? (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/80 z-10">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mb-2"></div>
+                                <span className="text-[10px] text-green-400 animate-pulse">Rendering Image...</span>
+                            </div>
+                        ) : scene.generatedImage ? (
+                            <>
+                                <img src={scene.generatedImage} alt="Generated" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <span className="text-white text-xs font-bold border border-white px-3 py-1 rounded-full backdrop-blur-sm">🔍 Phóng to</span>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-xs flex-col">
+                                <span className="text-2xl mb-1">🖼️</span>
+                                <span>{scene.veoMode === 'start-end-frame' ? 'Start Frame' : 'Image'}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {scene.veoMode === 'start-end-frame' && (
+                        <div className="relative w-28 aspect-video bg-black rounded border border-red-500/50 overflow-hidden group/end hover:border-red-500 transition-colors">
+                            <input
+                                ref={endFrameInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleEndFrameUpload}
+                                className="hidden"
+                            />
+
+                            <div className="absolute top-1 left-1 z-20 px-1 py-0.5 rounded text-[7px] font-bold bg-red-600 text-white">
+                                🔴 END
+                            </div>
+
+                            {scene.endFrameImage ? (
+                                <>
+                                    <img src={scene.endFrameImage} alt="End Frame" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-1 opacity-0 group-hover/end:opacity-100 transition-opacity">
+                                        <button
+                                            onClick={() => updateScene(scene.id, { endFrameImage: null })}
+                                            className="text-[9px] text-red-400 hover:text-red-300"
+                                        >
+                                            ✕ Xóa
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 text-[9px]">
+                                    <div className="flex flex-col items-center gap-1">
+                                        <button
+                                            onClick={() => endFrameInputRef.current?.click()}
+                                            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded text-[9px] flex items-center gap-1"
+                                        >
+                                            📁 Upload
+                                        </button>
+                                        <button
+                                            onClick={generateEndFrame}
+                                            className="px-2 py-1 bg-red-900/50 hover:bg-red-800 text-red-300 rounded text-[9px] flex items-center gap-1"
+                                        >
+                                            ✨ AI Gen
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {(scene.generatedVideo || (scene.isGenerating && (scene.videoStatus === 'starting' || scene.videoStatus === 'active'))) && (
+                    <div className="relative w-full aspect-video bg-black rounded border border-gray-600 overflow-hidden mt-1">
+                        {scene.isGenerating && (scene.videoStatus === 'starting' || scene.videoStatus === 'active') ? (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/90 z-10">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mb-2"></div>
+                                <span className="text-[10px] text-red-400 animate-pulse">Generating Video...</span>
+                            </div>
+                        ) : scene.generatedVideo ? (
+                            <video
+                                src={scene.generatedVideo}
+                                controls
+                                className="w-full h-full object-cover"
+                            />
+                        ) : null}
+                    </div>
+                )}
+
+                {scene.error && (
+                    <div className="bg-red-900/90 p-2 text-center rounded">
+                        <span className="text-white text-xs">{scene.error}</span>
+                    </div>
+                )}
+
+                <button
+                    onClick={generateImage}
+                    disabled={scene.isGenerating}
+                    className={`w-full py-2 font-bold text-xs rounded shadow-lg transition-all transform active:scale-95 flex items-center justify-center space-x-2
+                        ${scene.generatedImage
+                            ? 'bg-gray-700 text-white hover:bg-gray-600'
+                            : 'bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                    {scene.generatedImage ? (
+                        <><span>↻</span> <span>Tạo Lại</span></>
+                    ) : (
+                        <><span>✨</span> <span>Tạo Ảnh AI</span></>
+                    )}
+                </button>
+            </div>
+        </div>
+    );
+};

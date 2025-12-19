@@ -55,14 +55,15 @@ export function buildScriptPrompt(
         "product_ids": ["id1"] (array of product IDs visible in scene)
 
 IMPORTANT:
-1. First, plan the sequence of scenes.
-2. Then, write "detailed_story": A comprehensive novel-style summary of the ENTIRE narrative based specifically on the scenes you just generated. Connect the visual beats into a fluid story.
-3. STRICT CHARACTER/PRODUCT LOGIC:
+1. **Cinematic Logic & Flow**: Start with a "HOOK" in Scene 1. Use a variety of cinematic shots (OTS for dialogue, Cutaways for details, Flycam/Bird-view for scale). Avoid repetitive Medium Shots.
+2. **Visual Continuity (Image-to-Video)**: Ensure character appearance, lighting, and environment stay consistent between adjacent scenes to allow for smooth Image-to-Video motion.
+3. **Avoid Over-Stuffing**: In "visual_context", do NOT re-list the entire character description if they were defined earlier. Focus on their current ACTION, POSITION, and LIGHTING in the specific scene.
+4. **Scene Recommendations**: For a compelling story, aim for 8-12 scenes. Ensure there is "visual breathing room" (detail shots without characters).
+5. **Logic**:
    - The story MUST feature the selected "AVAILABLE CHARACTERS".
-   - If a character/product is mentioned in "visual_context" or "visual_description", you MUST include their exact ID in "character_ids" or "product_ids".
+   - If a character/product is mentioned, include their exact ID in "character_ids" or "product_ids".
    - Environment/Cutaway shots: If no characters are present, leave "character_ids" empty [].
-   - **CRITICAL VISUAL CONTINUITY**: Cutaway/Detail shots MUST match the lighting, color palette, and location of the current scene (unless the story explicitly shifts to a different location/subplot). Do not generate random generic backgrounds that break immersion.
-   - Ensure a logical flow where selected characters appear meaningfully.
+   - **CRITICAL VISUAL CONTINUITY**: Cutaway/Detail shots MUST match the lighting, color palette, and location of the current scene.
 `;
 
     // Add custom instructions if present
