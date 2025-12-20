@@ -1,17 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Type, GoogleGenAI } from "@google/genai";
-import { X, Undo, Eraser, Brush, Download, Wand2, Image as ImageIcon, History, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Scan, Maximize, Layers, Palette, Search, Upload, LayoutGrid, List } from 'lucide-react';
+import { X, Undo, Redo, Eraser, Brush, Download, Wand2, Image as ImageIcon, History, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Scan, Maximize, Layers, Palette, Search, Upload, LayoutGrid, List, Shirt } from 'lucide-react';
 import MaskCanvas, { MaskCanvasHandle } from '../MaskCanvas';
-import { expandImage, upscaleImage, editImageWithMask, analyzeImage, compositeImages, applyStyleTransfer, GeneratedImage } from '../../utils/geminiImageEdit';
+import { upscaleImage, expandImage, editImageWithMask, analyzeImage, compositeImages, applyStyleTransfer, generateImageFromImage, tryOnOutfit, GeneratedImage } from '../../utils/geminiImageEdit';
+
+import { Character, Product } from '../../types';
 
 interface AdvancedImageEditorProps {
     isOpen: boolean;
     onClose: () => void;
     sourceImage: string;
-    onSave: (editedImage: string, history: { id: string, image: string, prompt: string }[]) => void;
+    onSave: (editedImage: string, history: { id: string, image: string, prompt: string }[], viewKey?: string) => void;
     apiKey: string;
     genyuToken?: string;
     initialHistory?: { id: string; image: string; prompt: string }[];
+    character?: Character;
+    product?: Product;
+    activeView?: string;
 }
 
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -23,7 +28,10 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
     onSave,
     apiKey,
     genyuToken: genyuTokenProp,
-    initialHistory
+    initialHistory,
+    character,
+    product,
+    activeView: initialActiveView
 }) => {
     // Canvas State
     const canvasRef = useRef<MaskCanvasHandle>(null);
@@ -33,13 +41,22 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loadingMessage, setLoadingMessage] = useState<string>('');
+    const [promptHistory, setPromptHistory] = useState<string[]>(['']);
+    const [promptIndex, setPromptIndex] = useState(0);
+    const isHistoryChange = useRef(false);
+    const [isDrawMode, setIsDrawMode] = useState(true);
+
+    // Try On State
+    const [tryOnImage, setTryOnImage] = useState<string | null>(null);
+    const [corkboardImage, setCorkboardImage] = useState<string | null>(null);
+    const [isTryOnLoading, setIsTryOnLoading] = useState(false);
 
     // Image State
     const [currentImage, setCurrentImage] = useState(sourceImage);
-    const [history, setHistory] = useState<{ id: string, image: string, prompt: string }[]>(
+    const [history, setHistory] = useState<{ id: string, image: string, prompt: string, resolution?: '1k' | '2k' | '4k' }[]>(
         initialHistory && initialHistory.length > 0
-            ? initialHistory
-            : [{ id: generateId(), image: sourceImage, prompt: 'Original' }]
+            ? initialHistory.map(h => ({ ...h, resolution: h.resolution || '1k' }))
+            : [{ id: generateId(), image: sourceImage, prompt: 'Original', resolution: '1k' }]
     );
     const [historyLayout, setHistoryLayout] = useState<'list' | 'grid'>('list');
 
@@ -47,9 +64,13 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
     const [analysisTags, setAnalysisTags] = useState<string[] | null>(null);
     const [layerImage, setLayerImage] = useState<string | null>(null);
     const [styleRefImage, setStyleRefImage] = useState<string | null>(null);
+    const [upscaleLevel, setUpscaleLevel] = useState<'1k' | '2k' | '4k'>('2k');
     const layerInputRef = useRef<HTMLInputElement>(null);
     const styleInputRef = useRef<HTMLInputElement>(null);
-    const [activeTab, setActiveTab] = useState<'tools' | 'layers' | 'analysis'>('tools');
+    const [activeTab, setActiveTab] = useState<'tools' | 'layers' | 'analysis' | 'try-on'>('tools');
+    const [imageAspectRatio, setImageAspectRatio] = useState("1:1");
+    const [currentView, setCurrentView] = useState<string | undefined>(initialActiveView);
+    const [currentResolution, setCurrentResolution] = useState<'1k' | '2k' | '4k'>('1k');
 
     // Dimensions for the canvas
     const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -87,13 +108,17 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                 setCurrentImage(sourceImage);
             }
             if (initialHistory && initialHistory.length > 0) {
-                setHistory(initialHistory);
+                setHistory(initialHistory.map(h => ({ ...h, resolution: h.resolution || '1k' })));
             } else {
-                setHistory([{ id: 'original', image: sourceImage, prompt: 'Original' }]);
+                setHistory([{ id: 'original', image: sourceImage, prompt: 'Original', resolution: '1k' }]);
             }
+            setCurrentResolution('1k');
             setAnalysisTags(null);
             setLayerImage(null);
             setStyleRefImage(null);
+            setPrompt('');
+            setPromptHistory(['']);
+            setPromptIndex(0);
         }
     }, [isOpen, sourceImage]);
 
@@ -119,14 +144,182 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
             };
 
             updateDimensions();
+
+            // Determine Gemini aspect ratio
+            const img = new Image();
+            img.src = currentImage;
+            img.onload = () => {
+                const ratio = img.width / img.height;
+                if (ratio > 1.4) setImageAspectRatio("16:9");
+                else if (ratio < 0.7) setImageAspectRatio("9:16");
+                else if (ratio > 1.1) setImageAspectRatio("4:3");
+                else if (ratio < 0.9) setImageAspectRatio("3:4");
+                else setImageAspectRatio("1:1");
+            };
+
             window.addEventListener('resize', updateDimensions);
             return () => window.removeEventListener('resize', updateDimensions);
         }
     }, [isOpen, currentImage]);
 
-    const addToHistory = (newImage: string, actionPrompt: string) => {
-        setHistory(prev => [...prev, { id: generateId(), image: newImage, prompt: actionPrompt }]);
+    // Use a ref to keep track of history length for the popstate handler
+    // to avoid re-running the effect on every history change.
+    const historyRef = useRef(history);
+    useEffect(() => {
+        historyRef.current = history;
+    }, [history]);
+
+    // Prevention of accidental navigation (Warning on Back/Refresh/Swipe)
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const trapId = `editor_trap_${Date.now()}`;
+        const initialUrl = window.location.href;
+
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (historyRef.current.length > 1) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+        };
+
+        // Soft navigation (Back button, Swipe)
+        // Push a dummy state so "Back" intercepts here first
+        window.history.pushState({ trapId }, '', initialUrl);
+
+        const handlePopState = (e: PopStateEvent) => {
+            // Check if our trap was popped
+            if (e.state?.trapId !== trapId) {
+                if (historyRef.current.length > 1) {
+                    if (window.confirm("You have unsaved changes in CyberMask Studio. Discard changes and exit?")) {
+                        onClose();
+                    } else {
+                        // Restore the trap: user clicked "Back", so we are now one step "behind" the trap.
+                        // We go forward to return to the trap state.
+                        window.history.forward();
+                    }
+                } else {
+                    onClose();
+                }
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        window.addEventListener('popstate', handlePopState);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            window.removeEventListener('popstate', handlePopState);
+
+            // Clean up the trap state: if we are currently on the trap state, go back once.
+            if (window.history.state?.trapId === trapId) {
+                window.history.back();
+            }
+        };
+    }, [isOpen, onClose]);
+
+    const addToHistory = (newImage: string, actionPrompt: string, resolution?: '1k' | '2k' | '4k') => {
+        setHistory(prev => [...prev, {
+            id: generateId(),
+            image: newImage,
+            prompt: actionPrompt,
+            resolution: resolution || currentResolution
+        }]);
     }
+
+    // Prompt History Management
+    useEffect(() => {
+        if (isHistoryChange.current) {
+            isHistoryChange.current = false;
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            if (prompt !== promptHistory[promptIndex]) {
+                const newHistory = promptHistory.slice(0, promptIndex + 1);
+                newHistory.push(prompt);
+                setPromptHistory(newHistory);
+                setPromptIndex(newHistory.length - 1);
+            }
+        }, 1000); // 1s debounce to prevent cluttering
+
+        return () => clearTimeout(timer);
+    }, [prompt, promptIndex, promptHistory]);
+
+    const handlePromptUndo = () => {
+        if (promptIndex > 0) {
+            isHistoryChange.current = true;
+            const newIndex = promptIndex - 1;
+            setPromptIndex(newIndex);
+            setPrompt(promptHistory[newIndex]);
+        }
+    };
+
+    const handlePromptRedo = () => {
+        if (promptIndex < promptHistory.length - 1) {
+            isHistoryChange.current = true;
+            const newIndex = promptIndex + 1;
+            setPromptIndex(newIndex);
+            setPrompt(promptHistory[newIndex]);
+        }
+    };
+
+    const handleGenerateCorkboard = async () => {
+        if (!tryOnImage) return;
+        setIsTryOnLoading(true);
+        setLoadingMessage('Generating outfit corkboard...');
+        setError(null);
+        try {
+            const [header, data] = tryOnImage.split(',');
+            const mimeType = header.match(/:(.*?);/)?.[1] || 'image/png';
+
+            const promptStr = "Create a fashion product collage on a brown corkboard based on this outfit. Separate items like jacket, shirt, pants, shoes, and accessories clearly with labels like in a studio product shoot.";
+            // Use the new reference-to-image utility
+            const result = await generateImageFromImage(apiKey, data, mimeType, promptStr, imageAspectRatio, currentResolution);
+
+            setCorkboardImage(`data:${result.mimeType};base64,${result.base64}`);
+        } catch (err: any) {
+            console.error("Corkboard generation failed", err);
+            setError(`Corkboard extraction failed: ${err.message || String(err)}`);
+        } finally {
+            setIsTryOnLoading(false);
+            setLoadingMessage('');
+        }
+    };
+
+    const handleFinalTryOn = async () => {
+        if (!corkboardImage) return;
+        setIsGenerating(true);
+        setLoadingMessage('Applying outfit to character...');
+        setError(null);
+        try {
+            const hasMask = canvasRef.current?.hasDrawing() || false;
+            let canvasMask = null;
+            if (hasMask) {
+                canvasMask = await canvasRef.current?.getMaskDataURL();
+            }
+
+            const tryOnResult = await tryOnOutfit(
+                apiKey,
+                currentImage,
+                corkboardImage,
+                canvasMask,
+                imageAspectRatio,
+                currentResolution
+            );
+
+            const newUrl = `data:${tryOnResult.mimeType};base64,${tryOnResult.base64}`;
+            setCurrentImage(newUrl);
+            addToHistory(newUrl, `Try On Application (${hasMask ? 'Masked' : 'Auto'})`);
+        } catch (err: any) {
+            console.error("Try On failed", err);
+            setError(`Try On application failed: ${err.message || String(err)}`);
+        } finally {
+            setIsGenerating(false);
+            setLoadingMessage('');
+        }
+    };
 
     const handleGenerate = async () => {
         if (!prompt.trim()) return;
@@ -135,28 +328,28 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
         setLoadingMessage('Generating...');
 
         try {
+            // Helper to convert blob to GeneratedImage
+            const toGenImg = async (blob: Blob): Promise<GeneratedImage> => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve({
+                        base64: (reader.result as string).split(',')[1],
+                        mimeType: blob.type
+                    });
+                    reader.readAsDataURL(blob);
+                });
+            }
+
             // Check if we are doing Composition or Style Transfer first
             if (activeTab === 'layers' && layerImage) {
                 setLoadingMessage('Compositing Images...');
                 const baseBlob = await (await fetch(currentImage)).blob();
                 const layerBlob = await (await fetch(layerImage)).blob();
 
-                // Helper to convert blob to GeneratedImage
-                const toGenImg = async (blob: Blob): Promise<GeneratedImage> => {
-                    return new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => resolve({
-                            base64: (reader.result as string).split(',')[1],
-                            mimeType: blob.type
-                        });
-                        reader.readAsDataURL(blob);
-                    });
-                }
-
                 const baseGen = await toGenImg(baseBlob);
                 const layerGen = await toGenImg(layerBlob);
 
-                const result = await compositeImages(apiKey, baseGen, layerGen, prompt);
+                const result = await compositeImages(apiKey, baseGen, layerGen, prompt, imageAspectRatio, currentResolution);
                 if (result.base64) {
                     const newImage = `data:${result.mimeType};base64,${result.base64}`;
                     setCurrentImage(newImage);
@@ -165,36 +358,15 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                 return;
             }
 
-            if (activeTab === 'tools' && styleRefImage) { // Assuming Style is under Tools or its own
-                // Actually let's put style in Layers or separate? Let's assume Style logic if styleRefImage is active
-                // But wait, user might want to simple edit. Let's make it explicit.
-            }
-
-            // Default: Edit with Mask
-            const maskBase64 = await canvasRef.current?.getMaskDataURL();
-            if (!maskBase64) throw new Error("Failed to generate mask");
-
-            // Explicitly handle Style Transfer if selected
-            if (styleRefImage) {
+            if (activeTab === 'layers' && styleRefImage) {
                 setLoadingMessage('Applying Style Transfer...');
                 const baseBlob = await (await fetch(currentImage)).blob();
                 const styleBlob = await (await fetch(styleRefImage)).blob();
 
-                const toGenImg = async (blob: Blob): Promise<GeneratedImage> => {
-                    return new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => resolve({
-                            base64: (reader.result as string).split(',')[1],
-                            mimeType: blob.type
-                        });
-                        reader.readAsDataURL(blob);
-                    });
-                }
-
                 const baseGen = await toGenImg(baseBlob);
                 const styleGen = await toGenImg(styleBlob);
 
-                const result = await applyStyleTransfer(apiKey, baseGen, styleGen, prompt);
+                const result = await applyStyleTransfer(apiKey, baseGen, styleGen, prompt, imageAspectRatio, currentResolution);
                 if (result.base64) {
                     const newImage = `data:${result.mimeType};base64,${result.base64}`;
                     setCurrentImage(newImage);
@@ -204,9 +376,14 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                 return;
             }
 
-            // Normal Edit
+            // Default: Edit with Mask
+            const maskBase64 = await canvasRef.current?.getMaskDataURL();
+            if (!maskBase64) throw new Error("Failed to generate mask");
+
             setLoadingMessage('Editing with Mask...');
-            const result = await editImageWithMask(apiKey, currentImage, 'image/jpeg', maskBase64, prompt);
+            const [header, data] = currentImage.split(',');
+            const mimeType = header.match(/:(.*?);/)?.[1] || 'image/png';
+            const result = await editImageWithMask(apiKey, data, mimeType, maskBase64, prompt, imageAspectRatio, currentResolution);
 
             if (result.base64) {
                 const newImage = `data:${result.mimeType};base64,${result.base64}`;
@@ -224,16 +401,31 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
         }
     };
 
+    const getResolutionOrder = (res: '1k' | '2k' | '4k') => {
+        return res === '1k' ? 1 : res === '2k' ? 2 : 3;
+    };
+
     const handleUpscale = async () => {
+        const currentResOrder = getResolutionOrder(currentResolution);
+        const targetResOrder = getResolutionOrder(upscaleLevel);
+
+        if (targetResOrder <= currentResOrder) {
+            setError(`Cannot downscale or stay at the same resolution. Current: ${currentResolution.toUpperCase()}, Target: ${upscaleLevel.toUpperCase()}`);
+            return;
+        }
+
         setIsGenerating(true);
         setError(null);
-        setLoadingMessage('Upscaling Image (4x)...');
+        setLoadingMessage(`Upscaling Image to ${upscaleLevel.toUpperCase()}...`);
         try {
-            const result = await upscaleImage(apiKey, currentImage, 'image/jpeg');
+            const [header, data] = currentImage.split(',');
+            const mimeType = header.match(/:(.*?);/)?.[1] || 'image/png';
+            const result = await upscaleImage(apiKey, data, mimeType, imageAspectRatio, upscaleLevel);
             if (result.base64) {
                 const newImage = `data:${result.mimeType};base64,${result.base64}`;
                 setCurrentImage(newImage);
-                addToHistory(newImage, "Upscaled (4x)");
+                setCurrentResolution(upscaleLevel);
+                addToHistory(newImage, `Upscaled (${upscaleLevel.toUpperCase()})`, upscaleLevel);
             }
         } catch (err: any) {
             console.error("Upscale failed:", err);
@@ -249,7 +441,9 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
         setError(null);
         setLoadingMessage(`Expanding ${direction}...`);
         try {
-            const result = await expandImage(apiKey, currentImage, 'image/jpeg', direction);
+            const [header, data] = currentImage.split(',');
+            const mimeType = header.match(/:(.*?);/)?.[1] || 'image/png';
+            const result = await expandImage(apiKey, data, mimeType, direction, imageAspectRatio, currentResolution);
             if (result.base64) {
                 const newImage = `data:${result.mimeType};base64,${result.base64}`;
                 setCurrentImage(newImage);
@@ -294,6 +488,9 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
 
     const handleRestoreHistory = (scan: typeof history[0]) => {
         setCurrentImage(scan.image);
+        if (scan.resolution) {
+            setCurrentResolution(scan.resolution);
+        }
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (s: string | null) => void) => {
@@ -307,27 +504,69 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
         }
     };
 
-    // UI Components for Expand Buttons
-    const ExpandButton = ({ direction, className }: { direction: 'up' | 'down' | 'left' | 'right', className: string }) => {
-        const icons = {
-            up: ArrowUp,
-            down: ArrowDown,
-            left: ArrowLeft,
-            right: ArrowRight
-        };
-        const Icon = icons[direction];
+    // View Selection Handlers
+    const switchView = (viewKey: string, imageUrl: string | null) => {
+        if (!imageUrl) return;
+        setCurrentImage(imageUrl);
+        setCurrentView(viewKey);
+        setCurrentResolution('1k');
+        setHistory([{ id: generateId(), image: imageUrl, prompt: 'Original', resolution: '1k' }]);
+    };
+
+    const ViewNavigator = () => {
+        const views = character
+            ? [
+                { key: 'master', label: 'Reference', img: character.masterImage },
+                { key: 'face', label: 'Face', img: character.faceImage },
+                { key: 'body', label: 'Outfit', img: character.bodyImage },
+                { key: 'side', label: 'Side', img: character.sideImage },
+                { key: 'back', label: 'Back', img: character.backImage },
+            ]
+            : product
+                ? [
+                    { key: 'master', label: 'Main', img: product.masterImage },
+                    { key: 'front', label: 'Front', img: product.views.front },
+                    { key: 'back', label: 'Back', img: product.views.back },
+                    { key: 'left', label: 'Left', img: product.views.left },
+                    { key: 'right', label: 'Right', img: product.views.right },
+                    { key: 'top', label: 'Top', img: product.views.top },
+                ]
+                : [];
+
+        if (views.length === 0) return null;
 
         return (
-            <button
-                onClick={() => handleExpand(direction)}
-                disabled={isGenerating}
-                className={`absolute ${className} bg-black/60 backdrop-blur-md p-2 rounded-full text-white border border-white/20 hover:bg-blue-600/80 hover:scale-110 transition-all z-40 disabled:opacity-50 disabled:cursor-not-allowed group shadow-xl`}
-                title={`Magic Expand ${direction}`}
-            >
-                <Icon size={20} className="group-hover:animate-pulse" />
-            </button>
-        )
-    }
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center bg-black/40 backdrop-blur-xl rounded-2xl border border-white/10 p-2 z-40 shadow-2xl space-x-3 transition-all duration-300 hover:bg-black/60 group/nav">
+                <div className="flex items-center gap-2 px-2 border-r border-white/10 mr-1">
+                    <ImageIcon size={14} className="text-purple-400" />
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Views</span>
+                </div>
+                {views.map((v) => (
+                    <button
+                        key={v.key}
+                        onClick={() => switchView(v.key, v.img)}
+                        disabled={!v.img}
+                        className={`group relative flex flex-col items-center transition-all ${!v.img ? 'opacity-20 cursor-not-allowed grayscale' : 'hover:scale-105'}`}
+                    >
+                        <div className={`w-14 h-14 rounded-xl overflow-hidden border-2 transition-all duration-300 ${currentView === v.key ? 'border-purple-500 scale-110 shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'border-white/5 group-hover:border-white/20'}`}>
+                            {v.img ? (
+                                <img src={v.img} className="w-full h-full object-cover" alt={v.label} />
+                            ) : (
+                                <div className="w-full h-full bg-gray-900/50 flex items-center justify-center">
+                                    <ImageIcon size={16} className="text-gray-700" />
+                                </div>
+                            )}
+                        </div>
+                        <div className={`mt-1.5 px-2 py-0.5 rounded-full transition-all ${currentView === v.key ? 'bg-purple-600 text-white' : 'text-gray-500 group-hover:text-gray-300'}`}>
+                            <span className="text-[8px] font-bold uppercase tracking-tighter whitespace-nowrap">
+                                {v.label}
+                            </span>
+                        </div>
+                    </button>
+                ))}
+            </div>
+        );
+    };
 
     if (!isOpen) return null;
 
@@ -340,28 +579,15 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                     <div className="flex items-center space-x-2 text-purple-400">
                         <Wand2 size={24} />
                         <span className="font-bold text-lg tracking-wide text-white">CyberMask Studio</span>
-                        <div className="flex items-center space-x-1 ml-4">
-                            <button
-                                onClick={() => setActiveTab('tools')}
-                                className={`px-3 py-1 rounded text-sm ${activeTab === 'tools' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >Tools</button>
-                            <button
-                                onClick={() => setActiveTab('layers')}
-                                className={`px-3 py-1 rounded text-sm ${activeTab === 'layers' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >Layers</button>
-                            <button
-                                onClick={() => setActiveTab('analysis')}
-                                className={`px-3 py-1 rounded text-sm ${activeTab === 'analysis' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >Analysis</button>
-                        </div>
                     </div>
+
                     <div className="flex items-center space-x-4">
                         <button onClick={handleAnalyze} disabled={isGenerating} className="p-2 text-blue-400 hover:text-blue-300 transition-colors" title="Analyze Image">
                             <Search size={20} />
                         </button>
                         <button onClick={handleUpscale} disabled={isGenerating} className="flex items-center gap-2 bg-green-600/20 hover:bg-green-600/40 text-green-400 px-3 py-1.5 rounded-lg border border-green-600/50 transition-colors text-sm font-medium disabled:opacity-50">
                             <Scan size={16} />
-                            Upscale
+                            Upscale {upscaleLevel.toUpperCase()}
                         </button>
                         <div className="h-6 w-px bg-gray-700 mx-2"></div>
                         <button onClick={handleUndo} className="p-2 text-gray-400 hover:text-white transition-colors" title="Undo Mask (Ctrl+Z)">
@@ -392,6 +618,9 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                                     className={`relative p-1 rounded-lg cursor-pointer transition-all border group ${currentImage === scan.image ? 'border-purple-500 bg-purple-500/10' : 'border-transparent hover:bg-gray-800'}`}
                                 >
                                     <img src={scan.image} className="w-full h-16 object-cover rounded bg-black" />
+                                    <div className="absolute top-2 left-2 px-1 rounded-md bg-black/60 border border-white/10 text-[8px] font-black text-white uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {scan.resolution || '1k'}
+                                    </div>
                                     {historyLayout === 'list' && <div className="hidden md:block text-[10px] text-gray-400 truncate mt-1">{i === 0 ? 'Original' : scan.prompt}</div>}
                                     {/* Drag to layer button */}
                                     <button
@@ -409,50 +638,18 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                     {/* Center: Canvas */}
                     <div className="flex-1 bg-[#0a0a0a] flex flex-col relative">
 
-                        {/* Floating Toolbar (Only on Tools Tab) */}
-                        {activeTab === 'tools' && (
-                            <div className="absolute top-4 right-4 bg-[#1a1a1a]/90 backdrop-blur border border-gray-700 rounded-full px-6 py-3 flex items-center space-x-6 shadow-2xl z-30">
-                                <button
-                                    onClick={() => setIsEraser(false)}
-                                    className={`flex flex-col items-center space-y-1 ${!isEraser ? 'text-purple-400' : 'text-gray-500 hover:text-gray-300'}`}
-                                >
-                                    <Brush size={20} />
-                                    <span className="text-[10px] font-bold">Brush</span>
-                                </button>
-                                <button
-                                    onClick={() => canvasRef.current?.clear()}
-                                    className="flex flex-col items-center space-y-1 text-gray-500 hover:text-red-400"
-                                >
-                                    <Eraser size={20} />
-                                    <span className="text-[10px] font-bold">Clear</span>
-                                </button>
-                                <div className="w-px h-8 bg-gray-700"></div>
-                                <div className="flex items-center space-x-3">
-                                    <span className="text-xs text-gray-400">Size</span>
-                                    <input
-                                        type="range"
-                                        min="5"
-                                        max="100"
-                                        value={brushSize}
-                                        onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                                        className="w-24 accent-purple-500"
-                                    />
-                                    <span className="text-xs w-6 text-right text-gray-500">{brushSize}</span>
-                                </div>
-                            </div>
-                        )}
 
 
                         {/* Canvas Container */}
                         <div className="flex-1 flex items-center justify-center p-8 overflow-hidden group/canvas" ref={containerRef}>
                             <div className="relative shadow-2xl border border-gray-800">
-                                {/* Expand Buttons */}
-                                <div className="absolute inset-0 pointer-events-none z-20 opacity-0 group-hover/canvas:opacity-100 transition-opacity duration-300">
-                                    <ExpandButton direction="up" className="top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto" />
-                                    <ExpandButton direction="down" className="bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 pointer-events-auto" />
-                                    <ExpandButton direction="left" className="left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto" />
-                                    <ExpandButton direction="right" className="right-0 top-1/2 translate-x-1/2 -translate-y-1/2 pointer-events-auto" />
+                                {/* Character/Product Navigation */}
+                                <div className="absolute inset-x-0 bottom-0 pointer-events-none z-30 opacity-0 group-hover/canvas:opacity-100 transition-opacity duration-300">
+                                    <div className="pointer-events-auto">
+                                        <ViewNavigator />
+                                    </div>
                                 </div>
+
 
                                 <MaskCanvas
                                     ref={canvasRef}
@@ -460,11 +657,12 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                                     width={dimensions.width}
                                     height={dimensions.height}
                                     brushRadius={brushSize / 2}
-                                    brushColor={isEraser ? "#00000000" : "rgba(168, 85, 247, 0.6)"}
+                                    brushColor={isEraser ? "#000001" : "rgba(168, 85, 247, 0.8)"}
+                                    disabled={!isDrawMode || (activeTab !== 'tools' && activeTab !== 'try-on')}
                                 />
+
                                 {layerImage && activeTab === 'layers' && (
                                     <div className="absolute top-2 right-2 bg-black/60 text-xs text-white px-2 py-1 rounded pointer-events-none border border-white/20">
-                                        Layer Active
                                     </div>
                                 )}
                             </div>
@@ -473,6 +671,36 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
 
                     {/* Right Panel: Active Tab Content */}
                     <div className="w-72 bg-[#151515] border-l border-gray-800 flex flex-col">
+                        <div className="flex bg-[#0f0f0f] border-b border-gray-800">
+                            <button
+                                onClick={() => setActiveTab('tools')}
+                                className={`flex-1 py-3 flex items-center justify-center border-b-2 transition-all ${activeTab === 'tools' ? 'border-purple-500 text-purple-400 bg-purple-500/5' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                                title="Drawing Tools"
+                            >
+                                <Brush size={18} />
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('try-on')}
+                                className={`flex-1 py-3 flex items-center justify-center border-b-2 transition-all ${activeTab === 'try-on' ? 'border-purple-500 text-purple-400 bg-purple-500/5' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                                title="Virtual Try On"
+                            >
+                                <Shirt size={18} />
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('layers')}
+                                className={`flex-1 py-3 flex items-center justify-center border-b-2 transition-all ${activeTab === 'layers' ? 'border-purple-500 text-purple-400 bg-purple-500/5' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                                title="Layers & Style"
+                            >
+                                <Layers size={18} />
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('analysis')}
+                                className={`flex-1 py-3 flex items-center justify-center border-b-2 transition-all ${activeTab === 'analysis' ? 'border-purple-500 text-purple-400 bg-purple-500/5' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                                title="Image Analysis"
+                            >
+                                <Search size={18} />
+                            </button>
+                        </div>
 
                         {/* Analysis Content */}
                         {activeTab === 'analysis' && (
@@ -547,15 +775,258 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                             </div>
                         )}
 
-                        {/* Tools (Standard Mask Edit) Content - Empty here as it overlays canvas */}
+                        {/* Tools (Standard Mask Edit) Content */}
                         {activeTab === 'tools' && (
-                            <div className="p-4">
-                                <h3 className="text-white font-bold flex items-center gap-2 mb-4"><Brush size={16} /> Standard Edit</h3>
-                                <p className="text-xs text-gray-400">
-                                    Use the Brush and Eraser tools on the canvas to mask areas you want to change, then describe the changes below.
-                                </p>
-                                <div className="mt-4 p-3 bg-gray-900 rounded-lg text-xs text-gray-500 border border-gray-800">
-                                    <span className="text-purple-400 font-bold">Tip:</span> You can also use "Expand" arrows on the canvas edges to extend your image.
+                            <div className="p-5 space-y-8 flex-1 overflow-y-auto">
+                                {/* Quick Expand Section */}
+                                <div className="space-y-4">
+                                    <h3 className="text-white font-bold flex items-center gap-2"><Maximize size={18} className="text-blue-400" /> Magic Expand</h3>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {(['up', 'down', 'left', 'right'] as const).map(dir => (
+                                            <button
+                                                key={dir}
+                                                onClick={() => handleExpand(dir)}
+                                                disabled={isGenerating}
+                                                className="flex flex-col items-center justify-center p-3 rounded-xl bg-gray-800/50 hover:bg-blue-600/20 border border-gray-700 hover:border-blue-500/50 transition-all group disabled:opacity-50"
+                                            >
+                                                {dir === 'up' && <ArrowUp size={20} className="text-blue-400 group-hover:scale-110 transition-transform" />}
+                                                {dir === 'down' && <ArrowDown size={20} className="text-blue-400 group-hover:scale-110 transition-transform" />}
+                                                {dir === 'left' && <ArrowLeft size={20} className="text-blue-400 group-hover:scale-110 transition-transform" />}
+                                                {dir === 'right' && <ArrowRight size={20} className="text-blue-400 group-hover:scale-110 transition-transform" />}
+                                                <span className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-widest">{dir}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="h-px bg-gray-800/50"></div>
+
+                                {/* Upscale Section */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-white font-bold flex items-center gap-2"><Scan size={18} className="text-green-400" /> Image Quality</h3>
+                                        <div className="px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-[9px] font-black text-green-400 uppercase tracking-widest">
+                                            Current: {currentResolution.toUpperCase()}
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {(['1k', '2k', '4k'] as const).map(level => {
+                                            const isCurrentOrLower = getResolutionOrder(level) <= getResolutionOrder(currentResolution);
+                                            return (
+                                                <button
+                                                    key={level}
+                                                    onClick={() => !isCurrentOrLower && setUpscaleLevel(level)}
+                                                    disabled={isCurrentOrLower}
+                                                    className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${upscaleLevel === level
+                                                        ? 'bg-green-600/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.1)]'
+                                                        : isCurrentOrLower
+                                                            ? 'bg-gray-900/30 border-gray-800 text-gray-700 cursor-not-allowed grayscale'
+                                                            : 'bg-gray-800/50 border-gray-700 text-gray-500 hover:border-gray-600'
+                                                        }`}
+                                                >
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">{level}</span>
+                                                    <span className="text-[8px] font-medium opacity-60">
+                                                        {level === '1k' ? '1024px' : level === '2k' ? '2048px' : '4096px'}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="h-px bg-gray-800/50"></div>
+
+                                <div className="space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-white font-bold flex items-center gap-2"><Brush size={18} className="text-purple-400" /> Brush Tools</h3>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={() => setIsDrawMode(!isDrawMode)}
+                                                className={`flex items-center gap-2 px-2 py-1 rounded-lg border transition-all text-[10px] font-black uppercase tracking-widest ${isDrawMode ? 'bg-purple-500/20 border-purple-500 text-purple-400' : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300'}`}
+                                                title={isDrawMode ? "Disable Painting" : "Enable Painting"}
+                                            >
+                                                <Brush size={12} className={isDrawMode ? 'animate-pulse' : ''} />
+                                                <span>{isDrawMode ? 'ON' : 'OFF'}</span>
+                                            </button>
+                                            <button
+                                                onClick={() => canvasRef.current?.clear()}
+                                                className="text-[10px] text-gray-500 hover:text-red-400 flex items-center gap-1 uppercase tracking-tighter transition-colors"
+                                            >
+                                                <Eraser size={12} /> Clear
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={() => setIsEraser(false)}
+                                            className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all duration-300 ${!isEraser ? 'bg-purple-600/20 border-purple-500 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-gray-800/30 border-gray-700/50 text-gray-500 hover:bg-gray-800 hover:border-gray-600'}`}
+                                        >
+                                            <Brush size={24} />
+                                            <span className="text-[11px] font-bold uppercase tracking-wider">Paint</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setIsEraser(true)}
+                                            className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all duration-300 ${isEraser ? 'bg-purple-600/20 border-purple-500 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-gray-800/30 border-gray-700/50 text-gray-500 hover:bg-gray-800 hover:border-gray-600'}`}
+                                        >
+                                            <Eraser size={24} />
+                                            <span className="text-[11px] font-bold uppercase tracking-wider">Erase</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-4 pt-2">
+                                        <div className="flex justify-between items-center bg-gray-900/50 p-2 rounded-lg border border-gray-800/50">
+                                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Size</span>
+                                            <span className="text-xs text-purple-400 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">{brushSize}px</span>
+                                        </div>
+                                        <div className="px-1">
+                                            <input
+                                                type="range"
+                                                min="2"
+                                                max="150"
+                                                value={brushSize}
+                                                onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                                                className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-purple-500 hover:accent-purple-400 transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="h-px bg-gradient-to-r from-transparent via-gray-800 to-transparent"></div>
+                                    <div className="p-4 bg-purple-500/5 rounded-xl border border-purple-500/10 relative overflow-hidden group">
+                                        <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                                            <Wand2 size={40} />
+                                        </div>
+                                        <div className="flex items-center gap-2 text-purple-400 font-bold mb-3 text-xs">
+                                            <Wand2 size={14} />
+                                            <span>MASKING GUIDE</span>
+                                        </div>
+                                        <ul className="space-y-3 text-[11px] text-gray-500 font-medium">
+                                            <li className="flex gap-2">
+                                                <span className="text-purple-500/50">01.</span>
+                                                <span>Paint over parts you want to <span className="text-purple-300">modify</span>.</span>
+                                            </li>
+                                            <li className="flex gap-2">
+                                                <span className="text-purple-500/50">02.</span>
+                                                <span>Describe the change in the <span className="text-purple-300">Prompt</span> below.</span>
+                                            </li>
+                                            <li className="flex gap-2">
+                                                <span className="text-purple-500/50">03.</span>
+                                                <span>Hit <span className="text-purple-300">Generate</span> to let AI work its magic.</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Try On Content */}
+                        {activeTab === 'try-on' && (
+                            <div className="p-5 space-y-6 flex-1 overflow-y-auto">
+                                <div className="space-y-4">
+                                    <h3 className="text-white font-bold flex items-center gap-2 mb-2">
+                                        <Shirt size={18} className="text-purple-400" /> Virtual Try On
+                                    </h3>
+                                    <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
+                                        1. Upload an outfit image.<br />
+                                        2. Extract elements to a corkboard.<br />
+                                        3. <span className="text-purple-400">Optional:</span> Paint a mask for precise placement.<br />
+                                        4. Click Final Try On.
+                                    </p>
+
+                                    <div className="space-y-3">
+                                        <div
+                                            className={`relative aspect-square rounded-xl border-2 border-dashed transition-all cursor-pointer overflow-hidden group ${tryOnImage ? 'border-purple-500/50' : 'border-gray-800 hover:border-gray-700 bg-gray-900/50 shadow-inner'}`}
+                                            onClick={() => document.getElementById('try-on-upload')?.click()}
+                                        >
+                                            {tryOnImage ? (
+                                                <>
+                                                    <img src={tryOnImage} alt="Outfit" className="w-full h-full object-cover" />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                                                        <Upload className="text-white drop-shadow-lg" size={24} />
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-500">
+                                                    <div className="p-4 rounded-full bg-gray-800/50 mb-1">
+                                                        <Shirt size={32} className="opacity-40" />
+                                                    </div>
+                                                    <span className="text-xs font-bold uppercase tracking-widest opacity-60">Upload Outfit</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <input
+                                            id="try-on-upload"
+                                            type="file"
+                                            className="hidden"
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    const reader = new FileReader();
+                                                    reader.onload = (ev) => {
+                                                        setTryOnImage(ev.target?.result as string);
+                                                        setCorkboardImage(null);
+                                                    };
+                                                    reader.readAsDataURL(file);
+                                                }
+                                            }}
+                                        />
+
+                                        <button
+                                            onClick={handleGenerateCorkboard}
+                                            disabled={!tryOnImage || isTryOnLoading}
+                                            className="w-full py-3 bg-purple-600/20 border border-purple-500/50 text-purple-400 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-purple-600/30 transition-all disabled:opacity-30 flex items-center justify-center gap-2 shadow-lg active:scale-[0.98]"
+                                        >
+                                            {isTryOnLoading ? (
+                                                <div className="animate-spin rounded-full h-3 w-3 border-2 border-purple-400/20 border-t-purple-400"></div>
+                                            ) : (
+                                                <LayoutGrid size={14} />
+                                            )}
+                                            {isTryOnLoading ? 'EXTRACTING...' : 'GENERATE CORKBOARD'}
+                                        </button>
+                                    </div>
+
+                                    {corkboardImage && (
+                                        <div className="space-y-4 pt-4 border-t border-gray-800/50 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                            <div className="flex justify-between items-center bg-gray-900/30 p-2 rounded-lg border border-gray-800/50">
+                                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1">
+                                                    <LayoutGrid size={10} /> CORKBOARD RESULT
+                                                </span>
+                                                <button onClick={() => setCorkboardImage(null)} className="text-[10px] text-gray-600 hover:text-red-400 transition-colors">Clear</button>
+                                            </div>
+                                            <div className="relative aspect-video rounded-xl border border-gray-800 overflow-hidden bg-black/40 group shadow-inner">
+                                                <img src={corkboardImage} alt="Corkboard" className="w-full h-full object-contain" />
+                                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => setCurrentImage(corkboardImage)}
+                                                        className="bg-black/80 text-white p-2 rounded-lg hover:bg-purple-600 transition-all border border-white/10"
+                                                        title="Use as canvas"
+                                                    >
+                                                        <Maximize size={14} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onClick={handleFinalTryOn}
+                                                disabled={isTryOnLoading || isGenerating}
+                                                className="w-full py-4 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 text-white rounded-xl font-black text-xs uppercase tracking-[0.2em] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] transition-all active:scale-95 flex items-center justify-center gap-3 border border-white/10"
+                                            >
+                                                {isGenerating ? (
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white"></div>
+                                                ) : (
+                                                    <Shirt size={18} className="drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]" />
+                                                )}
+                                                {isGenerating ? 'APPLYING...' : 'FINAL TRY ON'}
+                                            </button>
+
+                                            <div className="p-4 bg-purple-500/5 rounded-xl border border-purple-500/10 text-[10px] text-purple-400/80 font-medium leading-relaxed italic text-center">
+                                                Tip: Paint a mask to tell AI exactly where to put the clothes!
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -564,47 +1035,96 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
 
                 </div>
 
-                {/* Bottom Bar: Prompt */}
-                <div className="p-6 bg-[#1a1a1a] border-t border-gray-800 flex items-center justify-center space-x-4 z-40">
-                    <div className="max-w-3xl w-full relative">
-                        <input
-                            type="text"
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                            placeholder={
-                                activeTab === 'layers' && layerImage ? "Describe how to composite the layer..." :
-                                    activeTab === 'layers' && styleRefImage ? "Describe style adjustments..." :
-                                        "Describe what to change..."
-                            }
-                            className="w-full bg-[#0d0d0d] border border-gray-700 rounded-lg py-4 pl-6 pr-32 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-inner text-lg"
-                        />
-                        <div className="absolute right-2 top-2 bottom-2">
+                {/* Bottom Bar: Prompt & Actions */}
+                <div className="p-6 bg-[#1a1a1a] border-t border-gray-800 flex items-end justify-center gap-4 z-40">
+                    <div className="max-w-4xl w-full flex gap-3">
+                        <div className="flex-1 relative group">
+                            <textarea
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
+                                rows={1}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleGenerate();
+                                    }
+                                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                                        e.preventDefault();
+                                        if (e.shiftKey) {
+                                            handlePromptRedo();
+                                        } else {
+                                            handlePromptUndo();
+                                        }
+                                    }
+                                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                                        e.preventDefault();
+                                        handlePromptRedo();
+                                    }
+                                }}
+                                placeholder={
+                                    activeTab === 'layers' && layerImage ? "Describe how to composite the layer..." :
+                                        activeTab === 'layers' && styleRefImage ? "Describe style adjustments..." :
+                                            "Describe what to change (e.g., 'Change hair to blue', 'Add a cat')..."
+                                }
+                                className="w-full bg-[#0d0d0d] border border-gray-700 rounded-xl py-4 pl-6 pr-6 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-inner text-base min-h-[60px] max-h-[150px] transition-all resize-none"
+                                style={{ height: 'auto' }}
+                                onInput={(e) => {
+                                    const target = e.target as HTMLTextAreaElement;
+                                    target.style.height = 'auto';
+                                    target.style.height = `${Math.min(target.scrollHeight, 150)}px`;
+                                }}
+                            />
+                            <div className="absolute right-3 bottom-3 flex items-center gap-3">
+                                <span className={`text-[10px] font-mono transition-opacity ${prompt.length > 0 ? 'opacity-40' : 'opacity-0'} mr-2`}>
+                                    {prompt.length} chars
+                                </span>
+                                <div className="flex items-center gap-1 bg-gray-900/80 backdrop-blur-sm p-1 rounded-lg border border-gray-800">
+                                    <button
+                                        onClick={handlePromptUndo}
+                                        disabled={promptIndex <= 0}
+                                        className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-all disabled:opacity-20"
+                                        title="Undo (Ctrl+Z)"
+                                    >
+                                        <Undo size={14} />
+                                    </button>
+                                    <div className="w-px h-3 bg-gray-800 mx-0.5" />
+                                    <button
+                                        onClick={handlePromptRedo}
+                                        disabled={promptIndex >= promptHistory.length - 1}
+                                        className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-all disabled:opacity-20"
+                                        title="Redo (Ctrl+Y)"
+                                    >
+                                        <Redo size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3 sm:flex-row">
                             <button
                                 onClick={handleGenerate}
-                                disabled={isGenerating || !prompt}
-                                className="h-full px-6 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-md shadow-lg transform transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                                disabled={isGenerating || !prompt.trim()}
+                                className="h-[60px] px-8 bg-gradient-to-br from-purple-600 to-blue-700 hover:from-purple-500 hover:to-blue-600 text-white font-black rounded-xl shadow-[0_4px_15px_rgba(168,85,247,0.3)] transform transition-all active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center space-x-3 group/gen min-w-[160px]"
                             >
                                 {isGenerating ? (
-                                    <>
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                    </>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/20 border-t-white"></div>
                                 ) : (
                                     <>
-                                        <Wand2 size={18} />
-                                        <span>Generate</span>
+                                        <Wand2 size={20} className="group-hover/gen:rotate-12 transition-transform" />
+                                        <span className="uppercase tracking-widest text-sm">Generate</span>
                                     </>
                                 )}
                             </button>
+
+                            <button
+                                onClick={() => { onSave(currentImage, history, currentView); onClose(); }}
+                                className="h-[60px] px-8 bg-[#f5f5f5] hover:bg-white text-black font-black rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center space-x-3 group/save border border-gray-200 min-w-[120px]"
+                            >
+                                <Download size={20} className="group-hover/save:-translate-y-0.5 transition-transform" />
+                                <span className="uppercase tracking-widest text-sm">Save</span>
+                            </button>
                         </div>
                     </div>
-                    <button
-                        onClick={() => { onSave(currentImage, history); onClose(); }}
-                        className="h-14 px-6 bg-brand-orange hover:bg-brand-red text-brand-cream font-bold rounded-lg shadow flex items-center space-x-2"
-                    >
-                        <Download size={20} />
-                        <span>Save</span>
-                    </button>
                 </div>
 
                 {isGenerating && loadingMessage && (

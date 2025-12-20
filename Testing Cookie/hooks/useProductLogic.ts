@@ -38,7 +38,8 @@ export function useProductLogic(
     }, [updateStateAndRecord]);
 
     const handleProductMasterImageUpload = useCallback(async (id: string, image: string) => {
-        const apiKey = userApiKey || (process.env as any).API_KEY;
+        const rawApiKey = userApiKey || (process.env as any).API_KEY;
+        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
         updateProduct(id, { masterImage: image, isAnalyzing: true });
 
         if (!apiKey && !state.genyuToken) {
@@ -78,7 +79,9 @@ export function useProductLogic(
                 let json = { name: "", description: "" };
                 try {
                     json = JSON.parse(analysisRes.text.replace(/```json/g, '').replace(/```/g, '').trim());
-                } catch (e) { console.error("JSON parse error", e); }
+                } catch (e) {
+                    console.error("JSON parse error", e);
+                }
 
                 updateProduct(id, { name: json.name, description: json.description });
 
@@ -86,11 +89,11 @@ export function useProductLogic(
                 const promptTemplate = (viewInfo: string) => `(STRICT REFERENCE: EXACT REPLICA) Generate a ${viewInfo} of the product described: ${json.description}. BACKGROUND: Pure Solid White Studio Background. STYLE: Product Photography.`.trim();
 
                 const [front, back, left, right, top] = await Promise.all([
-                    callGeminiAPI(apiKey, promptTemplate('OFFICIAL FRONT VIEW (0 degrees)'), '1:1', 'gemini-2.5-flash-image', referenceImage),
-                    callGeminiAPI(apiKey, promptTemplate('OFFICIAL BACK VIEW (180 degrees)'), '1:1', 'gemini-2.5-flash-image', referenceImage),
-                    callGeminiAPI(apiKey, promptTemplate('OFFICIAL LEFT PROFILE VIEW (90 degrees)'), '1:1', 'gemini-2.5-flash-image', referenceImage),
-                    callGeminiAPI(apiKey, promptTemplate('OFFICIAL RIGHT PROFILE VIEW (90 degrees)'), '1:1', 'gemini-2.5-flash-image', referenceImage),
-                    callGeminiAPI(apiKey, promptTemplate('TOP-DOWN BIRD\'S EYE VIEW'), '1:1', 'gemini-2.5-flash-image', referenceImage),
+                    callGeminiAPI(apiKey, promptTemplate('OFFICIAL FRONT VIEW (0 degrees)'), '1:1', 'gemini-2.0-flash', referenceImage),
+                    callGeminiAPI(apiKey, promptTemplate('OFFICIAL BACK VIEW (180 degrees)'), '1:1', 'gemini-2.0-flash', referenceImage),
+                    callGeminiAPI(apiKey, promptTemplate('OFFICIAL LEFT PROFILE VIEW (90 degrees)'), '1:1', 'gemini-2.0-flash', referenceImage),
+                    callGeminiAPI(apiKey, promptTemplate('OFFICIAL RIGHT PROFILE VIEW (90 degrees)'), '1:1', 'gemini-2.0-flash', referenceImage),
+                    callGeminiAPI(apiKey, promptTemplate('TOP-DOWN BIRD\'S EYE VIEW'), '1:1', 'gemini-2.0-flash', referenceImage),
                 ]);
 
                 updateProduct(id, { views: { front, back, left, right, top }, isAnalyzing: false });
@@ -154,7 +157,8 @@ export function useProductLogic(
         }
 
         updateProduct(id, { isAnalyzing: true });
-        const apiKey = userApiKey || (process.env as any).API_KEY;
+        const rawApiKey = userApiKey || (process.env as any).API_KEY;
+        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
         if (apiKey) {
             try {
                 const masterPrompt = `Professional product photography of ${description}. Studio lighting, white background, 8K detail, centered, front view, high quality product shot.`;

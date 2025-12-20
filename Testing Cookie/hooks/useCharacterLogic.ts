@@ -135,7 +135,8 @@ export function useCharacterLogic(
     }, [updateStateAndRecord]);
 
     const handleMasterImageUpload = useCallback(async (id: string, image: string) => {
-        const apiKey = userApiKey || (process.env as any).API_KEY;
+        const rawApiKey = userApiKey || (process.env as any).API_KEY;
+        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
         updateCharacter(id, { masterImage: image, isAnalyzing: true });
 
         if (!apiKey) {
@@ -177,17 +178,26 @@ export function useCharacterLogic(
             let json = { name: "", description: "" };
             try {
                 json = JSON.parse(analysisRes.text.replace(/```json/g, '').replace(/```/g, '').trim());
-            } catch (e) { console.error("JSON parse error", e); }
+            } catch (e) {
+                console.error("JSON parse error", e);
+            }
 
             updateCharacter(id, { name: json.name, description: json.description });
 
             const genyuToken = state.genyuToken;
             const currentStyle = GLOBAL_STYLES.find(s => s.value === state.stylePrompt)?.prompt || "Cinematic photorealistic, 8k, high quality";
 
-            const facePrompt = `(STRICT CAMERA: EXTREME CLOSE-UP - FACE ID) Generate a highly detailed Face ID close-up of this character: ${json.description}. STYLE: ${currentStyle}`;
-            const bodyPrompt = `(STRICT CAMERA: FULL BODY WIDE SHOT) Generate a Full Body character design sheet (Front View) for: ${json.description}. STYLE: ${currentStyle}`;
-            const sidePrompt = `(STRICT CAMERA: FULL BODY SIDE PROFILE) Generate a Full Body Side Profile for: ${json.description}. STYLE: ${currentStyle}`;
-            const backPrompt = `(STRICT CAMERA: FULL BODY BACK VIEW) Generate a Full Body Back View for: ${json.description}. STYLE: ${currentStyle}`;
+            const consistencyInstruction = `
+            **MANDATORY CONSISTENCY:** 
+            - You MUST match the background tone, lighting (color temperature, shadows), and environment of the provided "Ảnh Gốc". 
+            - The character's face, hair, and clothing MUST be exactly as seen in the reference.
+            - Maintain the same cinematic style: ${currentStyle}.
+            `.trim();
+
+            const facePrompt = `${consistencyInstruction}\n\n(STRICT CAMERA: EXTREME CLOSE-UP - FACE ID) Generate a highly detailed Face ID close-up of this character: ${json.description}. Focus on capturing the exact facial features and expression from the reference.`;
+            const bodyPrompt = `${consistencyInstruction}\n\n(STRICT CAMERA: FULL BODY WIDE SHOT) Generate a Full Body character design sheet (Front View, T-Pose or A-Pose) for: ${json.description}. The clothing must match the reference image's color and texture exactly.`;
+            const sidePrompt = `${consistencyInstruction}\n\n(STRICT CAMERA: FULL BODY SIDE PROFILE) Generate a Full Body Side Profile for: ${json.description}. Maintain the same clothing and body proportions as the body view.`;
+            const backPrompt = `${consistencyInstruction}\n\n(STRICT CAMERA: FULL BODY BACK VIEW) Generate a Full Body Back View for: ${json.description}. Ensure the back of the clothing reflects the design seen in the front.`;
 
             if (apiKey) {
                 const model = state.imageModel || 'gemini-2.5-flash-image';

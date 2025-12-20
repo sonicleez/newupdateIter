@@ -4,7 +4,7 @@ import { SceneRowProps } from './SceneRow';
 import { ExpandableTextarea } from '../common/ExpandableTextarea';
 
 export const StoryBoardCard: React.FC<SceneRowProps> = ({
-    scene, index, updateScene, removeScene,
+    scene, index, updateScene, assignSceneToGroup, sceneGroups, removeScene,
     generateImage, openImageViewer,
     onDragStart, onDragOver, onDrop
 }) => {
@@ -75,6 +75,11 @@ export const StoryBoardCard: React.FC<SceneRowProps> = ({
                         <span className="text-[10px] font-black text-brand-orange bg-brand-orange/10 px-2 py-0.5 rounded-md border border-brand-orange/20">
                             {scene.sceneNumber || (index + 1)}
                         </span>
+                        {scene.groupId && (
+                            <span className="text-[8px] font-black text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 uppercase">
+                                {sceneGroups?.find(g => g.id === scene.groupId)?.name}
+                            </span>
+                        )}
                         <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Scene</span>
                     </div>
                     <div className="text-[9px] text-gray-600 italic truncate max-w-[100px]">

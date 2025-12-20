@@ -119,6 +119,13 @@ export const IMAGE_MODELS = [
     { value: 'gemini-3-pro-image-preview', label: 'Google Nano Banana Pro (High Quality)' },
 ];
 
+export const SCRIPT_MODELS = [
+    { value: 'gemini-3-pro-high', label: 'Gemini 3 Pro (High)' },
+    { value: 'gemini-3-pro-low', label: 'Gemini 3 Pro (Low)' },
+    { value: 'gemini-3-flash', label: 'Gemini 3 Flash (New)' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Default)' },
+];
+
 export const ASPECT_RATIOS = [
     { value: '16:9', label: '16:9 (Landscape - Cinematic)' },
     { value: '9:16', label: '9:16 (Portrait - Mobile/Reels)' },
@@ -131,32 +138,32 @@ export const CHARACTER_STYLES = [
     {
         value: 'pixar',
         label: '3D Animation (Pixar/Disney Style)',
-        prompt: 'STRICT STYLE: 3D rendered character in Pixar/Disney animation style. MUST have: soft rounded features, smooth gradient shading, large expressive eyes with glossy reflections, exaggerated proportions (big head, small body for cute characters), vibrant saturated colors, soft ambient lighting with rim lights, no hard edges, clean subsurface scattering on skin. Art style: Toy Story, Inside Out, Zootopia aesthetic. Render engine style: Arnold/RenderMan quality.'
+        prompt: 'STRICT STYLE: 3D rendered character in Pixar/Disney animation style. MUST have: soft rounded features, smooth gradient shading, large expressive eyes, glossy reflections. ENVIRONMENTAL CONSISTENCY: Match the background atmosphere, soft ambient lighting (rim lights), and lighting temperature from the "Ảnh Gốc". No hard edges, clean subsurface scattering.'
     },
     {
         value: 'anime',
         label: 'Anime / Manga',
-        prompt: 'STRICT STYLE: Japanese anime/manga illustration. MUST have: large detailed eyes with highlights and sparkles, sharp clean lineart, cel-shaded coloring with minimal gradients, vibrant hair colors with chunky highlights, sharp angular shadows, exaggerated facial expressions, simplified nose (small dots or lines), detailed clothing folds. Art style: Studio Ghibli, Makoto Shinkai, modern anime aesthetic. NO realistic shading, NO western cartoon style.'
+        prompt: 'STRICT STYLE: Japanese anime/manga illustration. MUST have: large detailed eyes, sharp clean lineart, cel-shaded coloring with minimal gradients. ENVIRONMENTAL CONSISTENCY: Replicate the background color palette, sky/lighting conditions, and overall atmospheric mood from the "Ảnh Gốc".'
     },
     {
         value: 'cinematic',
         label: 'Realistic Cinematic',
-        prompt: 'STRICT STYLE: Photorealistic cinematic rendering. MUST have: realistic skin texture with pores and subsurface scattering, accurate anatomy and proportions, natural hair strands with physics, realistic fabric materials with wrinkles, professional studio lighting (key light + fill + rim), shallow depth of field, film grain texture, color grading like Hollywood movies. Photography style: 85mm portrait lens, f/2.8 aperture, cinematic color palette. NO cartoon features, NO stylization.'
+        prompt: 'STRICT STYLE: Photorealistic cinematic rendering. MUST have: realistic skin texture, accurate anatomy, natural hair. ENVIRONMENTAL CONSISTENCY: Strictly match the lighting (key/fill/rim light), color grading (LUT/tint), field depth (bokeh), and background location environment seen in the "Ảnh Gốc".'
     },
     {
         value: 'comic',
         label: 'American Comic Book',
-        prompt: 'STRICT STYLE: American comic book illustration. MUST have: bold black ink outlines (thick outer lines, thinner inner details), strong contrast with dramatic shadows, halftone dot shading, dynamic poses with motion lines, exaggerated anatomy (muscular heroes, curvy females), vibrant primary colors (red, blue, yellow dominance), Ben-Day dots texture. Art style: Marvel/DC comics, Jack Kirby, Jim Lee aesthetic. NO soft gradients, NO realistic rendering.'
+        prompt: 'STRICT STYLE: American comic book illustration. MUST have: bold black ink outlines, strong contrast shadows, halftone dots. ENVIRONMENTAL CONSISTENCY: Use the same background color scheme and dramatic lighting contrast provided in the "Ảnh Gốc".'
     },
     {
         value: 'fantasy',
         label: 'Digital Fantasy Art',
-        prompt: 'STRICT STYLE: Epic fantasy digital painting. MUST have: painterly brush strokes visible, rich atmospheric lighting (magical glows, dramatic backlighting), detailed costume design with ornate patterns, fantasy elements (armor, robes, magical effects), semi-realistic proportions with idealized features, rich color palette with jewel tones, ethereal atmosphere with particles/mist. Art style: concept art for games like World of Warcraft, League of Legends, Magic: The Gathering. Medium: digital painting with visible brush work.'
+        prompt: 'STRICT STYLE: Epic fantasy digital painting. MUST have: painterly brush strokes, rich atmospheric lighting, detailed costumes. ENVIRONMENTAL CONSISTENCY: Preserve the magical glows, atmospheric fog, and background architecture/landscape style from the "Ảnh Gốc".'
     },
     {
         value: 'clay',
         label: 'Claymation / Stop Motion',
-        prompt: 'STRICT STYLE: Claymation/stop-motion puppet style. MUST have: visible fingerprint textures on clay surface, slightly lumpy handmade appearance, matte finish with no glossy shine, simple geometric shapes, visible wire armature bumps, exaggerated simplified features, chunky proportions, soft pastel or earthy colors, slight imperfections showing handcrafted quality. Art style: Wallace & Gromit, Coraline, Kubo aesthetic. NO smooth 3D rendering, NO clean digital look.'
+        prompt: 'STRICT STYLE: Claymation/stop-motion puppet style. MUST have: fingerprint textures on clay, handmade appearance, matte finish. ENVIRONMENTAL CONSISTENCY: Match the physical set lighting, studio shadows, and miniature background style from the "Ảnh Gốc".'
     },
 ];
 
@@ -166,6 +173,7 @@ export const INITIAL_STATE: ProjectState = {
     projectName: '',
     stylePrompt: 'cinematic-realistic',
     imageModel: 'gemini-2.5-flash-image',
+    scriptModel: 'gemini-2.5-flash',
     aspectRatio: '16:9',
     genyuToken: '',
     resolution: '1K',
@@ -206,6 +214,7 @@ export const INITIAL_STATE: ProjectState = {
         }
     ],
     scenes: [],
+    sceneGroups: [],
 };
 
 export const CREATIVE_PRESETS = [

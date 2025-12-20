@@ -131,6 +131,13 @@ export const IMAGE_MODELS = [
     { value: 'gemini-3-pro-image-preview', label: 'Google Nano Banana Pro (High Quality)' },
 ];
 
+export const SCRIPT_MODELS = [
+    { value: 'gemini-3-pro-high', label: 'Gemini 3 Pro (High)' },
+    { value: 'gemini-3-pro-low', label: 'Gemini 3 Pro (Low)' },
+    { value: 'gemini-3-flash', label: 'Gemini 3 Flash (New)' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Default)' },
+];
+
 export const ASPECT_RATIOS = [
     { value: '16:9', label: '16:9 (Landscape - Cinematic)' },
     { value: '9:16', label: '9:16 (Portrait - Mobile/Reels)' },
@@ -177,6 +184,7 @@ export const createInitialState = (): ProjectState => ({
     projectName: '',
     stylePrompt: 'cinematic-realistic',
     imageModel: 'gemini-2.5-flash-image',
+    scriptModel: 'gemini-3-flash',
     aspectRatio: '16:9',
     genyuToken: '',
     resolution: '1K',
@@ -190,6 +198,8 @@ export const createInitialState = (): ProjectState => ({
         masterImage: null,
         faceImage: null,
         bodyImage: null,
+        sideImage: null,
+        backImage: null,
         props: [
             { id: generateId(), name: '', image: null },
             { id: generateId(), name: '', image: null },

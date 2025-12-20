@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { ProjectState } from '../types';
 import { cleanToken } from '../utils/helpers';
+import { CAMERA_ANGLES, LENS_OPTIONS } from '../constants/presets';
 
 export function useVideoGeneration(
     state: ProjectState,
@@ -16,7 +17,8 @@ export function useVideoGeneration(
         const scene = state.scenes.find(s => s.id === sceneId);
         if (!scene || !scene.generatedImage) return;
 
-        const apiKey = userApiKey || (process.env as any).API_KEY;
+        const rawApiKey = userApiKey || (process.env as any).API_KEY;
+        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
         if (!apiKey) return;
 
         try {
@@ -60,6 +62,7 @@ export function useVideoGeneration(
              - Scene Intent: "${promptName}"
              - Dialogue: "${scriptText}"
              - Featured Products: "${productContext}"
+             - Cinematography: "${scene.cameraAngleOverride === 'custom' ? scene.customCameraAngle : (CAMERA_ANGLES.find(a => a.value === scene.cameraAngleOverride)?.label || 'Auto')} | ${scene.lensOverride === 'custom' ? scene.customLensOverride : (LENS_OPTIONS.find(l => l.value === scene.lensOverride)?.label || 'Auto')}"
              
              **TASK:** 
              Analyze the scene and generate the OPTIMAL text-to-video prompt.
@@ -79,7 +82,12 @@ export function useVideoGeneration(
 
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
-                contents: { parts: [{ inlineData: { data, mimeType } }, { text: promptText }] }
+                contents: {
+                    parts: [
+                        { inlineData: { data, mimeType } },
+                        { text: promptText }
+                    ]
+                }
             });
 
             const veoPrompt = response.text?.trim() || '';
@@ -97,7 +105,8 @@ export function useVideoGeneration(
         if (scenesToProcess.length === 0) return alert("Không có phân cảnh nào cần tạo Veo prompt.");
 
         setIsVeoGenerating(true);
-        const apiKey = userApiKey || (process.env as any).API_KEY;
+        const rawApiKey = userApiKey || (process.env as any).API_KEY;
+        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
         if (!apiKey) {
             setApiKeyModalOpen(true);
             setIsVeoGenerating(false);

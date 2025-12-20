@@ -7,22 +7,25 @@ export const callGeminiAPI = async (
     imageModel: string = 'gemini-2.5-flash-image',
     imageContext: string | null = null
 ): Promise<string | null> => {
-    if (!apiKey) return null;
+    const trimmedKey = apiKey?.trim();
+    if (!trimmedKey) return null;
 
     console.log('[Gemini Gen] 🎨 Calling Gemini API...');
     try {
-        const ai = new GoogleGenAI({ apiKey });
-        const parts: any[] = [{ text: prompt }];
+        const ai = new GoogleGenAI({ apiKey: trimmedKey });
+        const parts: any[] = [];
 
         if (imageContext) {
             console.log('[Gemini Gen] 📎 Using Reference Image...');
             const base64Data = imageContext.includes('base64,') ? imageContext.split('base64,')[1] : imageContext;
             const mimeType = imageContext.startsWith('data:image/png') ? 'image/png' : 'image/jpeg';
-            parts.unshift({ inlineData: { data: base64Data, mimeType } });
+            parts.push({ inlineData: { data: base64Data, mimeType } });
         }
 
+        parts.push({ text: prompt });
+
         const response = await ai.models.generateContent({
-            model: imageModel,
+            model: imageModel === 'gemini-2.0-flash' ? 'gemini-2.5-flash-image' : imageModel,
             contents: { parts: parts },
             config: {
                 imageConfig: {

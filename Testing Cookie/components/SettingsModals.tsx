@@ -28,7 +28,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKe
     }, [isOpen]);
 
     const handleVerify = async () => {
-        if (!apiKey.trim()) {
+        const trimmedKey = apiKey.trim();
+        if (!trimmedKey) {
             setCheckStatus('error');
             setStatusMsg("Vui lòng nhập API Key.");
             return;
@@ -36,11 +37,16 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKe
 
         setCheckStatus('checking');
         try {
-            const ai = new GoogleGenAI({ apiKey });
-            await ai.models.generateContent({
+            const ai = new GoogleGenAI({ apiKey: trimmedKey });
+            const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
-                contents: { parts: [{ text: 'Test connection' }] }
+                contents: 'Test connection'
             });
+
+            if (response.promptFeedback?.blockReason) {
+                throw new Error(`Bị chặn: ${response.promptFeedback.blockReason}`);
+            }
+
             setCheckStatus('success');
             setStatusMsg("Kết nối thành công! Key hợp lệ.");
             setTimeout(onClose, 1500);
@@ -51,10 +57,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKe
                 msg = "Lỗi 403: Quyền bị từ chối. Hãy kiểm tra: 1) Project GCP đã bật Generative AI API chưa? 2) Billing đã kích hoạt chưa?";
             } else if (msg.includes('400') || msg.includes('INVALID_ARGUMENT')) {
                 msg = "Lỗi 400: API Key không hợp lệ.";
+            } else if (msg.includes('404')) {
+                msg = "Lỗi 404: Model không tồn tại hoặc API version không hỗ trợ.";
             }
             setStatusMsg(msg);
         }
-    }
+    };
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Quản lý API Key">

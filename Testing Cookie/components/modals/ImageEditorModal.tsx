@@ -31,7 +31,8 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({ isOpen, onCl
 
     const handleEdit = async () => {
         if (!editPrompt.trim()) return;
-        if (!apiKey) {
+        const trimmedKey = apiKey?.trim();
+        if (!trimmedKey) {
             setError("Missing API Key");
             return;
         }
@@ -40,18 +41,18 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({ isOpen, onCl
         setError(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey });
+            const ai = new GoogleGenAI({ apiKey: trimmedKey });
             const [header, data] = image.split(',');
             const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
 
             const response = await ai.models.generateContent({
                 model: selectedModel,
-                contents: {
+                contents: [{
                     parts: [
                         { inlineData: { data, mimeType } },
                         { text: `Edit this image: ${editPrompt}. Maintain the core composition and identity, only applying the requested changes.` }
                     ]
-                }
+                }]
             });
 
             const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);

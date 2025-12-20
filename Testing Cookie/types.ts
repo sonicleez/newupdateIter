@@ -32,9 +32,21 @@ export interface SceneDialogue {
   line: string;
 }
 
+export interface SceneGroup {
+  id: string;
+  name: string;
+  description: string;
+  continuityReferenceGroupId?: string; // ID of a previous group to reference for visual continuity
+  stylePrompt?: string; // Optional: Override global style for this group
+  customStyleInstruction?: string; // Optional: Custom style prompt for this group
+  conceptImage?: string | null; // AI-generated reference image for the group's location
+  pacing?: 'slow' | 'medium' | 'fast'; // Narrative rhythm for the group
+}
+
 export interface Scene {
   id: string;
   sceneNumber: string;
+  groupId?: string; // ID of the SceneGroup this scene belongs to
 
   // Legacy fields (backward compatibility)
   language1: string;
@@ -138,6 +150,7 @@ export interface ProjectState {
   imageModel: string; // Selected Image Gen Model
   aspectRatio: string; // "16:9" | "9:16" | "1:1" | "4:3" | "3:4"
   resolution: string;
+  scriptModel?: string; // Selected Script Gen Model (Gemini 3 series)
   genyuToken?: string; // Optional: For Genyu.io API
   recaptchaToken?: string; // Optional: For Google Labs Recaptcha
   scriptLanguage: string; // 'vietnamese' | 'language1' | 'custom'
@@ -158,6 +171,7 @@ export interface ProjectState {
   characters: Character[];
   products: Product[]; // List of Products/Props
   scenes: Scene[];
+  sceneGroups?: SceneGroup[]; // Optional: List of SceneGroups (Scenes Group feature)
 }
 
 export interface Product {

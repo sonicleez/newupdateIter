@@ -24,6 +24,7 @@ export const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = (
     const [generatedImage, setGeneratedImage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [selectedModel, setSelectedModel] = useState(model);
+    const [customStyle, setCustomStyle] = useState('');
 
     useEffect(() => {
         if (isOpen) {
@@ -33,6 +34,7 @@ export const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = (
             setSelectedModel(model);
             setResolution('1K');
             setAspectRatio('9:16');
+            setCustomStyle('');
         }
     }, [isOpen, model]);
 
@@ -49,7 +51,7 @@ export const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = (
 
         try {
             const styleConfig = CHARACTER_STYLES.find(s => s.value === style);
-            const stylePrompt = styleConfig?.prompt || styleConfig?.label || style;
+            const stylePrompt = style === 'custom' ? customStyle : (styleConfig?.prompt || styleConfig?.label || style);
 
             const fullPrompt = `
 CHARACTER DESIGN TASK:
@@ -128,8 +130,7 @@ CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate fr
                 }
 
                 if (genyuImage) {
-                    onSave(genyuImage);
-                    alert('✅ Character generated successfully (Genyu)!');
+                    setGeneratedImage(genyuImage);
                 } else {
                     let errorMsg = `Cannot find image URL. Keys: ${Object.keys(data).join(', ')}`;
                     setError(errorMsg);
@@ -139,10 +140,11 @@ CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate fr
 
             } else {
                 // >>> ROUTE 2: GEMINI DIRECT <<<
-                const ai = new GoogleGenAI({ apiKey });
+                const trimmedKey = apiKey?.trim();
+                const ai = new GoogleGenAI({ apiKey: trimmedKey });
                 const response = await ai.models.generateContent({
                     model: selectedModel,
-                    contents: { parts: [{ text: fullPrompt }] },
+                    contents: [{ parts: [{ text: fullPrompt }] }],
                     config: {
                         imageConfig: {
                             aspectRatio: aspectRatio
@@ -154,8 +156,7 @@ CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate fr
                 if (imagePart?.inlineData) {
                     const base64ImageBytes = imagePart.inlineData.data;
                     const imageUrl = `data:${imagePart.inlineData.mimeType};base64,${base64ImageBytes}`;
-                    onSave(imageUrl);
-                    alert('✅ Character generated successfully!');
+                    setGeneratedImage(imageUrl);
                 } else {
                     setError("AI không trả về ảnh. Thử lại.");
                     alert('❌ AI không trả về ảnh. Vui lòng thử lại.');
@@ -215,8 +216,21 @@ CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate fr
                             {CHARACTER_STYLES.map(s => (
                                 <option key={s.value} value={s.value}>{s.label}</option>
                             ))}
+                            <option value="custom" className="text-brand-orange font-bold">+ Tùy chỉnh (Style)...</option>
                         </select>
                     </div>
+                    {style === 'custom' && (
+                        <div className="col-span-2">
+                            <label className="block text-[10px] font-medium text-brand-orange mb-1">Nhập phong cách tùy chỉnh</label>
+                            <textarea
+                                value={customStyle}
+                                onChange={(e) => setCustomStyle(e.target.value)}
+                                placeholder="VD: Ghibli style, hand-drawn, watercolor, soft lighting..."
+                                rows={2}
+                                className="w-full bg-gray-900 border border-brand-orange rounded p-2 text-xs text-white focus:outline-none"
+                            />
+                        </div>
+                    )}
                     <div className="flex space-x-2">
                         <div className="flex-1">
                             <label className="block text-xs font-medium text-gray-400 mb-1">Tỷ lệ (Ratio)</label>

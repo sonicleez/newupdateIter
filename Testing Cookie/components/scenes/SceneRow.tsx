@@ -9,7 +9,9 @@ export interface SceneRowProps {
     index: number;
     characters: Character[];
     products: Product[];
+    sceneGroups: any[];
     updateScene: (id: string, updates: Partial<Scene>) => void;
+    assignSceneToGroup: (sceneId: string, groupId: string | undefined) => void;
     removeScene: (id: string) => void;
     generateImage: () => void;
     generateEndFrame: () => void;
@@ -20,7 +22,7 @@ export interface SceneRowProps {
 }
 
 export const SceneRow: React.FC<SceneRowProps> = ({
-    scene, index, characters, products, updateScene, removeScene,
+    scene, index, characters, products, sceneGroups, updateScene, assignSceneToGroup, removeScene,
     generateImage, generateEndFrame, openImageViewer,
     onDragStart, onDragOver, onDrop
 }) => {
@@ -62,6 +64,19 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                     placeholder="SC.."
                 />
                 <button onClick={() => removeScene(scene.id)} className="text-red-500 hover:text-red-400 text-xs opacity-0 group-hover/row:opacity-100 transition-opacity">Xóa</button>
+                <div className="pt-2 w-full">
+                    <select
+                        value={scene.groupId || ''}
+                        onChange={(e) => assignSceneToGroup(scene.id, e.target.value || undefined)}
+                        className="w-full bg-gray-900 border border-purple-900/30 rounded p-1 text-[9px] text-purple-400 focus:border-purple-500 font-bold uppercase tracking-wider text-center"
+                        title="Assign to Group"
+                    >
+                        <option value="">No Group</option>
+                        {sceneGroups?.map(g => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
             {/* Script */}
@@ -112,29 +127,64 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                         {CAMERA_ANGLES.map(angle => (
                             <option key={angle.value} value={angle.value}>🎬 {angle.label}</option>
                         ))}
+                        <option value="custom" className="text-brand-orange font-bold">+ Tùy chỉnh (Shot/Angle)...</option>
                     </select>
 
+                    {scene.cameraAngleOverride === 'custom' && (
+                        <input
+                            type="text"
+                            value={scene.customCameraAngle || ''}
+                            onChange={(e) => updateScene(scene.id, { customCameraAngle: e.target.value })}
+                            placeholder="Nhập Shot Type (VD: Bird's Eye, Drone...)"
+                            className="w-full bg-gray-900 border border-brand-orange rounded px-2 py-1 text-[10px] text-white focus:outline-none"
+                        />
+                    )}
+
                     <div className="grid grid-cols-2 gap-1.5">
-                        <select
-                            value={scene.lensOverride || ''}
-                            onChange={(e) => updateScene(scene.id, { lensOverride: e.target.value })}
-                            className="w-full bg-gray-800 text-[11px] text-gray-300 border border-gray-600 rounded px-2 py-1 focus:border-brand-orange"
-                            title="Lens"
-                        >
-                            {LENS_OPTIONS.map(lens => (
-                                <option key={lens.value} value={lens.value}>🔭 {lens.label}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={scene.transitionType || ''}
-                            onChange={(e) => updateScene(scene.id, { transitionType: e.target.value })}
-                            className="w-full bg-gray-800 text-[11px] text-gray-300 border border-gray-600 rounded px-2 py-1 focus:border-brand-orange"
-                            title="Transition"
-                        >
-                            {TRANSITION_TYPES.map(t => (
-                                <option key={t.value} value={t.value}>✂️ {t.label}</option>
-                            ))}
-                        </select>
+                        <div className="flex flex-col space-y-1">
+                            <select
+                                value={scene.lensOverride || ''}
+                                onChange={(e) => updateScene(scene.id, { lensOverride: e.target.value })}
+                                className="w-full bg-gray-800 text-[11px] text-gray-300 border border-gray-600 rounded px-2 py-1 focus:border-brand-orange"
+                                title="Lens"
+                            >
+                                {LENS_OPTIONS.map(lens => (
+                                    <option key={lens.value} value={lens.value}>🔭 {lens.label}</option>
+                                ))}
+                                <option value="custom" className="text-brand-orange font-bold">+ Custom...</option>
+                            </select>
+                            {scene.lensOverride === 'custom' && (
+                                <input
+                                    type="text"
+                                    value={scene.customLensOverride || ''}
+                                    onChange={(e) => updateScene(scene.id, { customLensOverride: e.target.value })}
+                                    placeholder="Lens..."
+                                    className="w-full bg-gray-900 border border-brand-orange rounded px-1 py-0.5 text-[9px] text-white focus:outline-none"
+                                />
+                            )}
+                        </div>
+                        <div className="flex flex-col space-y-1">
+                            <select
+                                value={scene.transitionType || ''}
+                                onChange={(e) => updateScene(scene.id, { transitionType: e.target.value })}
+                                className="w-full bg-gray-800 text-[11px] text-gray-300 border border-gray-600 rounded px-2 py-1 focus:border-brand-orange"
+                                title="Transition"
+                            >
+                                {TRANSITION_TYPES.map(t => (
+                                    <option key={t.value} value={t.value}>✂️ {t.label}</option>
+                                ))}
+                                <option value="custom" className="text-brand-orange font-bold">+ Custom...</option>
+                            </select>
+                            {scene.transitionType === 'custom' && (
+                                <input
+                                    type="text"
+                                    value={scene.customTransitionType || ''}
+                                    onChange={(e) => updateScene(scene.id, { customTransitionType: e.target.value })}
+                                    placeholder="Trans..."
+                                    className="w-full bg-gray-900 border border-brand-orange rounded px-1 py-0.5 text-[9px] text-white focus:outline-none"
+                                />
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -343,6 +393,6 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                     )}
                 </button>
             </div>
-        </div>
+        </div >
     );
 };

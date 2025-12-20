@@ -12,6 +12,7 @@ interface ScenesMapSectionProps {
     setViewMode: (mode: 'table' | 'storyboard') => void;
     characters: Character[];
     products: Product[];
+    sceneGroups: any[];
     updateScene: (id: string, updates: Partial<Scene>) => void;
     removeScene: (id: string) => void;
     insertScene: (index: number) => void;
@@ -20,6 +21,8 @@ interface ScenesMapSectionProps {
     handleOpenImageViewer: (index: number) => void;
     handleGenerateAllImages: () => void;
     isBatchGenerating: boolean;
+    isStopping: boolean;
+    stopBatchGeneration: () => void;
     handleGenerateAllVeoPrompts: () => void;
     isVeoGenerating: boolean;
     handleGenerateAllVideos: () => void;
@@ -28,6 +31,10 @@ interface ScenesMapSectionProps {
     detailedScript: string;
     onDetailedScriptChange: (val: string) => void;
     onCleanAll: () => void;
+    createGroup: (name: string, description?: string) => string;
+    updateGroup: (id: string, updates: Partial<{ name: string; description: string }>) => void;
+    deleteGroup: (id: string) => void;
+    assignSceneToGroup: (sceneId: string, groupId: string | undefined) => void;
     draggedSceneIndex: number | null;
     setDraggedSceneIndex: (idx: number | null) => void;
     dragOverIndex: number | null;
@@ -48,6 +55,8 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
     handleOpenImageViewer,
     handleGenerateAllImages,
     isBatchGenerating,
+    isStopping,
+    stopBatchGeneration,
     handleGenerateAllVeoPrompts,
     isVeoGenerating,
     handleGenerateAllVideos,
@@ -56,6 +65,11 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
     detailedScript,
     onDetailedScriptChange,
     onCleanAll,
+    createGroup,
+    updateGroup,
+    deleteGroup,
+    assignSceneToGroup,
+    sceneGroups,
     draggedSceneIndex,
     setDraggedSceneIndex,
     dragOverIndex,
@@ -84,9 +98,20 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                     </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                    <button onClick={handleGenerateAllImages} disabled={isBatchGenerating} className={`px-4 py-2 font-semibold text-brand-cream rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed`}>
-                        {isBatchGenerating ? 'Đang tạo (Tuần tự)...' : '1. Tạo ảnh hàng loạt'}
-                    </button>
+                    <div className="flex items-center space-x-2">
+                        <button onClick={handleGenerateAllImages} disabled={isBatchGenerating} className={`px-4 py-2 font-semibold text-brand-cream rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed`}>
+                            {isBatchGenerating ? 'Đang tạo (Tuần tự)...' : '1. Tạo ảnh hàng loạt'}
+                        </button>
+                        {isBatchGenerating && (
+                            <button
+                                onClick={stopBatchGeneration}
+                                disabled={isStopping}
+                                className={`px-4 py-2 font-semibold text-white rounded-lg bg-red-600 hover:bg-red-700 shadow-lg shadow-red-900/20 transition-all duration-300 transform hover:scale-105 disabled:opacity-50`}
+                            >
+                                {isStopping ? 'Đang dừng...' : 'Stop'}
+                            </button>
+                        )}
+                    </div>
                     <button onClick={handleGenerateAllVeoPrompts} disabled={isVeoGenerating} className={`px-4 py-2 font-semibold text-brand-cream rounded-lg bg-gradient-to-r from-brand-red to-brand-brown hover:from-brand-orange hover:to-brand-red shadow-lg shadow-brand-red/20 transition-all duration-300 transform hover:scale-105 disabled:opacity-50`}>
                         {isVeoGenerating ? 'Đang tạo Prompt...' : '2. Tạo Veo Prompts'}
                     </button>
@@ -133,96 +158,190 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                     <div className="col-span-3 text-center">Ảnh</div>
                 </div>
             )}
+            {/* === SCENES LIST WITH GROUPS === */}
             <div className={`mt-4 ${viewMode === 'storyboard' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6' : 'space-y-4'}`}>
-                {scenes.map((scene, index) => (
-                    <React.Fragment key={scene.id}>
-                        {viewMode === 'table' && (
-                            <>
-                                {/* Insert Button Before each row */}
-                                <div className="relative h-2 group/insert">
-                                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-brand-orange/0 group-hover/insert:border-brand-orange/30 transition-all"></div>
-                                    <button
-                                        onClick={() => insertScene(index)}
-                                        className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-brand-orange text-white w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover/insert:opacity-100 transition-all shadow-xl z-20 hover:scale-125"
-                                        title="Chèn phân cảnh mới vào đây"
-                                    >
-                                        <Plus size={14} />
-                                    </button>
-                                </div>
+                {(() => {
+                    const renderedScenes: React.ReactNode[] = [];
+                    let currentGroupId: string | undefined | 'initial' = 'initial';
 
-                                <SceneRow
-                                    scene={scene}
-                                    index={index}
-                                    characters={characters}
-                                    products={products}
-                                    updateScene={updateScene}
-                                    removeScene={removeScene}
-                                    generateImage={() => performImageGeneration(scene.id)}
-                                    generateEndFrame={() => performImageGeneration(scene.id, undefined, true)}
-                                    openImageViewer={() => handleOpenImageViewer(index)}
-                                    onDragStart={(idx) => setDraggedSceneIndex(idx)}
-                                    onDragOver={(idx) => {
-                                        if (dragOverIndex !== idx) {
-                                            setDragOverIndex(idx);
-                                            (window as any).dragOverIndex = idx;
-                                        }
-                                    }}
-                                    onDrop={(targetIdx) => {
-                                        if (draggedSceneIndex !== null) {
-                                            moveScene(draggedSceneIndex, targetIdx);
-                                        }
-                                        setDraggedSceneIndex(null);
-                                        setDragOverIndex(null);
-                                        (window as any).dragOverIndex = null;
-                                    }}
-                                />
+                    scenes.forEach((scene, index) => {
+                        // Check if we need to render a Group Header
+                        if (scene.groupId !== currentGroupId) {
+                            currentGroupId = scene.groupId;
+                            const group = sceneGroups?.find(g => g.id === currentGroupId);
 
-                                {/* Last Insert Button */}
-                                {index === scenes.length - 1 && (
-                                    <div className="relative h-2 group/insert">
-                                        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-brand-orange/0 group-hover/insert:border-brand-orange/30 transition-all"></div>
-                                        <button
-                                            onClick={() => insertScene(index + 1)}
-                                            className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-brand-orange text-white w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover/insert:opacity-100 transition-all shadow-xl z-20 hover:scale-125"
-                                            title="Thêm phân cảnh mới vào cuối"
-                                        >
-                                            <Plus size={14} />
-                                        </button>
+                            renderedScenes.push(
+                                <div key={`group-header-${currentGroupId || 'none'}`} className={`col-span-full py-4 flex items-center justify-between border-b border-gray-700/50 mb-2 ${viewMode === 'table' ? 'px-4' : ''}`}>
+                                    <div className="flex items-center space-x-3 flex-1">
+                                        <div className={`w-2 h-10 rounded-full bg-gradient-to-b ${currentGroupId ? 'from-purple-500 to-blue-500' : 'from-gray-600 to-gray-800'}`}></div>
+                                        <div className="flex-1">
+                                            {group ? (
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center space-x-2">
+                                                        <input
+                                                            value={group.name}
+                                                            onChange={(e) => updateGroup(group.id, { name: e.target.value })}
+                                                            className="bg-transparent border-none text-lg font-bold text-white focus:ring-1 focus:ring-purple-500 rounded px-1 min-w-[200px]"
+                                                            placeholder="Group Name"
+                                                        />
+                                                        <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded uppercase tracking-wider font-black">Group</span>
+                                                    </div>
+                                                    <input
+                                                        value={group.description || ''}
+                                                        onChange={(e) => updateGroup(group.id, { description: e.target.value })}
+                                                        className="bg-transparent border-none text-xs text-gray-500 focus:ring-1 focus:ring-purple-500 rounded px-1 w-full"
+                                                        placeholder="Add group description..."
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-gray-400">No Group / Default Context</h3>
+                                                    <p className="text-xs text-gray-600 italic">No visual continuity reference. Uses previous scene fallback.</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                )}
-                            </>
-                        )}
+                                    <div className="flex items-center space-x-2">
+                                        {!currentGroupId ? (
+                                            <button
+                                                onClick={() => {
+                                                    const name = prompt("Enter Group Name (e.g., 'On Deck', 'Cabin'):");
+                                                    if (name) {
+                                                        const gId = createGroup(name);
+                                                        assignSceneToGroup(scene.id, gId);
+                                                    }
+                                                }}
+                                                className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg border border-gray-700 transition-all flex items-center gap-1.5"
+                                            >
+                                                <Plus size={12} /> New Group from Here
+                                            </button>
+                                        ) : (
+                                            <div className="flex items-center space-x-2">
+                                                <button
+                                                    onClick={() => {
+                                                        if (confirm('Unassign this scene from group?')) {
+                                                            assignSceneToGroup(scene.id, undefined);
+                                                        }
+                                                    }}
+                                                    className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-700 px-3 py-1.5 rounded-lg border border-gray-700/50 transition-all"
+                                                >
+                                                    Unassign
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        if (confirm('Delete this group? Scenes will be unassigned.')) {
+                                                            deleteGroup(currentGroupId!);
+                                                        }
+                                                    }}
+                                                    className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-red-900/10 hover:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-900/30 transition-all flex items-center gap-1.5"
+                                                >
+                                                    <Trash2 size={12} /> Delete Group
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        }
 
-                        {viewMode === 'storyboard' && (
-                            <StoryBoardCard
-                                scene={scene}
-                                index={index}
-                                characters={characters}
-                                products={products}
-                                updateScene={updateScene}
-                                removeScene={removeScene}
-                                generateImage={() => performImageGeneration(scene.id)}
-                                generateEndFrame={() => performImageGeneration(scene.id, undefined, true)}
-                                openImageViewer={() => handleOpenImageViewer(index)}
-                                onDragStart={(idx) => setDraggedSceneIndex(idx)}
-                                onDragOver={(idx) => {
-                                    if (dragOverIndex !== idx) {
-                                        setDragOverIndex(idx);
-                                        (window as any).dragOverIndex = idx;
-                                    }
-                                }}
-                                onDrop={(targetIdx) => {
-                                    if (draggedSceneIndex !== null) {
-                                        moveScene(draggedSceneIndex, targetIdx);
-                                    }
-                                    setDraggedSceneIndex(null);
-                                    setDragOverIndex(null);
-                                    (window as any).dragOverIndex = null;
-                                }}
-                            />
-                        )}
-                    </React.Fragment>
-                ))}
+                        // Render the Scene (Row or Card)
+                        renderedScenes.push(
+                            <React.Fragment key={scene.id}>
+                                {viewMode === 'table' && (
+                                    <>
+                                        {/* Insert Button Before each row */}
+                                        <div className="relative h-2 group/insert">
+                                            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-brand-orange/0 group-hover/insert:border-brand-orange/30 transition-all"></div>
+                                            <button
+                                                onClick={() => insertScene(index)}
+                                                className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-brand-orange text-white w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover/insert:opacity-100 transition-all shadow-xl z-20 hover:scale-125"
+                                                title="Chèn phân cảnh mới vào đây"
+                                            >
+                                                <Plus size={14} />
+                                            </button>
+                                        </div>
+
+                                        <SceneRow
+                                            scene={scene}
+                                            index={index}
+                                            characters={characters}
+                                            products={products}
+                                            sceneGroups={sceneGroups}
+                                            assignSceneToGroup={assignSceneToGroup}
+                                            updateScene={updateScene}
+                                            removeScene={removeScene}
+                                            generateImage={() => performImageGeneration(scene.id)}
+                                            generateEndFrame={() => performImageGeneration(scene.id, undefined, true)}
+                                            openImageViewer={() => handleOpenImageViewer(index)}
+                                            onDragStart={(idx) => setDraggedSceneIndex(idx)}
+                                            onDragOver={(idx) => {
+                                                if (dragOverIndex !== idx) {
+                                                    setDragOverIndex(idx);
+                                                    (window as any).dragOverIndex = idx;
+                                                }
+                                            }}
+                                            onDrop={(targetIdx) => {
+                                                if (draggedSceneIndex !== null) {
+                                                    moveScene(draggedSceneIndex, targetIdx);
+                                                }
+                                                setDraggedSceneIndex(null);
+                                                setDragOverIndex(null);
+                                                (window as any).dragOverIndex = null;
+                                            }}
+                                        />
+
+                                        {/* Last Insert Button */}
+                                        {index === scenes.length - 1 && (
+                                            <div className="relative h-2 group/insert">
+                                                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-brand-orange/0 group-hover/insert:border-brand-orange/30 transition-all"></div>
+                                                <button
+                                                    onClick={() => insertScene(index + 1)}
+                                                    className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-brand-orange text-white w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover/insert:opacity-100 transition-all shadow-xl z-20 hover:scale-125"
+                                                    title="Thêm phân cảnh mới vào cuối"
+                                                >
+                                                    <Plus size={14} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+
+                                {viewMode === 'storyboard' && (
+                                    <StoryBoardCard
+                                        scene={scene}
+                                        index={index}
+                                        characters={characters}
+                                        products={products}
+                                        sceneGroups={sceneGroups}
+                                        assignSceneToGroup={assignSceneToGroup}
+                                        updateScene={updateScene}
+                                        removeScene={removeScene}
+                                        generateImage={() => performImageGeneration(scene.id)}
+                                        generateEndFrame={() => performImageGeneration(scene.id, undefined, true)}
+                                        openImageViewer={() => handleOpenImageViewer(index)}
+                                        onDragStart={(idx) => setDraggedSceneIndex(idx)}
+                                        onDragOver={(idx) => {
+                                            if (dragOverIndex !== idx) {
+                                                setDragOverIndex(idx);
+                                                (window as any).dragOverIndex = idx;
+                                            }
+                                        }}
+                                        onDrop={(targetIdx) => {
+                                            if (draggedSceneIndex !== null) {
+                                                moveScene(draggedSceneIndex, targetIdx);
+                                            }
+                                            setDraggedSceneIndex(null);
+                                            setDragOverIndex(null);
+                                            (window as any).dragOverIndex = null;
+                                        }}
+                                    />
+                                )}
+                            </React.Fragment>
+                        );
+                    });
+
+                    return renderedScenes;
+                })()}
             </div>
         </div>
     );

@@ -29,3 +29,34 @@ export const cleanToken = (t: string) => {
 };
 
 export const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+export const detectCharactersInText = (text: string, characters: { id: string, name: string }[]): string[] => {
+    if (!text) return [];
+    const detectedIds: string[] = [];
+
+    characters.forEach(char => {
+        if (!char.name) return;
+        // Escape special characters in name
+        const escapedName = char.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        // Use Unicode property escapes for start/end boundaries
+        // (?<!\p{L}) ensures no letter precedes
+        // (?!\p{L}) ensures no letter follows
+        // Requires 'u' flag
+        try {
+            // Standard word boundary behavior but Unicode-aware (\p{L} = Letters, \p{N} = Numbers)
+            const regex = new RegExp(`(?<![\\p{L}\\p{N}_])${escapedName}(?![\\p{L}\\p{N}_])`, 'gui');
+            if (regex.test(text)) {
+                detectedIds.push(char.id);
+            }
+        } catch (e) {
+            // Fallback for environments that don't support Unicode property escapes fully
+            const fallbackRegex = new RegExp(`(?:^|[^\\p{L}\\p{N}_])${escapedName}(?:$|[^\\p{L}\\p{N}_])`, 'gui');
+            if (fallbackRegex.test(text)) {
+                detectedIds.push(char.id);
+            }
+        }
+    });
+
+    return [...new Set(detectedIds)];
+};

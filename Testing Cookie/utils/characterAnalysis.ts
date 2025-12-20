@@ -37,7 +37,8 @@ export async function analyzeCharacterImage(
     imageBase64: string,
     apiKey: string
 ): Promise<CharacterAnalysis> {
-    const ai = new GoogleGenAI({ apiKey });
+    const trimmedKey = apiKey?.trim();
+    const ai = new GoogleGenAI({ apiKey: trimmedKey });
 
     // Clean base64 if needed
     const cleanData = imageBase64.includes(',')
@@ -47,13 +48,13 @@ export async function analyzeCharacterImage(
     console.log('[Character Analysis] 🔍 Analyzing master image with Gemini...');
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: {
+        model: 'gemini-1.5-flash',
+        contents: [{
             parts: [
                 { inlineData: { data: cleanData, mimeType: 'image/jpeg' } },
                 { text: ANALYSIS_PROMPT }
             ]
-        }
+        }]
     });
 
     const text = response.text || '{}';

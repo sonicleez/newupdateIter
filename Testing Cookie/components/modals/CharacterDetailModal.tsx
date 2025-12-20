@@ -1,5 +1,5 @@
 import React from 'react';
-import { Character, CharacterProp } from '../types';
+import { Character, CharacterProp } from '../../types';
 import Modal from '../Modal';
 import SingleImageSlot from '../SingleImageSlot';
 

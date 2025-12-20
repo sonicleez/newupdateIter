@@ -99,10 +99,11 @@ CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate fr
 
             // === GEMINI API ONLY ===
             console.log('[Character Gen] 🎨 Using Gemini API...');
-            const ai = new GoogleGenAI({ apiKey });
+            const trimmedKey = apiKey?.trim();
+            const ai = new GoogleGenAI({ apiKey: trimmedKey });
             const response = await ai.models.generateContent({
                 model: selectedModel,
-                contents: { parts: [{ text: fullPrompt }] },
+                contents: [{ parts: [{ text: fullPrompt }] }],
                 config: {
                     imageConfig: {
                         aspectRatio: aspectRatio,

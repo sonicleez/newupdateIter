@@ -14,6 +14,7 @@ import { ScenesMapSection } from './components/sections/ScenesMapSection';
 import { CharacterDetailModal } from './components/modals/CharacterDetailModal';
 import { ProductDetailModal } from "./components/ProductDetailModal";
 import { AdvancedImageEditor } from './components/modals/AdvancedImageEditor';
+import { ScreenplayModal } from './components/modals/ScreenplayModal';
 import { APP_NAME, PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from './constants/presets';
 import { handleDownloadAll } from './utils/zipUtils';
 
@@ -36,6 +37,7 @@ const App: React.FC = () => {
         handleSave,
         handleOpen,
         handleNewProject,
+        stateRef,
         history
     } = useStateManager();
 
@@ -55,6 +57,7 @@ const App: React.FC = () => {
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingImage, setEditingImage] = useState<any>(null);
     const [charGenState, setCharGenState] = useState<{ isOpen: boolean; charId: string | null }>({ isOpen: false, charId: null });
+    const [isScreenplayModalOpen, setScreenplayModalOpen] = useState(false);
     const [draggedSceneIndex, setDraggedSceneIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
@@ -63,13 +66,17 @@ const App: React.FC = () => {
     // Functional Hooks
     const {
         isBatchGenerating,
+        isStopping,
         performImageGeneration,
-        handleGenerateAllImages
-    } = useImageGeneration(state, updateStateAndRecord, userApiKey, setApiKeyModalOpen);
+        generateGroupConcept,
+        handleGenerateAllImages,
+        stopBatchGeneration
+    } = useImageGeneration(state, stateRef, updateStateAndRecord, userApiKey, setApiKeyModalOpen, isContinuityMode);
 
     const {
         isScriptGenerating,
-        handleGenerateScript
+        handleGenerateScript,
+        handleRegenerateGroup
     } = useScriptGeneration(state, updateStateAndRecord, userApiKey, setApiKeyModalOpen);
 
     const {
@@ -95,7 +102,12 @@ const App: React.FC = () => {
         insertScene,
         moveScene,
         handleScriptUpload,
-        triggerFileUpload
+        triggerFileUpload,
+        createGroup: addSceneGroup,
+        updateGroup: updateSceneGroup,
+        deleteGroup: deleteSceneGroup,
+        assignSceneToGroup,
+        applyGeneratedScript
     } = useSceneLogic(state, updateStateAndRecord);
 
     const {
@@ -124,6 +136,19 @@ const App: React.FC = () => {
         return () => mainContent?.removeEventListener('scroll', handleScroll);
     }, []);
 
+    // State Hydration
+    useEffect(() => {
+        const genyuToken = localStorage.getItem('genyuToken');
+        const recaptchaToken = localStorage.getItem('recaptchaToken');
+        if (genyuToken || recaptchaToken) {
+            updateStateAndRecord(s => ({
+                ...s,
+                genyuToken: genyuToken || s.genyuToken,
+                recaptchaToken: recaptchaToken || s.recaptchaToken
+            }));
+        }
+    }, [updateStateAndRecord]);
+
     // Derived Handlers
     const handleProjectNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         updateStateAndRecord(s => ({ ...s, projectName: e.target.value.toUpperCase() }));
@@ -145,14 +170,28 @@ const App: React.FC = () => {
         updateStateAndRecord(s => ({ ...s, scriptLanguage: e.target.value as any }));
     };
 
+    const closeEditor = useCallback(() => {
+        setIsEditorOpen(false);
+    }, []);
+
     const openEditor = (id: string, image: string, type: any, propIndex?: number, viewKey?: string) => {
-        setEditingImage({ id, image, type, propIndex, viewKey });
+        // ... (existing logic to find history if it exists)
+        let editorHistory = undefined;
+        if (type === 'scene') {
+            editorHistory = state.scenes.find(s => s.id === id)?.editHistory;
+        } else if (['master', 'face', 'body', 'side', 'back'].includes(type) || viewKey) {
+            editorHistory = state.characters.find(c => c.id === id)?.editHistory;
+        }
+
+        setEditingImage({ id, image, type, propIndex, viewKey, history: editorHistory });
         setIsEditorOpen(true);
     };
 
-    const handleEditorSave = (newImage: string, history: any[]) => {
+    const handleEditorSave = (newImage: string, history: any[], savedViewKey?: string) => {
         if (!editingImage) return;
-        const { id, type, propIndex, viewKey } = editingImage;
+        const { id, type, propIndex, viewKey: initialViewKey } = editingImage;
+        const viewKey = savedViewKey || initialViewKey;
+
         if (type === 'prop' && typeof propIndex === 'number') {
             const char = state.characters.find(c => c.id === id);
             if (char) {
@@ -160,11 +199,11 @@ const App: React.FC = () => {
                 newProps[propIndex] = { ...newProps[propIndex], image: newImage };
                 updateCharacter(id, { props: newProps });
             }
-        } else if (type === 'master') updateCharacter(id, { masterImage: newImage, editHistory: history });
-        else if (type === 'face') updateCharacter(id, { faceImage: newImage, editHistory: history });
-        else if (type === 'body') updateCharacter(id, { bodyImage: newImage, editHistory: history });
-        else if (type === 'side') updateCharacter(id, { sideImage: newImage, editHistory: history });
-        else if (type === 'back') updateCharacter(id, { backImage: newImage, editHistory: history });
+        } else if (type === 'master' || viewKey === 'master') updateCharacter(id, { masterImage: newImage, editHistory: history });
+        else if (type === 'face' || viewKey === 'face') updateCharacter(id, { faceImage: newImage, editHistory: history });
+        else if (type === 'body' || viewKey === 'body') updateCharacter(id, { bodyImage: newImage, editHistory: history });
+        else if (type === 'side' || viewKey === 'side') updateCharacter(id, { sideImage: newImage, editHistory: history });
+        else if (type === 'back' || viewKey === 'back') updateCharacter(id, { backImage: newImage, editHistory: history });
         else if (type === 'scene') updateScene(id, { generatedImage: newImage, editHistory: history });
         else if (type === 'product') {
             if (viewKey) {
@@ -236,6 +275,8 @@ const App: React.FC = () => {
                             onCustomStyleInstructionChange={(val) => updateStateAndRecord(s => ({ ...s, customStyleInstruction: val }))}
                             imageModel={state.imageModel}
                             onImageModelChange={handleImageModelChange}
+                            scriptModel={state.scriptModel || 'gemini-2.5-flash'}
+                            onScriptModelChange={(e) => updateStateAndRecord(s => ({ ...s, scriptModel: e.target.value }))}
                             resolution={state.resolution}
                             onResolutionChange={(val) => updateStateAndRecord(s => ({ ...s, resolution: val }))}
                             aspectRatio={state.aspectRatio}
@@ -273,6 +314,8 @@ const App: React.FC = () => {
                             handleOpenImageViewer={handleOpenImageViewer}
                             handleGenerateAllImages={handleGenerateAllImages}
                             isBatchGenerating={isBatchGenerating}
+                            isStopping={isStopping}
+                            stopBatchGeneration={stopBatchGeneration}
                             handleGenerateAllVeoPrompts={handleGenerateAllVeoPrompts}
                             isVeoGenerating={isVeoGenerating}
                             handleGenerateAllVideos={handleGenerateAllVideos}
@@ -285,11 +328,24 @@ const App: React.FC = () => {
                                     updateStateAndRecord(s => ({ ...s, scenes: [], detailedScript: '' }));
                                 }
                             }}
+                            createGroup={addSceneGroup} // Assuming these might be renamed or available via hook
+                            updateGroup={updateSceneGroup}
+                            deleteGroup={deleteSceneGroup}
+                            assignSceneToGroup={assignSceneToGroup}
+                            sceneGroups={state.sceneGroups}
                             draggedSceneIndex={draggedSceneIndex}
                             setDraggedSceneIndex={setDraggedSceneIndex}
                             dragOverIndex={dragOverIndex}
                             setDragOverIndex={setDragOverIndex}
                         />
+                        <div className="flex justify-end mt-8 gap-4">
+                            <button
+                                onClick={() => setScreenplayModalOpen(true)}
+                                className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 rounded-lg flex items-center gap-2 border border-purple-500/30 transition-all active:scale-95 text-xs font-bold"
+                            >
+                                📄 XUẤT KỊCH BẢN
+                            </button>
+                        </div>
                     </div>
                 </div>
             </main>
@@ -341,6 +397,17 @@ const App: React.FC = () => {
                 customInstruction={state.customScriptInstruction}
                 onCustomInstructionChange={(val) => updateStateAndRecord(s => ({ ...s, customScriptInstruction: val }))}
                 onAddPreset={(p) => updateStateAndRecord(s => ({ ...s, customScriptPresets: [...s.customScriptPresets, p] }))}
+                onApplyGenerated={applyGeneratedScript}
+                onRegenerateGroup={handleRegenerateGroup}
+                onGenerateMoodboard={generateGroupConcept}
+                scriptModel={state.scriptModel || 'gemini-2.5-flash'}
+                onScriptModelChange={(e) => updateStateAndRecord(s => ({ ...s, scriptModel: e.target.value }))}
+            />
+
+            <ScreenplayModal
+                isOpen={isScreenplayModalOpen}
+                onClose={() => setScreenplayModalOpen(false)}
+                state={state}
             />
 
             <CharacterDetailModal
@@ -368,12 +435,15 @@ const App: React.FC = () => {
 
             <AdvancedImageEditor
                 isOpen={isEditorOpen}
-                onClose={() => setIsEditorOpen(false)}
+                onClose={closeEditor}
                 sourceImage={editingImage?.image || ''}
                 onSave={handleEditorSave}
                 apiKey={userApiKey}
                 genyuToken={state.genyuToken}
                 initialHistory={editingImage?.history}
+                character={editingImage?.type && ['master', 'face', 'body', 'side', 'back', 'prop'].includes(editingImage.type) ? state.characters.find(c => c.id === editingImage.id) : undefined}
+                product={editingImage?.type === 'product' ? state.products.find(p => p.id === editingImage.id) : undefined}
+                activeView={editingImage?.viewKey || editingImage?.type}
             />
 
             <ImageViewerModal

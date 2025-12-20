@@ -1,11 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ProjectState } from '../types';
+import { saveProject, openProject } from '../utils/fileUtils';
 import { INITIAL_STATE } from '../constants/presets';
 import { slugify } from '../utils/helpers';
-
-// These are expected to be available globally in the environment (e.g., via script tags in index.html)
-declare const saveProject: (state: ProjectState, filename: string) => void;
-declare const openProject: (callback: (state: ProjectState) => void) => void;
 
 export function useStateManager() {
     const [state, setState] = useState<ProjectState>(INITIAL_STATE);
@@ -19,6 +16,7 @@ export function useStateManager() {
     const updateStateAndRecord = useCallback((updater: (prevState: ProjectState) => ProjectState) => {
         setState(prevState => {
             const newState = updater(prevState);
+            stateRef.current = newState; // Ensure ref is updated immediately for loops/async functions
             setHistory(h => {
                 const newPast = [...h.past, prevState];
                 if (newPast.length > 50) newPast.shift();
