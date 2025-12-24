@@ -30,12 +30,13 @@ export function buildScriptPrompt(
         ? JSON.stringify(availableProducts, null, 2)
         : null;
 
-    // Build character instructions based on preset
-    const characterInstructions = preset.outputFormat.hasDialogue && availableCharacters.length > 0
+    // Build character instructions - ALWAYS include when characters exist
+    const characterInstructions = availableCharacters.length > 0
         ? `\n**AVAILABLE CHARACTERS (JSON):**\n${characterListString}\n\n**CHARACTER USAGE RULES:**
-1. **Selective Tagging**: CHỈ trả về 'character_ids' cho các nhân vật THỰC SỰ xuất hiện hoặc đóng vai trò quan trọng trong cảnh. Tránh gán nhân vật rác nếu họ không có thoại hoặc không được mô tả hành động cụ thể.
-2. **Dialogue Consistency**: Nếu một nhân vật có tên trong 'dialogues', ID của họ PHẢI có trong 'character_ids'.
-3. **Visual Anchor**: Trong "visual_context", mô tả chi tiết đặc điểm nhận dạng của họ (kiểu tóc, màu tóc, trang phục cụ thể) ĐÚNG với mô tả được cung cấp.`
+1. **AUTO ASSIGN REQUIRED**: Tự động gán 'character_ids' cho các cảnh có nhân vật xuất hiện hoặc được nhắc đến. PHẢI gán ít nhất 1 character nếu cảnh có người.
+2. **Visual Consistency**: Trong "visual_context", MÔ TẢ CHI TIẾT đặc điểm nhận dạng của nhân vật (kiểu tóc, màu tóc, trang phục) ĐÚNG với description được cung cấp.
+3. **No Ghost People**: NẾU cảnh KHÔNG có character_ids, visual_context TUYỆT ĐỐI KHÔNG được mô tả người. Chỉ mô tả landscape/environment.
+4. **Selective but Active**: Chọn đúng nhân vật cho từng cảnh, nhưng phải chủ động gán - không để trống nếu cảnh có người.`
         : '';
 
     // Build product instructions
