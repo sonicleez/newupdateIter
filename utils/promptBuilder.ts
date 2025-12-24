@@ -136,8 +136,11 @@ ${preset.sceneGuidelines}
 **CONTINUITY GUIDELINES:**
 - **Group locking**: Các scene trong cùng một 'group_id' PHẢI có sự nhất quán tuyệt đối về bối cảnh và ánh sáng.
 - **Time-of-Day Lock**: Xác định rõ thời gian trong ngày (VD: Sunrise, Golden Hour, High Noon, Night) và GIỮ NGUYÊN cho toàn bộ group.
-- **Progressive Action**: Nếu các cảnh diễn ra liên tiếp, hãy mô tả hành động như một chuỗi chuyển động mượt mà.
+- **Progressive Action**: Nếu các cảnh diễn ra liên tiếp, hãy mô tả hành động như một chuỗi chuyển động mượt mà. Đảm bảo tư thế, trang phục (nhàu, rách) và các vật dụng đang cầm (giỏ, vũ khí) phải khớp tuyệt đối với mô tả cảnh trước.
 - **Visual Anchors**: Luôn nhắc lại các vật thể/chi tiết đặc trưng của bối cảnh để tạo mỏ neo thị giác.
+- **Seamless Movement**: Khi nhân vật di chuyển từ bối cảnh này sang bối cảnh khác trong cùng một dòng thời gian, hãy ghi chú rõ hành động đang tiếp diễn (VD: "Vẫn cầm giỏ hoa quả từ cảnh trước, chú mèo bước vào nhà...").
+- **Action Persistence**: Giữ nguyên mức độ mệt mỏi, vết bẩn, hoặc trạng thái cảm xúc của nhân vật nếu thời gian giữa 2 phân cảnh là cực ngắn.
+- **Background Integrity**: Chỉ thay đổi bối cảnh nếu nội dung yêu cầu, nhưng các vật thể nhân vật đang tương tác (vũ khí, đạo cụ) phải đi theo nhân vật.
 
 ${outputFormatInstructions}
 

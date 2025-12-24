@@ -234,11 +234,26 @@ export function useImageGeneration(
                     .filter(s => s.groupId === sceneToUpdate.groupId && s.generatedImage)
                     .sort((a, b) => parseInt(a.scene_number) - parseInt(b.scene_number))[0];
 
-                // 2. SHOT CONTINUITY: The 2 immediately preceding generated images
-                const precedingScenes = currentState.scenes
+                // 2. SHOT CONTINUITY: The 2 immediately preceding generated images (Absolute Sequence)
+                // We pick the last 2 shots before this scene, even if they are in a different group,
+                // to ensure seamless action and outfit continuity.
+                const absolutePrecedingScenes = currentState.scenes
                     .slice(0, currentSceneIndex)
-                    .filter(s => s.groupId === sceneToUpdate.groupId && s.generatedImage)
-                    .reverse()
+                    .filter(s => s.generatedImage)
+                    .reverse();
+
+                // Group-Specific Reference
+                const sameGroupPreceding = absolutePrecedingScenes
+                    .filter(s => s.groupId === sceneToUpdate.groupId)
+                    .slice(0, 2);
+
+                // Action Continuity: Pick last 2 shots REGARDLESS of group, but prioritize shared characters
+                const actionContinuityScenes = absolutePrecedingScenes
+                    .filter(s => {
+                        // Include if in same group OR shares at least one character
+                        const hasSharedChar = s.characterIds.some(id => sceneToUpdate.characterIds.includes(id));
+                        return s.groupId === sceneToUpdate.groupId || hasSharedChar;
+                    })
                     .slice(0, 2);
 
                 if (firstSceneInGroup?.generatedImage) {
@@ -251,20 +266,24 @@ export function useImageGeneration(
                     }
                 }
 
-                for (let i = 0; i < precedingScenes.length; i++) {
-                    const prevScene = precedingScenes[i];
+                for (let i = 0; i < actionContinuityScenes.length; i++) {
+                    const prevScene = actionContinuityScenes[i];
                     if (prevScene.id === firstSceneInGroup?.id) continue;
 
                     const imgData = await safeGetImageData(prevScene.generatedImage!);
                     if (imgData) {
-                        const refLabel = `SHOT_CONTINUITY_${i + 1} (${i === 0 ? 'Last Shot' : 'Previous Shot'})`;
-                        parts.push({ text: `[${refLabel}]: Match character clothing, hair state, and immediate action from this previous shot. Note: This shot is a PERSPECTIVE SHIFT from the Master Lock.` });
+                        const isSameGroup = prevScene.groupId === sceneToUpdate.groupId;
+                        const refLabel = isSameGroup
+                            ? `SHOT_CONTINUITY_${i + 1} (Same Group)`
+                            : `ACTION_SEQUENCE_${i + 1} (Previous Timeline)`;
+
+                        parts.push({ text: `[${refLabel}]: Match character clothing, hair state, accessories (giỏ xách, vũ khí), and immediate action/pose from this shot. ${!isSameGroup ? 'Note: The background location has changed, but the character action is a SEAMLESS CONTINUATION.' : ''}` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        continuityInstruction += `(SHOT CONTINUITY: Follow ${refLabel}) `;
+                        continuityInstruction += `(ACTION CONTINUITY: Follow ${refLabel}) `;
                     }
                 }
 
-                if (precedingScenes.length === 0 && !firstSceneInGroup && groupObj?.conceptImage) {
+                if (actionContinuityScenes.length === 0 && !firstSceneInGroup && groupObj?.conceptImage) {
                     const imgData = await safeGetImageData(groupObj.conceptImage);
                     if (imgData) {
                         parts.push({ text: `[MOODBOARD REFERENCE]: Match lighting, color palette, and architectural style.` });
