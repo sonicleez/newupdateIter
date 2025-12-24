@@ -1,0 +1,15 @@
+[build]
+  # Tell Netlify to enter the Main folder before building
+  base = "Main"
+  
+  # Command to build the project
+  command = "npm run build"
+  
+  # Directory where the built files are located (relative to base)
+  publish = "dist"
+
+# Redirects for Single Page Applications (React)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
