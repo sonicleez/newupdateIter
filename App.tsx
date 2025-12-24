@@ -294,14 +294,20 @@ Return the style description in English, including:
 Format as a single paragraph of style instructions, suitable for use as an AI image generation prompt. Be specific and detailed.`;
 
             const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: { parts: [{ inlineData: { data, mimeType } }, { text: analyzePrompt }] },
-                config: {
-                    thinkingConfig: { thinkingLevel: 'low' as any }
-                }
+                model: 'gemini-2.0-flash',
+                contents: { parts: [{ inlineData: { data, mimeType } }, { text: analyzePrompt }] }
             });
 
-            const styleDescription = (response as any).text?.() || (response as any).text || '';
+            // Extract text from Gemini response - handle multiple formats
+            let styleDescription = '';
+            try {
+                // Try different ways to get the text
+                const candidate = response.candidates?.[0];
+                const textPart = candidate?.content?.parts?.find((p: any) => p.text);
+                styleDescription = textPart?.text || '';
+            } catch (e) {
+                console.error('Failed to extract text from response:', e);
+            }
 
             if (styleDescription) {
                 updateStateAndRecord(s => ({
@@ -309,7 +315,10 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                     stylePrompt: 'custom',
                     customStyleInstruction: styleDescription.trim()
                 }));
+            } else {
+                throw new Error('Không nhận được kết quả từ AI');
             }
+
 
         } catch (error: any) {
             console.error('Style analysis failed:', error);
