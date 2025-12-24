@@ -58,6 +58,7 @@ const App: React.FC = () => {
     const [headerSticky, setHeaderSticky] = useState(false);
     const [showSuccessToast, setShowSuccessToast] = useState<string | null>(null);
     const [isContinuityMode, setIsContinuityMode] = useState(true);
+    const [isOutfitLockMode, setIsOutfitLockMode] = useState(true);
     const [isImageViewerOpen, setImageViewerOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [viewMode, setViewMode] = useState<'table' | 'storyboard'>('table');
@@ -85,7 +86,7 @@ const App: React.FC = () => {
         generateGroupConcept,
         handleGenerateAllImages,
         stopBatchGeneration
-    } = useImageGeneration(state, stateRef, updateStateAndRecord, userApiKey, setProfileModalOpen, isContinuityMode, session?.user.id);
+    } = useImageGeneration(state, stateRef, updateStateAndRecord, userApiKey, setProfileModalOpen, isContinuityMode, session?.user.id, isOutfitLockMode);
 
     const {
         isScriptGenerating,
@@ -505,6 +506,12 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                                     onStylePromptChange={handleStylePromptChange}
                                     customStyleInstruction={state.customStyleInstruction || ''}
                                     onCustomStyleInstructionChange={(val) => updateStateAndRecord(s => ({ ...s, customStyleInstruction: val }))}
+                                    isContinuityMode={isContinuityMode}
+                                    toggleContinuityMode={() => setIsContinuityMode(!isContinuityMode)}
+                                    isOutfitLockMode={isOutfitLockMode}
+                                    toggleOutfitLockMode={() => setIsOutfitLockMode(!isOutfitLockMode)}
+                                    onAnalyzeStyleFromImage={analyzeStyleFromImage}
+                                    isAnalyzingStyle={isAnalyzingStyle}
                                     imageModel={state.imageModel}
                                     onImageModelChange={handleImageModelChange}
                                     scriptModel={state.scriptModel || 'gemini-2.5-flash'}
@@ -530,8 +537,6 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                                     onOpenScriptGenerator={() => setScriptModalOpen(true)}
                                     isScriptGenerating={isScriptGenerating}
                                     onTriggerFileUpload={triggerFileUpload}
-                                    onAnalyzeStyleFromImage={analyzeStyleFromImage}
-                                    isAnalyzingStyle={isAnalyzingStyle}
                                 />
 
                                 <ScenesMapSection

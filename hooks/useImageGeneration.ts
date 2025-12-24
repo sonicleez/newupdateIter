@@ -56,7 +56,8 @@ export function useImageGeneration(
     userApiKey: string | null,
     setApiKeyModalOpen: (open: boolean) => void,
     isContinuityMode: boolean,
-    userId?: string
+    userId?: string,
+    isOutfitLockMode?: boolean
 ) {
     const [isBatchGenerating, setIsBatchGenerating] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
@@ -177,7 +178,8 @@ export function useImageGeneration(
             let charPrompt = '';
             if (selectedChars.length > 0) {
                 const charDesc = selectedChars.map(c => `[${c.name}: ${c.description}]`).join(' ');
-                charPrompt = `Appearing Characters: ${charDesc}`;
+                const outfitConstraint = isOutfitLockMode ? ' (STRICT OUTFIT LOCK: Use EXACT clothes/colors from reference images.)' : '';
+                charPrompt = `Appearing Characters: ${charDesc}${outfitConstraint}`;
             } else {
                 // EXPLICIT NO CHARACTER for macro/landscape shots
                 charPrompt = `STRICT NEGATIVE: NO PEOPLE, NO CHARACTERS, NO HUMANS, NO FACES, NO BODY PARTS. EXPLICITLY REMOVE ALL HUMAN ELEMENTS. FOCUS ONLY ON ${cleanedContext.toUpperCase() || 'ENVIRONMENT'}.`;
@@ -227,15 +229,17 @@ export function useImageGeneration(
                 const groupObj = currentState.sceneGroups?.find(g => g.id === sceneToUpdate.groupId);
 
                 // 1. MASTER ANCHOR: The very first image in the group (The "Set")
+                // 1. MASTER LOCK: The first generated image in this group
                 const firstSceneInGroup = currentState.scenes
                     .filter(s => s.groupId === sceneToUpdate.groupId && s.generatedImage)
                     .sort((a, b) => parseInt(a.scene_number) - parseInt(b.scene_number))[0];
 
-                // 2. CONTINUITY ANCHOR: The immediately preceding generated image
-                const precedingSceneInGroup = currentState.scenes
+                // 2. SHOT CONTINUITY: The 2 immediately preceding generated images
+                const precedingScenes = currentState.scenes
                     .slice(0, currentSceneIndex)
                     .filter(s => s.groupId === sceneToUpdate.groupId && s.generatedImage)
-                    .reverse()[0];
+                    .reverse()
+                    .slice(0, 2);
 
                 if (firstSceneInGroup?.generatedImage) {
                     const imgData = await safeGetImageData(firstSceneInGroup.generatedImage);
@@ -247,15 +251,20 @@ export function useImageGeneration(
                     }
                 }
 
-                if (precedingSceneInGroup?.generatedImage && precedingSceneInGroup.id !== firstSceneInGroup?.id) {
-                    const imgData = await safeGetImageData(precedingSceneInGroup.generatedImage);
+                for (let i = 0; i < precedingScenes.length; i++) {
+                    const prevScene = precedingScenes[i];
+                    if (prevScene.id === firstSceneInGroup?.id) continue;
+
+                    const imgData = await safeGetImageData(prevScene.generatedImage!);
                     if (imgData) {
-                        const refLabel = `SHOT_CONTINUITY_ANCHOR (Last Shot)`;
+                        const refLabel = `SHOT_CONTINUITY_${i + 1} (${i === 0 ? 'Last Shot' : 'Previous Shot'})`;
                         parts.push({ text: `[${refLabel}]: Match character clothing, hair state, and immediate action from this previous shot. Note: This shot is a PERSPECTIVE SHIFT from the Master Lock.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                         continuityInstruction += `(SHOT CONTINUITY: Follow ${refLabel}) `;
                     }
-                } else if (!firstSceneInGroup && groupObj?.conceptImage) {
+                }
+
+                if (precedingScenes.length === 0 && !firstSceneInGroup && groupObj?.conceptImage) {
                     const imgData = await safeGetImageData(groupObj.conceptImage);
                     if (imgData) {
                         parts.push({ text: `[MOODBOARD REFERENCE]: Match lighting, color palette, and architectural style.` });

@@ -378,6 +378,19 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                             generateEndFrame={() => performImageGeneration(scene.id, undefined, true)}
                                             generateVeoPrompt={generateVeoPrompt}
                                             openImageViewer={() => handleOpenImageViewer(index)}
+                                            onCopyPreviousStyle={() => {
+                                                if (index > 0) {
+                                                    const prev = scenes[index - 1];
+                                                    updateScene(scene.id, {
+                                                        cameraAngleOverride: prev.cameraAngleOverride,
+                                                        customCameraAngle: prev.customCameraAngle,
+                                                        lensOverride: prev.lensOverride,
+                                                        customLensOverride: prev.customLensOverride,
+                                                        transitionType: prev.transitionType,
+                                                        customTransitionType: prev.customTransitionType
+                                                    });
+                                                }
+                                            }}
                                             onDragStart={(idx) => setDraggedSceneIndex(idx)}
                                             onDragOver={(idx) => {
                                                 if (dragOverIndex !== idx) {

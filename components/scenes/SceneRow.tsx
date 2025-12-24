@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Copy } from 'lucide-react';
 import { Scene, Character, Product } from '../../types';
 import { ExpandableTextarea } from '../common/ExpandableTextarea';
 import { CAMERA_ANGLES, LENS_OPTIONS, TRANSITION_TYPES, VEO_MODES, VEO_PRESETS } from '../../constants/presets';
@@ -20,13 +20,15 @@ export interface SceneRowProps {
     onDragOver: (index: number) => void;
     onDrop: (index: number) => void;
     generateVeoPrompt: (sceneId: string) => void;
+    onCopyPreviousStyle?: () => void;
 }
 
 export const SceneRow: React.FC<SceneRowProps> = ({
     scene, index, characters, products, sceneGroups, updateScene, assignSceneToGroup, removeScene,
     generateImage, generateEndFrame, openImageViewer,
     onDragStart, onDragOver, onDrop,
-    generateVeoPrompt
+    generateVeoPrompt,
+    onCopyPreviousStyle
 }) => {
     const endFrameInputRef = useRef<HTMLInputElement>(null);
 
@@ -119,7 +121,18 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                     title="Mô tả bối cảnh (Context Description)"
                 />
                 <div className="space-y-1.5 bg-gray-900/60 p-2 rounded border border-gray-700/50">
-                    <div className="text-[9px] text-gray-500 font-semibold">📹 Cinematography</div>
+                    <div className="flex items-center justify-between mb-1">
+                        <div className="text-[9px] text-gray-500 font-semibold">📹 Cinematography</div>
+                        {index > 0 && onCopyPreviousStyle && (
+                            <button
+                                onClick={onCopyPreviousStyle}
+                                className="text-[8px] flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-brand-orange px-1.5 py-0.5 rounded border border-gray-700 transition-all uppercase font-black tracking-tighter"
+                                title="Copy camera settings from previous scene"
+                            >
+                                <Copy size={8} /> Copy Previous
+                            </button>
+                        )}
+                    </div>
                     <select
                         value={scene.cameraAngleOverride || ''}
                         onChange={(e) => updateScene(scene.id, { cameraAngleOverride: e.target.value })}

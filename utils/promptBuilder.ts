@@ -94,6 +94,11 @@ export function buildScriptPrompt(
 7. **Cinematic Shot Progression**: Đảm bảo sự chuyển động góc máy logic (WIDE SHOT -> MEDIUM -> CLOSE UP).
 8. **No Ghost People**: NẾU KHÔNG CÓ character_ids, visual_context TUYỆT ĐỐI KHÔNG mô tả bất kỳ người nào.
 9. **Integrity**: Chỉ sử dụng các character_id/product_id được cung cấp trong danh sách.
+10. **CONTINUITY TAGS**: Sử dụng các thẻ sau trong visual_context khi cần thiết:
+    - [SAME_OUTFIT]: Đảm bảo trang phục y hệt cảnh trước.
+    - [SAME_LIGHTING]: Đảm bảo hướng và màu sắc ánh sáng nhất quán.
+    - [SAME_LOCATION]: Đảm bảo các chi tiết bối cảnh xung quanh không thay đổi.
+11. **TRANSITION HINTS**: Mô tả ngắn gọn sự thay đổi tư thế/vị trí so với cảnh trước (VD: "Tiếp nối cảnh trước, Kaya hạ tay xuống...").
 `;
 
 
@@ -127,6 +132,12 @@ Write all dialogues, voiceovers, and narration in ${language}.
 ${preset.sceneGuidelines}
 
 ---
+
+**CONTINUITY GUIDELINES:**
+- **Group locking**: Các scene trong cùng một 'group_id' PHẢI có sự nhất quán tuyệt đối về bối cảnh và ánh sáng.
+- **Time-of-Day Lock**: Xác định rõ thời gian trong ngày (VD: Sunrise, Golden Hour, High Noon, Night) và GIỮ NGUYÊN cho toàn bộ group.
+- **Progressive Action**: Nếu các cảnh diễn ra liên tiếp, hãy mô tả hành động như một chuỗi chuyển động mượt mà.
+- **Visual Anchors**: Luôn nhắc lại các vật thể/chi tiết đặc trưng của bối cảnh để tạo mỏ neo thị giác.
 
 ${outputFormatInstructions}
 
