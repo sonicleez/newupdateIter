@@ -98,6 +98,7 @@ const App: React.FC = () => {
         deleteCharacter,
         setDefaultCharacter,
         analyzeCharacterImage,
+        analyzeAndGenerateSheets,
         generateCharacterSheets,
         generateCharacterImage
     } = useCharacterLogic(state, updateStateAndRecord, userApiKey, setProfileModalOpen, session?.user.id);
@@ -534,7 +535,7 @@ const App: React.FC = () => {
                         character={state.characters.find(c => c.id === editingCharacterId) || null}
                         updateCharacter={updateCharacter}
                         setDefault={setDefaultCharacter}
-                        onAnalyze={analyzeCharacterImage}
+                        onAnalyze={analyzeAndGenerateSheets}
                         onGenerateSheets={generateCharacterSheets}
                         onEditImage={openEditor}
                         onOpenCharGen={(id) => setCharGenState({ isOpen: true, charId: id })}

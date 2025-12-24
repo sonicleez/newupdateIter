@@ -98,18 +98,21 @@ export function useCharacterLogic(
                         console.error("Cloud upload failed for master image", e);
                     }
                 }
-            } else {
-                const proxyUrl = `http://localhost:3001/api/proxy/fetch-image?url=${encodeURIComponent(image)}`;
-                const imgRes = await fetch(proxyUrl);
+            } else if (image.startsWith('http')) {
+                // Handle URL images
+                const imgRes = await fetch(image);
                 if (!imgRes.ok) throw new Error(`Fetch failed`);
                 const blob = await imgRes.blob();
-                mimeType = blob.type;
+                mimeType = blob.type || 'image/jpeg';
                 data = await new Promise<string>((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
                     reader.onerror = reject;
                     reader.readAsDataURL(blob);
                 });
+                finalMasterUrl = image;
+            } else {
+                throw new Error("Invalid image format");
             }
 
             const analyzePrompt = `Analyze this character's main features. Return JSON: {"name": "Suggest a concise name", "description": "Short Vietnamese description (2-3 sentences) of key physical traits, clothing, and overall vibe. Focus on what makes them unique."}`;
@@ -147,6 +150,131 @@ export function useCharacterLogic(
             updateCharacter(id, { isAnalyzing: false });
         }
     }, [userApiKey, updateCharacter, setApiKeyModalOpen, userId]);
+
+    // Combined function: Analyze + Generate Face ID & Body in one step
+    const analyzeAndGenerateSheets = useCallback(async (id: string, image: string) => {
+        const rawApiKey = userApiKey || (process.env as any).API_KEY;
+        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
+
+        if (!apiKey) {
+            setApiKeyModalOpen(true);
+            return;
+        }
+
+        updateCharacter(id, { isAnalyzing: true });
+
+        try {
+            const ai = new GoogleGenAI({ apiKey });
+            let data: string;
+            let mimeType: string = 'image/jpeg';
+            let finalMasterUrl = image;
+
+            // Convert image to base64 if needed
+            if (image.startsWith('data:')) {
+                const [header, base64Data] = image.split(',');
+                data = base64Data;
+                mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+
+                if (userId) {
+                    try {
+                        finalMasterUrl = await uploadImageToSupabase(image, 'project-assets', `${userId}/characters/${id}_master_${Date.now()}.jpg`);
+                    } catch (e) {
+                        console.error("Cloud upload failed for master image", e);
+                    }
+                }
+            } else if (image.startsWith('http')) {
+                const imgRes = await fetch(image);
+                if (!imgRes.ok) throw new Error(`Fetch failed`);
+                const blob = await imgRes.blob();
+                mimeType = blob.type || 'image/jpeg';
+                data = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+                finalMasterUrl = image;
+            } else {
+                throw new Error("Invalid image format");
+            }
+
+            // Step 1: Analyze the character AND detect art style
+            const analyzePrompt = `Analyze this character image. Return JSON:
+{
+    "name": "Suggest a concise character name",
+    "description": "Short Vietnamese description (2-3 sentences) of key physical traits, clothing, and overall vibe.",
+    "art_style": "Describe the artistic style of this image in English (e.g., 'Anime cel-shaded with vibrant colors', 'Photorealistic 3D render', 'Watercolor illustration', 'Pixel art', 'Comic book style with bold outlines'). Be specific about the visual style."
+}`;
+
+            const analysisRes = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: { parts: [{ inlineData: { data, mimeType } }, { text: analyzePrompt }] },
+                config: {
+                    responseMimeType: "application/json",
+                    thinkingConfig: { thinkingLevel: 'low' as any }
+                }
+            });
+
+            let json = { name: "", description: "", art_style: "" };
+            try {
+                const text = (analysisRes as any).text();
+                json = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
+            } catch (e) {
+                console.error("JSON parse error", e);
+            }
+
+            const charName = json.name || "Unnamed Character";
+            const charDescription = json.description || "Character";
+            const detectedStyle = json.art_style || "High quality, detailed";
+
+            // Update character with analysis results first
+            updateCharacter(id, {
+                masterImage: finalMasterUrl,
+                name: charName,
+                description: charDescription
+            });
+
+            // Step 2: Generate Face ID and Body using the DETECTED style from the reference image
+            const styleInstruction = `
+**MANDATORY STYLE CONSISTENCY:**
+- ART STYLE: You MUST replicate the exact artistic style of the reference image: "${detectedStyle}".
+- DO NOT change the art style. If the reference is anime, generate anime. If photorealistic, generate photorealistic.
+- BACKGROUND: Pure Solid White Studio Background.
+- CHARACTER: The character's face, hair, and clothing MUST be exactly as seen in the reference.
+- LIGHTING: Professional studio lighting with rim lights.
+- QUALITY: High resolution, clean sharp focus.
+            `.trim();
+
+            const facePrompt = `${styleInstruction}\n\n(STRICT CAMERA: EXTREME CLOSE-UP - FACE ID ON WHITE BACKGROUND) Generate a highly detailed Face ID close-up of this character: ${charDescription}. Focus on capturing the exact facial features and expression from the reference. Match the art style EXACTLY.`;
+            const bodyPrompt = `${styleInstruction}\n\n(STRICT CAMERA: FULL BODY HEAD-TO-TOE WIDE SHOT ON WHITE BACKGROUND) Generate a Full Body character design sheet (Front View, T-Pose or A-Pose). MUST CAPTURE HEAD-TO-TOE INCLUDING VISIBLE FEET. Description: ${charDescription}. Match the art style and clothing EXACTLY from the reference.`;
+
+            const model = state.imageModel || 'gemini-3-pro-image-preview';
+
+            let [faceUrl, bodyUrl] = await Promise.all([
+                callGeminiAPI(apiKey, facePrompt, "1:1", model, image),
+                callGeminiAPI(apiKey, bodyPrompt, "9:16", model, image),
+            ]);
+
+            if (userId) {
+                if (faceUrl?.startsWith('data:')) {
+                    faceUrl = await uploadImageToSupabase(faceUrl, 'project-assets', `${userId}/characters/${id}_face_${Date.now()}.jpg`);
+                }
+                if (bodyUrl?.startsWith('data:')) {
+                    bodyUrl = await uploadImageToSupabase(bodyUrl, 'project-assets', `${userId}/characters/${id}_body_${Date.now()}.jpg`);
+                }
+            }
+
+            updateCharacter(id, {
+                faceImage: faceUrl || undefined,
+                bodyImage: bodyUrl || undefined,
+                isAnalyzing: false
+            });
+
+        } catch (error: any) {
+            console.error("Analyze and Generate Failed", error);
+            updateCharacter(id, { isAnalyzing: false });
+        }
+    }, [userApiKey, updateCharacter, setApiKeyModalOpen, userId, state.imageModel]);
 
     const generateCharacterSheets = useCallback(async (id: string) => {
         const char = state.characters.find(c => c.id === id);
@@ -293,6 +421,7 @@ CRITICAL: The style MUST strictly follow the "STYLE PRESET" and Capturing the sp
         deleteCharacter,
         setDefaultCharacter,
         analyzeCharacterImage,
+        analyzeAndGenerateSheets,
         generateCharacterSheets,
         generateCharacterImage
     };
