@@ -17,8 +17,35 @@ export const callGeminiAPI = async (
 
         if (imageContext) {
             console.log('[Gemini Gen] 📎 Using Reference Image...');
-            const base64Data = imageContext.includes('base64,') ? imageContext.split('base64,')[1] : imageContext;
-            const mimeType = imageContext.startsWith('data:image/png') ? 'image/png' : 'image/jpeg';
+            let base64Data: string;
+            let mimeType: string = 'image/jpeg';
+
+            if (imageContext.startsWith('data:')) {
+                // It's already a Base64 Data URI
+                base64Data = imageContext.split('base64,')[1];
+                mimeType = imageContext.startsWith('data:image/png') ? 'image/png' : 'image/jpeg';
+            } else if (imageContext.startsWith('http')) {
+                // It's a URL, we need to fetch and convert it
+                console.log('[Gemini Gen] 🌐 Fetching image from URL...');
+                try {
+                    const imgRes = await fetch(imageContext);
+                    if (!imgRes.ok) throw new Error('Failed to fetch image from URL');
+                    const blob = await imgRes.blob();
+                    mimeType = blob.type || 'image/jpeg';
+                    base64Data = await new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                } catch (fetchError: any) {
+                    console.error('[Gemini Gen] ❌ Failed to fetch URL image:', fetchError.message);
+                    return null;
+                }
+            } else {
+                // Assume it's raw base64 without the data URI prefix
+                base64Data = imageContext;
+            }
             parts.push({ inlineData: { data: base64Data, mimeType } });
         }
 
