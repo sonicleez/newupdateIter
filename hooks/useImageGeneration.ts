@@ -119,13 +119,19 @@ export function useImageGeneration(
             let styleInstruction = '';
             const currentGroupObj = currentState.sceneGroups?.find(g => g.id === sceneToUpdate.groupId);
             const effectiveStylePrompt = currentGroupObj?.stylePrompt || currentState.stylePrompt;
-            const effectiveCustomStyle = currentGroupObj?.stylePrompt ? currentGroupObj.customStyleInstruction : currentState.customStyleInstruction;
+
+            // Use group's custom style if it has one, otherwise fallback to global
+            const effectiveCustomStyle = (currentGroupObj?.stylePrompt === 'custom' && currentGroupObj?.customStyleInstruction)
+                ? currentGroupObj.customStyleInstruction
+                : currentState.customStyleInstruction;
 
             if (effectiveStylePrompt === 'custom') {
                 styleInstruction = effectiveCustomStyle || '';
+                console.log('[ImageGen] Using CUSTOM style:', styleInstruction?.substring(0, 100) + '...');
             } else {
                 const selectedStyle = GLOBAL_STYLES.find(s => s.value === effectiveStylePrompt);
                 styleInstruction = selectedStyle ? selectedStyle.prompt : '';
+                console.log('[ImageGen] Using PRESET style:', effectiveStylePrompt);
             }
 
             // --- 2. CINEMATOGRAPHY ---
