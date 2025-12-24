@@ -71,6 +71,7 @@ export const CharacterDetailModal: React.FC<CharacterDetailModalProps> = ({
                             type="text"
                             value={character.name}
                             onChange={e => updateCharacter(character.id, { name: e.target.value })}
+                            onMouseDown={(e) => e.stopPropagation()}
                             className="w-full bg-brand-dark/50 border border-gray-600 rounded px-3 py-2 text-brand-cream focus:outline-none focus:border-brand-orange"
                             placeholder="VD: Nguyễn Văn A"
                         />
@@ -80,12 +81,14 @@ export const CharacterDetailModal: React.FC<CharacterDetailModalProps> = ({
                         <textarea
                             value={character.description}
                             onChange={e => updateCharacter(character.id, { description: e.target.value })}
+                            onMouseDown={(e) => e.stopPropagation()}
                             rows={3}
                             className="w-full bg-brand-dark/50 border border-gray-600 rounded px-3 py-2 text-brand-cream focus:outline-none focus:border-brand-orange"
                             placeholder="VD: Tóc vàng, mắt xanh, áo khoác da màu đen, có sẹo trên mặt..."
                         />
                     </div>
                 </div>
+
 
                 {/* Master Image */}
                 <div>

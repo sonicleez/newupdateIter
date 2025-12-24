@@ -39,6 +39,8 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({ character, index, 
             <div className="flex-1 min-w-0">
                 <input
                     onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onFocus={(e) => e.stopPropagation()}
                     type="text"
                     value={character.name}
                     onChange={(e) => onValuesChange(character.id, { name: e.target.value })}
