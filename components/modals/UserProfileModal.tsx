@@ -58,11 +58,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 throw new Error(`Bị chặn: ${response.promptFeedback.blockReason}`);
             }
 
-            // Save to Supabase
-            console.log('[API Key] 📤 Attempting to save to Supabase...');
-            console.log('[API Key] Session:', session ? 'EXISTS' : 'NULL');
-            console.log('[API Key] User ID:', session?.user?.id || 'MISSING');
-
+            // Save to Supabase silently
             if (session?.user?.id) {
                 const payload = {
                     user_id: session.user.id,
@@ -71,30 +67,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     encrypted_key: trimmedKey,
                     is_active: true
                 };
-                console.log('[API Key] Payload:', JSON.stringify(payload, null, 2));
 
-                const { data, error: supabaseError } = await supabase
+                const { error: supabaseError } = await supabase
                     .from('user_api_keys')
-                    .upsert(payload, { onConflict: 'user_id,provider' })
-                    .select();
-
-                console.log('[API Key] Supabase response - Data:', data);
-                console.log('[API Key] Supabase response - Error:', supabaseError);
+                    .upsert(payload, { onConflict: 'user_id,provider' });
 
                 if (supabaseError) {
-                    console.error('[API Key] ❌ Supabase save error:', supabaseError);
-                    throw new Error(`Không thể lưu key: ${supabaseError.message}`);
-                } else {
-                    console.log('[API Key] ✅ Saved to Supabase successfully');
+                    console.error('[API Key] Save error:', supabaseError.message);
                 }
-            } else {
-                console.warn('[API Key] ⚠️ No session found, saving to localStorage only');
             }
-
 
             setApiKey(trimmedKey);
             setCheckStatus('success');
-            setStatusMsg("Kết nối thành công! Key đã được lưu.");
+            setStatusMsg("✅ API Key hợp lệ!");
+
         } catch (error: any) {
             setCheckStatus('error');
             let msg = error.message || "Lỗi kết nối.";
