@@ -8,6 +8,47 @@ import {
 import { getPresetById } from '../utils/scriptPresets';
 import { uploadImageToSupabase } from '../utils/storageUtils';
 
+// Helper function to safely extract base64 data from both URL and base64 images
+const safeGetImageData = async (imageStr: string): Promise<{ data: string; mimeType: string } | null> => {
+    if (!imageStr) return null;
+
+    try {
+        if (imageStr.startsWith('data:')) {
+            // It's a base64 data URI
+            const [header, data] = imageStr.split(',');
+            const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+            return { data, mimeType };
+        } else if (imageStr.startsWith('http')) {
+            // It's a URL, fetch and convert
+            console.log('[ImageGen] 🌐 Converting URL to Base64...');
+            const response = await fetch(imageStr);
+            if (!response.ok) throw new Error('Failed to fetch image');
+            const blob = await response.blob();
+            const mimeType = blob.type || 'image/jpeg';
+            const data = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+            return { data, mimeType };
+        }
+    } catch (e) {
+        console.error('[ImageGen] ❌ Failed to process image:', e);
+    }
+    return null;
+};
+
+// Helper function to clean VEO-specific tokens from prompt for image generation
+const cleanPromptForImageGen = (prompt: string): string => {
+    return prompt
+        .replace(/\[\d{2}:\d{2}-\d{2}:\d{2}\]/g, '') // Remove timestamps [00:00-00:05]
+        .replace(/SFX:.*?(\.|$)/gi, '') // Remove SFX descriptions
+        .replace(/Emotion:.*?(\.|$)/gi, '') // Remove Emotion descriptions
+        .replace(/\s+/g, ' ') // Collapse whitespace
+        .trim();
+};
+
 export function useImageGeneration(
     state: ProjectState,
     stateRef: React.MutableRefObject<ProjectState>,
@@ -109,6 +150,9 @@ export function useImageGeneration(
                 .replace(/Tham chiếu bối cảnh từ.*?(nhất quán|consistency)\.?/gi, '')
                 .trim();
 
+            // STRIP VEO-specific tokens (timestamps, SFX, Emotion) for image generation
+            cleanedContext = cleanPromptForImageGen(cleanedContext);
+
             // STRIP character names from context if they are NOT selected for this scene
             const unselectedChars = currentState.characters.filter(c => !sceneToUpdate.characterIds.includes(c.id));
             unselectedChars.forEach(c => {
@@ -118,6 +162,7 @@ export function useImageGeneration(
                 cleanedContext = cleanedContext.replace(regex, '');
             });
             cleanedContext = cleanedContext.replace(/\s+/g, ' ').trim();
+
 
             const isHighRes = (currentState.imageModel || 'gemini-3-pro-image-preview') === 'gemini-3-pro-image-preview';
 
@@ -187,27 +232,30 @@ export function useImageGeneration(
                     .reverse()[0];
 
                 if (firstSceneInGroup?.generatedImage) {
-                    const [header, data] = firstSceneInGroup.generatedImage.split(',');
-                    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                    const refLabel = `SCENE_MASTER_LOCK (Set Anchor)`;
-                    parts.push({ text: `[${refLabel}]: AUTHORITATIVE STRICT BACKGROUND for the physical environment. Match the architecture, props, weather, and lighting EXACTLY. This is a TIGHT SET LOCK. IGNORE the action in this reference, only follow its GEOMETRY and LIGHTING.` });
-                    parts.push({ inlineData: { data, mimeType } });
-                    continuityInstruction += `(STRICT SET LOCK: Follow ${refLabel}) `;
+                    const imgData = await safeGetImageData(firstSceneInGroup.generatedImage);
+                    if (imgData) {
+                        const refLabel = `SCENE_MASTER_LOCK (Set Anchor)`;
+                        parts.push({ text: `[${refLabel}]: AUTHORITATIVE STRICT BACKGROUND for the physical environment. Match the architecture, props, weather, and lighting EXACTLY. This is a TIGHT SET LOCK. IGNORE the action in this reference, only follow its GEOMETRY and LIGHTING.` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        continuityInstruction += `(STRICT SET LOCK: Follow ${refLabel}) `;
+                    }
                 }
 
                 if (precedingSceneInGroup?.generatedImage && precedingSceneInGroup.id !== firstSceneInGroup?.id) {
-                    const [header, data] = precedingSceneInGroup.generatedImage.split(',');
-                    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                    const refLabel = `SHOT_CONTINUITY_ANCHOR (Last Shot)`;
-                    parts.push({ text: `[${refLabel}]: Match character clothing, hair state, and immediate action from this previous shot. Note: This shot is a PERSPECTIVE SHIFT from the Master Lock.` });
-                    parts.push({ inlineData: { data, mimeType } });
-                    continuityInstruction += `(SHOT CONTINUITY: Follow ${refLabel}) `;
+                    const imgData = await safeGetImageData(precedingSceneInGroup.generatedImage);
+                    if (imgData) {
+                        const refLabel = `SHOT_CONTINUITY_ANCHOR (Last Shot)`;
+                        parts.push({ text: `[${refLabel}]: Match character clothing, hair state, and immediate action from this previous shot. Note: This shot is a PERSPECTIVE SHIFT from the Master Lock.` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        continuityInstruction += `(SHOT CONTINUITY: Follow ${refLabel}) `;
+                    }
                 } else if (!firstSceneInGroup && groupObj?.conceptImage) {
-                    const [header, data] = groupObj.conceptImage.split(',');
-                    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                    parts.push({ text: `[MOODBOARD REFERENCE]: Match lighting, color palette, and architectural style.` });
-                    parts.push({ inlineData: { data, mimeType } });
-                    continuityInstruction += `(CONCEPT LOCK) `;
+                    const imgData = await safeGetImageData(groupObj.conceptImage);
+                    if (imgData) {
+                        parts.push({ text: `[MOODBOARD REFERENCE]: Match lighting, color palette, and architectural style.` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        continuityInstruction += `(CONCEPT LOCK) `;
+                    }
                 }
 
                 if (continuityInstruction) {
@@ -215,11 +263,12 @@ export function useImageGeneration(
                 }
             }
 
+
             // 5b. CHARACTER & PRODUCT REFERENCES (Advanced Mapping for Gemini 3 Pro - 14 References)
             const isPro = currentState.imageModel === 'gemini-3-pro-image-preview';
             let referencePreamble = '';
 
-            selectedChars.forEach((char) => {
+            for (const char of selectedChars) {
                 const charRefs: { type: string, img: string }[] = [];
                 if (char.faceImage) charRefs.push({ type: 'FACE ID', img: char.faceImage });
                 if (char.bodyImage) charRefs.push({ type: 'FULL BODY', img: char.bodyImage });
@@ -235,18 +284,19 @@ export function useImageGeneration(
                     charRefs.push({ type: 'PRIMARY', img: char.masterImage });
                 }
 
-                charRefs.forEach(ref => {
-                    const [header, data] = ref.img.split(',');
-                    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                    const refLabel = `MASTER VISUAL: ${char.name.toUpperCase()} ${ref.type}`;
-                    parts.push({ text: `[${refLabel}]: AUTHORITATIVE identity anchor for ${char.name}. Match these exact face features. For clothing and pose, defer to SCENE_LOCK_REFERENCE if present. Description: ${char.description}` });
-                    parts.push({ inlineData: { data, mimeType } });
-                    referencePreamble += `(IDENTITY CONTINUITY: Match ${refLabel}) `;
-                });
-            });
+                for (const ref of charRefs) {
+                    const imgData = await safeGetImageData(ref.img);
+                    if (imgData) {
+                        const refLabel = `MASTER VISUAL: ${char.name.toUpperCase()} ${ref.type}`;
+                        parts.push({ text: `[${refLabel}]: AUTHORITATIVE identity anchor for ${char.name}. Match these exact face features. For clothing and pose, defer to SCENE_LOCK_REFERENCE if present. Description: ${char.description}` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        referencePreamble += `(IDENTITY CONTINUITY: Match ${refLabel}) `;
+                    }
+                }
+            }
 
             const selectedProducts = currentState.products.filter(p => sceneToUpdate.productIds.includes(p.id));
-            selectedProducts.forEach((prod) => {
+            for (const prod of selectedProducts) {
                 const prodRefs: { type: string, img: string }[] = [];
                 if (prod.views?.front) prodRefs.push({ type: 'FRONT VIEW', img: prod.views.front });
 
@@ -266,15 +316,17 @@ export function useImageGeneration(
                     prodRefs.push({ type: 'PRIMARY', img: prod.masterImage });
                 }
 
-                prodRefs.forEach(ref => {
-                    const [header, data] = ref.img.split(',');
-                    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                    const refLabel = `MASTER VISUAL: ${prod.name.toUpperCase()} ${ref.type}`;
-                    parts.push({ text: `[${refLabel}]: AUTHORITATIVE visual anchor for ${prod.name}. Match the design, colors, and branding from this image exactly.` });
-                    parts.push({ inlineData: { data, mimeType } });
-                    referencePreamble += `(PRODUCT CONTINUITY: Match ${refLabel}) `;
-                });
-            });
+                for (const ref of prodRefs) {
+                    const imgData = await safeGetImageData(ref.img);
+                    if (imgData) {
+                        const refLabel = `MASTER VISUAL: ${prod.name.toUpperCase()} ${ref.type}`;
+                        parts.push({ text: `[${refLabel}]: AUTHORITATIVE visual anchor for ${prod.name}. Match the design, colors, and branding from this image exactly.` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        referencePreamble += `(PRODUCT CONTINUITY: Match ${refLabel}) `;
+                    }
+                }
+            }
+
 
             if (continuityInstruction) {
                 finalImagePrompt = `${continuityInstruction.trim()} ${finalImagePrompt}`;
