@@ -30,7 +30,10 @@ interface StyleSettingsSectionProps {
     onOpenScriptGenerator: () => void;
     isScriptGenerating: boolean;
     onTriggerFileUpload: () => void;
+    onAnalyzeStyleFromImage?: (image: string) => Promise<void>;
+    isAnalyzingStyle?: boolean;
 }
+
 
 export const StyleSettingsSection: React.FC<StyleSettingsSectionProps> = ({
     stylePrompt,
@@ -59,8 +62,24 @@ export const StyleSettingsSection: React.FC<StyleSettingsSectionProps> = ({
     onCustomMetaTokensChange,
     onOpenScriptGenerator,
     isScriptGenerating,
-    onTriggerFileUpload
+    onTriggerFileUpload,
+    onAnalyzeStyleFromImage,
+    isAnalyzingStyle
 }) => {
+
+    const handleStyleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !onAnalyzeStyleFromImage) return;
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            onAnalyzeStyleFromImage(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
+
+
     return (
         <div className="my-16 p-6 bg-gray-800/50 rounded-lg border border-gray-700">
             <SectionTitle>Your Styles</SectionTitle>
@@ -81,15 +100,47 @@ export const StyleSettingsSection: React.FC<StyleSettingsSectionProps> = ({
                                 <option value="custom" className="text-brand-orange font-bold">+ Custom Style (Tự nhập Prompt)...</option>
                             </select>
                             {stylePrompt === 'custom' && (
-                                <div className="mt-2 animate-fadeIn">
+                                <div className="mt-2 animate-fadeIn space-y-2">
                                     <textarea
                                         value={customStyleInstruction}
                                         onChange={e => onCustomStyleInstructionChange(e.target.value)}
+                                        onMouseDown={(e) => e.stopPropagation()}
                                         placeholder="Nhập mô tả phong cách, ánh sáng, màu sắc (VD: Cyberpunk city, neon lights, rain, high contrast, 8k masterpiece...)"
                                         className="w-full bg-gray-900/80 text-white px-3 py-2 rounded-md border border-brand-orange text-xs focus:outline-none min-h-[80px]"
                                     />
+                                    {onAnalyzeStyleFromImage && (
+                                        <div className="flex items-center space-x-2">
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleStyleImageUpload}
+                                                className="hidden"
+                                                id="style-image-upload"
+                                            />
+                                            <label
+                                                htmlFor="style-image-upload"
+                                                className={`flex-1 px-3 py-2 text-xs font-medium rounded-md text-center cursor-pointer transition-all ${isAnalyzingStyle
+                                                        ? 'bg-purple-600/50 text-gray-300 cursor-wait'
+                                                        : 'bg-purple-600 hover:bg-purple-500 text-white'
+                                                    }`}
+                                            >
+                                                {isAnalyzingStyle ? (
+                                                    <span className="flex items-center justify-center space-x-2">
+                                                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                        </svg>
+                                                        <span>Đang phân tích...</span>
+                                                    </span>
+                                                ) : (
+                                                    <span>📷 Upload ảnh để phân tích Style</span>
+                                                )}
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                             )}
+
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Model Images</label>
