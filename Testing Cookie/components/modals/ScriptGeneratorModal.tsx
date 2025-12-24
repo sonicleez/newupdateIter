@@ -24,6 +24,7 @@ export interface ScriptGeneratorModalProps {
     onGenerateMoodboard: (groupName: string, groupDesc: string, style?: string, customStyle?: string) => Promise<string | null>;
     scriptModel: string;
     onScriptModelChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+    onSmartMapAssets: (scenes: any[], characters: Character[], products: Product[]) => Promise<any>;
 }
 
 export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
@@ -43,7 +44,8 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
     onRegenerateGroup,
     onGenerateMoodboard,
     scriptModel,
-    onScriptModelChange
+    onScriptModelChange,
+    onSmartMapAssets
 }) => {
     const [step, setStep] = useState<'input' | 'review'>('input');
     const [previewData, setPreviewData] = useState<{ detailedStory: string; groups: any[]; scenes: any[] } | null>(null);
@@ -137,25 +139,34 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
         }
     };
 
-    const handleSmartAssignCharacters = () => {
+    const handleSmartAssignAssets = async () => {
         if (!previewData) return;
         setIsScanning(true);
 
-        setTimeout(() => {
-            const newScenes = previewData.scenes.map(scene => {
-                const dialogueText = scene.dialogues?.map((d: any) => `${d.characterName} ${d.line}`).join(' ') || '';
-                const combinedText = `${scene.visual_context} ${scene.prompt_name} ${scene.voiceover || ''} ${dialogueText}`;
-                const detectedIds = detectCharactersInText(combinedText, characters);
-
-                // Merge detected with existing
-                const finalIds = [...new Set([...(scene.character_ids || []), ...detectedIds])];
-                return { ...scene, character_ids: finalIds };
-            });
-            setPreviewData({ ...previewData, scenes: newScenes });
+        try {
+            const mapping = await onSmartMapAssets(previewData.scenes, characters, products);
+            if (mapping) {
+                const newScenes = previewData.scenes.map(scene => {
+                    const sceneMapping = mapping[scene.scene_number];
+                    if (sceneMapping) {
+                        return {
+                            ...scene,
+                            character_ids: [...new Set([...(scene.character_ids || []), ...(sceneMapping.character_ids || [])])],
+                            product_ids: [...new Set([...(scene.product_ids || []), ...(sceneMapping.product_ids || [])])]
+                        };
+                    }
+                    return scene;
+                });
+                setPreviewData({ ...previewData, scenes: newScenes });
+                setShowSuccessToast(true);
+                setTimeout(() => setShowSuccessToast(false), 3000);
+            }
+        } catch (error) {
+            console.error("Smart assignment failed:", error);
+            alert("Gán thông minh thất bại. Vui lòng thử lại.");
+        } finally {
             setIsScanning(false);
-            setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 3000);
-        }, 800);
+        }
     };
 
     const handleGenerateMoodboardLocal = async (groupIdx: number) => {
@@ -173,6 +184,20 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
             newGroups[groupIdx].conceptImage = imageUrl;
             setPreviewData({ ...previewData, groups: newGroups });
         }
+    };
+
+    const handleCopyAllPrompts = () => {
+        if (!previewData) return;
+        const allPrompts = previewData.scenes
+            .map(s => s.visual_context)
+            .join('\n\n');
+
+        navigator.clipboard.writeText(allPrompts).then(() => {
+            alert("Đã copy toàn bộ prompt vào bộ nhớ tạm!");
+        }).catch(err => {
+            console.error('Lỗi khi copy:', err);
+            alert("Không thể copy. Vui lòng thử lại.");
+        });
     };
 
     return (
@@ -457,7 +482,7 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
                                                         />
                                                     </div>
 
-                                                    {/* Character Tags */}
+                                                    {/* Character & Product Tags */}
                                                     <div className="flex flex-wrap gap-1">
                                                         {scene.character_ids?.map((cid: string) => {
                                                             const char = characters.find(c => c.id === cid);
@@ -465,6 +490,15 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
                                                             return (
                                                                 <span key={cid} className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
                                                                     👤 {char.name}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                        {scene.product_ids?.map((pid: string) => {
+                                                            const prod = products.find(p => p.id === pid);
+                                                            if (!prod) return null;
+                                                            return (
+                                                                <span key={pid} className="text-[8px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                                                    📦 {prod.name}
                                                                 </span>
                                                             );
                                                         })}
@@ -497,26 +531,33 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
                             </button>
                             <div className="relative flex items-center gap-2">
                                 <button
-                                    onClick={handleSmartAssignCharacters}
+                                    onClick={handleSmartAssignAssets}
                                     disabled={isScanning}
                                     className={`px-4 py-2 rounded-xl text-sm font-medium transition-all border flex items-center gap-2 ${isScanning
                                         ? 'bg-purple-600/10 border-purple-500/20 text-purple-400 cursor-not-allowed'
                                         : 'bg-purple-600/20 hover:bg-purple-600/40 border-purple-500/30 text-purple-200 shadow-lg shadow-purple-500/10'
                                         }`}
-                                    title="Tự động nhận diện nhân vật từ lời thoại và mô tả"
+                                    title="Tự động nhận diện nhân vật & sản phẩm từ ngữ cảnh"
                                 >
                                     <span className={`w-2 h-2 bg-purple-500 rounded-full ${isScanning ? 'animate-ping' : 'animate-pulse'}`}></span>
-                                    {isScanning ? 'Đang quét...' : 'Quét & Gán Nhân Vật (Smart)'}
+                                    {isScanning ? 'Đang phân tích ngữ cảnh...' : 'Gán nhân vật & Sản phẩm (Smart)'}
                                 </button>
                                 {showSuccessToast && (
                                     <span className="absolute left-0 -top-10 whitespace-nowrap bg-brand-green text-white text-[10px] font-bold px-3 py-1.5 rounded-lg border border-brand-green/20 shadow-xl animate-bounce-in flex items-center gap-1">
-                                        ✨ Đã gán xong!
+                                        ✨ Đã gán xong Nhân vật & Sản phẩm!
                                     </span>
                                 )}
                             </div>
                         </div>
 
                         <div className="flex gap-4">
+                            <button
+                                onClick={handleCopyAllPrompts}
+                                className="px-6 py-2 text-sm font-bold text-brand-orange border border-brand-orange/30 rounded-lg hover:bg-brand-orange/10 transition-all flex items-center gap-2"
+                                title="Copy toàn bộ visual prompts cách nhau một dòng"
+                            >
+                                📋 Copy All Prompts
+                            </button>
                             <button
                                 onClick={() => handleSubmit()}
                                 className="px-6 py-2 text-sm font-bold text-brand-green border border-brand-green/30 rounded-lg hover:bg-brand-green/10 transition-all flex items-center gap-2"

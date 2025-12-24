@@ -32,14 +32,17 @@ export function buildScriptPrompt(
 
     // Build character instructions based on preset
     const characterInstructions = preset.outputFormat.hasDialogue && availableCharacters.length > 0
-        ? `\n**AVAILABLE CHARACTERS:**\n${characterListString}\n\nSử dụng các nhân vật này trong script. Trả về 'character_ids' cho nhân vật XUẤT HIỆN trong cảnh.
-MANDATORY: Khi một nhân vật xuất hiện, "visual_context" PHẢI mô tả chi tiết đặc điểm nhận dạng của họ (kiểu tóc, màu tóc, trang phục cụ thể, phụ kiện, biểu cảm) để AI tạo ảnh không bị bias.`
+        ? `\n**AVAILABLE CHARACTERS (JSON):**\n${characterListString}\n\n**CHARACTER USAGE RULES:**
+1. **Selective Tagging**: CHỈ trả về 'character_ids' cho các nhân vật THỰC SỰ xuất hiện hoặc đóng vai trò quan trọng trong cảnh. Tránh gán nhân vật rác nếu họ không có thoại hoặc không được mô tả hành động cụ thể.
+2. **Dialogue Consistency**: Nếu một nhân vật có tên trong 'dialogues', ID của họ PHẢI có trong 'character_ids'.
+3. **Visual Anchor**: Trong "visual_context", mô tả chi tiết đặc điểm nhận dạng của họ (kiểu tóc, màu tóc, trang phục cụ thể) ĐÚNG với mô tả được cung cấp.`
         : '';
 
     // Build product instructions
     const productInstructions = productListString
-        ? `\n**AVAILABLE PRODUCTS/PROPS:**\n${productListString}\n\nĐây là các sản phẩm/đạo cụ có thể xuất hiện trong cảnh. Trả về 'product_ids' cho sản phẩm XUẤT HIỆN trong cảnh. 
-MANDATORY: Mô tả cực kỳ chi tiết hình dáng, chất liệu, màu sắc và cách sản phẩm xuất hiện trong visual_context. Không dùng tên chung chung.`
+        ? `\n**AVAILABLE PRODUCTS/PROPS (JSON):**\n${productListString}\n\n**PRODUCT USAGE RULES:**
+1. **Selective Tagging**: CHỈ trả về 'product_ids' cho sản phẩm/đạo cụ là tiêu điểm hoặc có tương tác trong cảnh.
+2. **Visual Precision**: Mô tả cực kỳ chi tiết hình dáng, chất liệu, màu sắc của sản phẩm trong visual_context để đảm bảo tính nhất quán.`
         : '';
 
     // Build output format instructions based on preset
@@ -57,7 +60,7 @@ MANDATORY: Mô tả cực kỳ chi tiết hình dáng, chất liệu, màu sắc
 ],
 - "scenes": [
     {
-        "visual_context": "BẮT ĐẦU bằng từ khóa cỡ cảnh (WIDE SHOT, CLOSE UP...). Mô tả chi tiết nhân vật (tóc, quần áo), bối cảnh và hành động.",
+        "visual_context": "BẮT ĐẦU bằng mốc thời gian [00:00-00:0X]. Mô tả theo cấu trúc chuẩn VEO 3.1: [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]. Cuối cùng thêm SFX (Sound Effects) và Emotion (Cảm xúc).",
         "scene_number": "1",
         "group_id": "group_id",
         "prompt_name": "Tiêu đề cảnh",
@@ -80,13 +83,14 @@ MANDATORY: Mô tả cực kỳ chi tiết hình dáng, chất liệu, màu sắc
     outputFormatInstructions += `    }
 ]
 
-**IMPORTANT RULES:**
-1. **Shot Scale**: "visual_context" BẮT ĐẦU bằng từ khóa cỡ cảnh viết hoa (VD: WIDE SHOT, MEDIUM SHOT, CLOSE UP).
-2. **Character Detail**: Mô tả chi tiết ngoại hình (tóc, quần áo) của nhân vật TRONG MỖI CẢNH.
-3. **High-Density Visuals**: Cung cấp mô tả độ phân giải cao về chất liệu, ánh sáng, da dẻ.
-4. **Group Continuity**: Mọi cảnh trong bối cảnh mới PHẢI mô tả lại không khí chung của Group.
-5. **No Ghost People**: NẾU KHÔNG CÓ character_ids, visual_context TUYỆT ĐỐI KHÔNG mô tả bất kỳ người nào.
-6. **Integrity**: Chỉ sử dụng các character_id được cung cấp.
+**IMPORTANT RULES (VEO 3.1 STANDARDS):**
+1. **Timestamped Scenes**: Mọi mô tả TRONG visual_context PHẢI bắt đầu bằng mốc thời gian (VD: [00:00-00:04]).
+2. **The Veo Formula**: Cấu trúc visual_context PHẢI tuân thủ: [Cinematography: Camera movement/composition] + [Subject: Visual details of main character] + [Action: What they are doing] + [Context: Environment details] + [Style & Ambiance: Lighting, mood, film grain].
+3. **Sound & Emotion**: BẮT BUỘC bao gồm SFX (VD: "SFX: tiếng mưa rơi, tiếng lá xào xạc") và Emotion (VD: "Emotion: Hopeful and determined") ở cuối visual_context.
+4. **Director's Story Audit**: Trước khi viết mỗi cảnh, hãy tự hỏi: "Chi tiết này có giúp kể câu chuyện tốt hơn không?". TUYỆT ĐỐI LOẠI BỎ các yếu tố trang trí không liên quan đến cốt truyện hoặc tính cách nhân vật.
+5. **Cinetic Shot Progression**: Đảm bảo sự chuyển động góc máy logic (WIDE SHOT -> MEDIUM -> CLOSE UP) để tạo nhịp điệu điện ảnh.
+6. **No Ghost People**: NẾU KHÔNG CÓ character_ids, visual_context TUYỆT ĐỐI KHÔNG mô tả bất kỳ người nào.
+7. **Integrity**: Chỉ sử dụng các character_id/product_id được cung cấp trong danh sách.
 `;
 
     // Add custom instructions if present

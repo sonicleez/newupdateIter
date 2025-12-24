@@ -12,17 +12,18 @@ export const DEFAULT_PRESETS: ScriptPreset[] = [
         category: 'film',
         description: 'Phim ngắn hoạt hình với lời thoại nhân vật, camera chi tiết',
         icon: '🎬',
-        systemPrompt: `Bạn là nhà biên kịch chuyên nghiệp về phim hoạt hình và điện ảnh.
+        systemPrompt: `BẠN LÀ ĐẠO DIỄN PHIM HOẠT HÌNH & CHIẾN THẦN CINEMATIC. 
+Nhiệm vụ của bạn là biến ý tưởng của người dùng thành một tác phẩm nghệ thuật có chiều sâu kịch bản và thị giác.
 
-Viết kịch bản theo cấu trúc điện ảnh mẫu mực:
-- CẢNH 1 PHẢI LÀ MỘT "HOOK": Một hình ảnh hoặc khoảnh khắc cực kỳ ấn tượng để thu hút người xem ngay lập tức.
-- ĐA DẠNG GÓC MÁY: Tránh lặp lại Medium Shot. Sử dụng xen kẽ WIDE SHOT (thiết lập không gian), CLOSE-UP (biểu cảm), OVER THE SHOULDER (đối thoại), CUTAWAY (chi tiết vật thể), FLYCAM/BIRD VIEW (toàn cảnh từ trên cao), DUTCH ANGLE (tạo căng thẳng).
-- TÍNH LIÊN TỤC (CONTINUITY): Vì đây là kịch bản cho Image-to-Video, các cảnh cần có sự tiếp nối chặc chẽ về ánh sáng, màu sắc và vị trí nhân vật để chuyển động mượt mà.
-- NHỊP ĐIỆU: Xen kẽ các cảnh hành động nhanh và các cảnh đặt tả chậm (visual breathing room).
-- Tên nhân vật và lời thoại (CHARACTER NAME: "dialogue").
-- Cảm xúc và hành động của nhân vật cụ thể.
+[DIRECTOR'S VISION]: 
+- ĐỪNG CHỈ MÔ TẢ: Hãy kể chuyện bằng ánh sáng, góc máy và sự im lặng. Mỗi cảnh phải có một "Lý do hiện diện" (Visual Purpose).
+- STORY INTEGRITY: Tuyệt đối không thêm thắt các chi tiết rác (cây cối, đồ vật) nếu chúng không phục vụ cho việc khắc họa tính cách nhân vật hoặc không khí của phân đoạn.
+- VISUAL DNA: 
+    - Ánh sáng: Sử dụng Rim light cho nhân vật, Volume light cho không gian.
+    - Màu sắc: Thiết lập một tông màu chủ đạo xuyên suốt (Color Palette).
+    - Camera: Sử dụng ngôn ngữ cơ thể của ống kính (ví dụ: Lens 35mm cho sự chân thực, 85mm cho sự thân mật).
 
-GỢI Ý: Với một câu chuyện trung bình, nên tạo từ 8-12 cảnh để đảm bảo sự liền mạch và đầy đủ nội dung.`,
+MÔ TẢ SIÊU CHI TIẾT (HYPER-DETAILED): Bạn là đôi mắt của AI tạo ảnh. Bạn PHẢI mô tả chính xác kết cấu vật liệu (vải lanh nhăn, gỗ sồi cũ, mồ hôi trên da) và các hiệu ứng hạt (atmospheric dust, bokeh).`,
         outputFormat: {
             hasDialogue: true,
             hasNarration: false,
@@ -30,22 +31,32 @@ GỢI Ý: Với một câu chuyện trung bình, nên tạo từ 8-12 cảnh đ�
             sceneStructure: 'traditional'
         },
         toneKeywords: ['điện ảnh', 'cảm xúc', 'kịch tính', 'kể chuyện bằng hình ảnh', 'cinematic continuity'],
-        sceneGuidelines: `Định dạng mỗi cảnh:
+        sceneGuidelines: `Định dạng mỗi cảnh chuẩn Veo 3.1:
 
 CẢNH [SỐ]: [Mô tả ngắn gọn]
-CAMERA: [Góc máy cụ thể: OTS, CU, ECU, Flycam, Bird View, v.v. + Hành động camera: pan, tilt, zoom]
-VISUAL: [Mô tả hình ảnh chi tiết: ánh sáng, bố cục, màu sắc. Chú ý tính tiếp nối với cảnh trước]
+VISUAL (VEO 3.1 FORMAT): [00:00-00:0X] [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]. 
+SFX: [Mô tả âm thanh]
+EMOTION: [Trạng thái cảm xúc]
 
-NHÂN VẬT: "Lời thoại"
-[Mô tả hành động/cảm xúc chi tiết]`,
-        exampleOutput: `CẢNH 1: [HOOK] - Một bông hồng thủy tinh vỡ tan trên sàn đá đen
-CAMERA: EXTREME CLOSE-UP (ECU), Slow motion mảnh kính văng ra lấp lánh dưới ánh trăng.
-VISUAL: Một không gian tối tăm, chỉ có tia sáng trăng duy nhất chiếu vào bông hồng. Sự tương phản mạnh mẽ giữa đen và bạc.
-
-CẢNH 2: Phía sau lưng một bóng người đang nhìn qua cửa sổ
-CAMERA: OVER-THE-SHOULDER (OTS) nhìn từ phía sau ông MINH, thấy thành phố rực rỡ bên ngoài.
-ÔNG MINH: "Đẹp... nhưng thật mong manh."
-[Ông khẽ thở dài, hơi ấm làm mờ kính cửa sổ]`,
+NHÂN VẬT: "Lời thoại" (Nếu có)`,
+        exampleOutput: `{
+  "detailed_story": "Một câu chuyện về sự cô đơn và niềm hy vọng le lói trong một thế giới cơ khí hóa.",
+  "scene_groups": [
+    { "id": "g1", "name": "Căn phòng cơ khí", "description": "Không gian tối với các bánh răng chuyển động" }
+  ],
+  "scenes": [
+    {
+      "visual_context": "[00:00-00:04] [Cinematography: Extreme Close-Up, slow motion] + [Subject: Một bông hồng thủy tinh xanh] + [Action: Bông hồng vỡ tan thành ngàn mảnh pha lê lấp lánh] + [Context: Sàn đá đen bóng, một tia sáng trăng duy nhất chiếu rọi] + [Style & Ambiance: Cinematic dark fantasy, tương phản mạnh, bokeh lung linh]. SFX: tiếng kính vỡ sắc lạnh, âm thanh tinh thể va chạm. Emotion: U sầu và mong manh.",
+      "scene_number": "1",
+      "group_id": "g1",
+      "prompt_name": "Hy Vọng Vụn Vỡ",
+      "character_ids": [],
+      "product_ids": [],
+      "dialogues": [],
+      "camera_angle": "Extreme Close-Up"
+    }
+  ]
+}`,
         isDefault: true,
         isCustom: false,
         createdAt: new Date().toISOString()
@@ -56,14 +67,14 @@ CAMERA: OVER-THE-SHOULDER (OTS) nhìn từ phía sau ông MINH, thấy thành ph
         category: 'documentary',
         description: 'Phim tài liệu chuyên nghiệp với sự tương phản về quy mô và nhịp điệu khách quan',
         icon: '📺',
-        systemPrompt: `Bạn là nhà biên kịch phim tài liệu chuyên nghiệp của các kênh lớn như Discovery, National Geographic.
+        systemPrompt: `BẠN LÀ ĐẠO DIỄN PHIM TÀI LIỆU CỦA NATIONAL GEOGRAPHIC & DISCOVERY. 
+Nhiệm vụ của bạn là tìm ra "Sự thật trần trụi" và "Vẻ đẹp hùng vĩ" trong từng khung hình.
 
-Viết kịch bản với cấu trúc sâu sắc:
-- CẢNH 1 PHẢI LÀ "INFORMATION HOOK": Một hình ảnh ẩn dụ mạnh mẽ hoặc một sự thật gây sửng sốt để đặt nền móng cho câu chuyện.
-- TƯƠNG PHẢN QUY MÔ (SCALE CONTRAST): Xen kẽ giữa EXTREME MACRO (chi tiết cực nhỏ, texture) và AERIAL/WIDE SHOT (toàn cảnh bao la) để tạo cảm giác về tầm vóc.
-- NHỊP ĐIỆU QUAN SÁT: Mô tả B-roll với chuyển động camera chậm, tinh tế (slow pan, slow zoom).
-- NARRATION: Lời tường thuật mang tính chiêm nghiệm, thông tin nhưng đầy cảm hứng.
-- KHÔNG có lời thoại nhân vật trực tiếp, tập trung vào tiếng động môi trường (Ambience).`,
+[FILMMaker'S ETHOS]:
+- AUTHENTICITY: Chỉ mô tả những gì thuộc về thực tế. Tuyệt đối không trang trí hào nhoáng không cần thiết.
+- SCALE CONTRAST: Sử dụng sự đối lập giữa cái siêu nhỏ (Macro) và cái vô tận (Aerial) để tạo ra sự kinh ngạc cho người xem.
+- OBSERVATION: Mô tả như một người quan sát thầm lặng. Chú ý đến kết cấu của bề mặt (Texture) như rêu trên đá, vân tay trên đồ vật, sự chuyển động của bụi trong nắng.
+- NARRATIVE FLOW: Lời bình phải mang tính triết lý, kết nối các cảnh quay bằng sự liên tưởng tinh tế.`,
         outputFormat: {
             hasDialogue: false,
             hasNarration: true,
@@ -71,21 +82,31 @@ Viết kịch bản với cấu trúc sâu sắc:
             sceneStructure: 'documentary'
         },
         toneKeywords: ['chiêm nghiệm', 'vĩ mô', 'tỉ mỉ', 'giáo dục cao cấp'],
-        sceneGuidelines: `Định dạng mỗi cảnh:
+        sceneGuidelines: `Định dạng mỗi cảnh chuẩn Veo 3.1:
 
-CẢNH [SỐ]: [Địa điểm/Chủ đề - Sự kết nối với cảnh trước]
-CAMERA: [Góc máy tạo scale: Aerial, Macro, Slow Pan, v.v.]
-VISUAL: [Mô tả chi tiết texture, ánh sáng tự nhiên, sự chuyển động của môi trường]
-NARRATION: "Lời tường thuật mang tính kể chuyện"
-SOUND: [Tiếng động đặc trưng: gió, nước, tiếng máy móc]`,
-        exampleOutput: `CẢNH 1: [HOOK] - Một giọt sương rơi trên mặt trống đồng cổ
-CAMERA: EXTREME MACRO, slow motion 120fps.
-VISUAL: Giọt nước lấp lánh phản chiếu ánh bình minh, chạm vào hoa văn chim lạc. Ánh sáng vàng dịu nhẹ.
-NARRATION: "Thời gian không chỉ được đo bằng năm tháng, mà bằng những dấu vết nó để lại trên ký ức của tổ tiên..."
-
-CẢNH 2: Toàn cảnh ngôi làng cổ trong sương sớm
-CAMERA: AERIAL DRONE SHOT, sweeping movement.
-VISUAL: Ngôi làng hiện ra lờ mờ giữa những rặng tre, sự đối lập giữa cái nhỏ bé của giọt sương và sự bao la của vùng đất.`,
+CẢNH [SỐ]: [Địa điểm/Chủ đề]
+VISUAL (VEO 3.1 FORMAT): [00:00-00:0X] [Cinematography: Aerial/Macro] + [Subject: Texture/Landscape] + [Action: Subtle movement] + [Context: Natural environment] + [Style: Documentary realism].
+SFX: [Âm thanh môi trường: gió, nước, chim kêu]
+EMOTION: [Cảm giác: hùng vĩ, yên bình, tò mò]
+NARRATION: "Lời tường thuật"`,
+        exampleOutput: `{
+  "detailed_story": "Hành trình sinh tồn của loài báo tuyết trên đỉnh Himalaya hùng vĩ.",
+  "scene_groups": [
+    { "id": "g1", "name": "Đỉnh núi tuyết", "description": "Các vách đá dựng đứng phủ tuyết trắng" }
+  ],
+  "scenes": [
+    {
+      "visual_context": "[00:00-00:06] [Cinematography: Aerial drone sweeping shot] + [Subject: Những đỉnh núi đá nhọn hoắt phủ tuyết] + [Action: Gió thổi những dải mây dày đặc băng qua các vách đá] + [Context: Đường chân trời vô tận, ánh nắng gắt phản chiếu trên băng] + [Style & Ambiance: Documentary realism, độ sắc nét cao 8k, màu sắc tự nhiên]. SFX: tiếng gió hú gầm rít, tiếng sấm xa xăm. Emotion: Hùng vĩ và choáng ngợp.",
+      "scene_number": "1",
+      "group_id": "g1",
+      "prompt_name": "Nóc Nhà Thế Giới",
+      "character_ids": [],
+      "product_ids": [],
+      "voiceover": "Tại độ cao này, mỗi hơi thở là một cuộc chiến sinh tồn.",
+      "camera_angle": "Aerial"
+    }
+  ]
+}`,
         isDefault: true,
         isCustom: false,
         createdAt: new Date().toISOString()
@@ -96,13 +117,14 @@ VISUAL: Ngôi làng hiện ra lờ mờ giữa những rặng tre, sự đối l
         category: 'commercial',
         description: 'Quảng cáo chuyên nghiệp với cấu trúc Problem/Solution và hình ảnh Hero',
         icon: '📢',
-        systemPrompt: `Bạn là nhà biên kịch quảng cáo chuyên nghiệp tại các Creative Agency hàng đầu.
+        systemPrompt: `BẠN LÀ ĐẠO DIỄN QUẢNG CÁO TẠI CÁC AGENT HÀNG ĐẦU NHƯ OGILVY & MCCANN. 
+Nhiệm vụ của bạn là tạo ra sự "Khát khao" (Desire) và "Uy tín" (Prestige) chỉ trong vài giây.
 
-Viết kịch bản quảng cáo đạt chuẩn quốc tế:
-- CẤU TRÚC 3 HỒI NHANH: Hook (Vấn đề) -> Agitation (Sự khó chịu) -> Solution (Sản phẩm là người hùng).
-- HERO SHOTS: Các cảnh quay sản phẩm phải được mô tả với ánh sáng lộng lẫy (rim light, vibrant colors), góc máy tôn vinh (Low Angle).
-- ĐỘNG LỰC CAMERA: Sử dụng các cú máy nhanh, dứt khoát: WHIP PAN, SNAPPY ZOOM, DOLLY IN để tạo năng lượng.
-- CALL TO ACTION: Kết thúc bằng thông điệp mạnh mẽ, ngắn gọn.`,
+[DIRECTOR'S STRATEGY]:
+- PSYCHOLOGICAL HOOK: Cảnh đầu tiên phải chạm đúng nỗi đau (Pain Point) hoặc khao khát của khách hàng.
+- PRODUCT ADORATION: Sản phẩm là ngôi sao. Sử dụng ánh sáng Hero (rim lighting, bokeh mượt mà) để tôn vinh chất liệu và nhãn hiệu.
+- SNAPPY PACING: Nhịp cắt nhanh, máy quay luôn chuyển động (Zoom in, Dolly) để tạo cảm giác năng động, hiện đại.
+- INTEGRITY: Mọi bối cảnh và nhân vật phụ chỉ được tồn tại ĐỂ LÀM NỀN cho thông điệp chủ chốt. Loại bỏ mọi yếu tố gây xao nhãng.`,
         outputFormat: {
             hasDialogue: true,
             hasNarration: true,
@@ -110,22 +132,31 @@ Viết kịch bản quảng cáo đạt chuẩn quốc tế:
             sceneStructure: 'commercial'
         },
         toneKeywords: ['năng lượng', 'cao cấp', 'giải quyết vấn đề', 'khát vọng'],
-        sceneGuidelines: `Định dạng mỗi cảnh (Snappy & Fast):
+        sceneGuidelines: `Định dạng mỗi cảnh (Snappy & Fast - Veo 3.1):
 
 CẢNH [SỐ]: [Mục tiêu: Hook/Problem/Solution]
-CAMERA: [Dynamic movement: Snap zoom, Whip pan, High-speed tracking]
-VISUAL: [Ánh sáng rực rỡ, màu sắc thương hiệu, Product Hero Lighting]
-VOICEOVER: "Thông điệp ngắn gọn, súc tích"
-CTA: [Chỉ xuất hiện ở cảnh cuối]`,
-        exampleOutput: `CẢNH 1: [HOOK/PROBLEM] - Một người đang vật lộn với chiếc điện thoại hết pin giữa đường phố mưa
-CAMERA: HANDHELD, rung lắc nhẹ tạo sự căng thẳng.
-VISUAL: Ánh đèn neon nhòe nhoẹt, hạt mưa tạt vào màn hình điện thoại đen ngòm.
-VOICEOVER: "Thế giới không dừng lại để chờ bạn sạc pin."
-
-CẢNH 2: [SOLUTION/HERO] - Sản phẩm PowerBank X hiện ra như một khối ngọc bích
-CAMERA: LOW ANGLE tracking quanh sản phẩm, RIM LIGHT rực rỡ ranh giới.
-VISUAL: Sản phẩm lấp lánh, logo phát sáng nhẹ. Không gian trở nên sáng sủa và hiện đại.
-VOICEOVER: "PowerBank X - Năng lượng vô tận cho thế hệ không dừng lại."`,
+VISUAL (VEO 3.1 FORMAT): [00:00-00:0X] [Cinematography: Snap zoom/Whip pan] + [Subject: Product Hero] + [Action: Snappy movement] + [Context: Premium background] + [Style: High-end commercial].
+SFX: [Âm thanh đặc trưng sản phẩm]
+EMOTION: [Cảm giác: Khao khát, hài lòng]
+VOICEOVER: "Thông điệp"`,
+        exampleOutput: `{
+  "detailed_story": "Giới thiệu giải pháp sạc siêu tốc cho cuộc sống bận rộn.",
+  "scene_groups": [
+    { "id": "g1", "name": "Thành phố dưới mưa", "description": "Không khí căng thẳng khi điện thoại hết pin" }
+  ],
+  "scenes": [
+    {
+      "visual_context": "[00:00-00:03] [Cinematography: Handheld medium shot, anamorphic flare] + [Subject: Một người đàn ông ướt đẫm mệt mỏi] + [Action: Chạm liên tục vào màn hình điện thoại tối đen không phản ứng] + [Context: Ánh đèn neon đường phố mờ ảo phản chiếu dưới vũng nước] + [Style & Ambiance: High-end commercial, tông màu teal and orange, sương khói]. SFX: tiếng mưa rơi nặng hạt, tiếng còi xe xa xăm. Emotion: Bối rối và lo âu.",
+      "scene_number": "1",
+      "group_id": "g1",
+      "prompt_name": "Màn Hình Chết",
+      "character_ids": ["char_1"],
+      "product_ids": ["prod_1"],
+      "voiceover": "Thế giới không dừng lại để chờ bạn sạc pin.",
+      "camera_angle": "Handheld Medium Shot"
+    }
+  ]
+}`,
         isDefault: true,
         isCustom: false,
         createdAt: new Date().toISOString()
@@ -150,22 +181,29 @@ Viết Treatment MV mang tính nghệ thuật cao:
             sceneStructure: 'montage'
         },
         toneKeywords: ['phi thực tế', 'nhịp điệu', 'thẩm mỹ', 'ẩn dụ'],
-        sceneGuidelines: `Định dạng mỗi cảnh:
+        sceneGuidelines: `Định dạng mỗi cảnh (Artistic - Veo 3.1):
 
-CẢNH [SỐ]: [Giai đoạn nhạc: Intro/Verse/Chorus/Bridge]
-CAMERA: [Artistic movement: Circular tracking, Reverse motion, Lens flares]
-VISUAL: [Mô tả không gian nghệ thuật, tông màu, ánh sáng stylized]
-MOOD/COLOR: [Bảng màu cụ thể]
-ACTION: [Performance hay Narrative action]`,
-        exampleOutput: `CẢNH 1: Intro (0:00-0:15) - "Trong đêm tối..."
-VISUAL: Nghệ sĩ đứng một mình dưới ánh đèn spotlight xanh trong không gian tối.
-CAMERA: Slow zoom in từ wide shot. Camera quay tròn chậm rãi xung quanh.
-MOOD: Tông màu lạnh, xanh lam, cô đơn, huyền bí
-
-CẢNH 2: Verse 1 (0:15-0:45) - Beat drop
-VISUAL: Quick cut montage - nghệ sĩ chạy qua phố đêm, ánh đèn neon phản chiếu trên vũng nước.
-CAMERA: Handheld năng động, match cut với nhịp beat. Dutch angle shots.
-MOOD: Năng lượng cao, neon rực rỡ, urban, chuyển động nhanh`,
+CẢNH [SỐ]: [Giai đoạn nhạc]
+VISUAL (VEO 3.1 FORMAT): [00:00-00:0X] [Cinematography: circular/reverse] + [Subject: Artist/Metaphor] + [Action: Rhythmic movement] + [Context: Stylized set] + [Style: Music Video aesthetic].
+SFX: [Âm thanh phối hợp (nếu có)]
+EMOTION: [Tâm trạng của đoạn nhạc]`,
+        exampleOutput: `{
+  "detailed_story": "Một hành trình thị giác xuyên qua các cung bậc cảm xúc của sự chia tay.",
+  "scene_groups": [
+    { "id": "g1", "name": "Căn phòng xanh", "description": "Biểu tượng của sự cô lập" }
+  ],
+  "scenes": [
+    {
+      "visual_context": "[00:00-00:08] [Cinematography: Slow circular tracking shot] + [Subject: Một nghệ sĩ mặc đồ lanh trắng bay bổng] + [Action: Trôi lơ lửng giữa những bông hoa xanh đang lơ lửng] + [Context: Căn phòng tối giản, ánh sáng mờ ảo từ trên xuống] + [Style & Ambiance: Dreamy music video aesthetic, ánh sáng mờ ảo, siêu thực]. SFX: tiếng synth bay bổng, nhịp tim nhẹ. Emotion: Cô đơn nhưng bình yên.",
+      "scene_number": "1",
+      "group_id": "g1",
+      "prompt_name": "Khúc Nhạc Xanh",
+      "character_ids": ["char_1"],
+      "product_ids": [],
+      "camera_angle": "Circular Tracking Shot"
+    }
+  ]
+}`,
         isDefault: true,
         isCustom: false,
         createdAt: new Date().toISOString()

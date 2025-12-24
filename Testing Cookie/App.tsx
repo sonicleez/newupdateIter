@@ -3,7 +3,6 @@ import { useHotkeys } from './hooks/useHotkeys';
 import { Header } from './components/common/Header';
 import { ProjectNameInput } from './components/common/ProjectNameInput';
 import { ApiKeyModal } from './components/modals/ApiKeyModal';
-import { GenyuTokenModal } from './components/modals/GenyuTokenModal';
 import { CharacterGeneratorModal } from './components/modals/CharacterGeneratorModal';
 import { ScriptGeneratorModal } from './components/modals/ScriptGeneratorModal';
 import { ImageViewerModal } from './components/modals/ImageViewerModal';
@@ -45,7 +44,6 @@ const App: React.FC = () => {
     const [zoom, setZoom] = useState(1);
     const [isApiKeyModalOpen, setApiKeyModalOpen] = useState(false);
     const [isScriptModalOpen, setScriptModalOpen] = useState(false);
-    const [genyuModalOpen, setGenyuModalOpen] = useState(false);
     const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null);
     const [editingProductId, setEditingProductId] = useState<string | null>(null);
     const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
@@ -76,7 +74,8 @@ const App: React.FC = () => {
     const {
         isScriptGenerating,
         handleGenerateScript,
-        handleRegenerateGroup
+        handleRegenerateGroup,
+        handleSmartMapAssets
     } = useScriptGeneration(state, updateStateAndRecord, userApiKey, setApiKeyModalOpen);
 
     const {
@@ -84,7 +83,9 @@ const App: React.FC = () => {
         addCharacter,
         deleteCharacter,
         setDefaultCharacter,
-        handleMasterImageUpload
+        analyzeCharacterImage,
+        generateCharacterSheets,
+        generateCharacterImage
     } = useCharacterLogic(state, updateStateAndRecord, userApiKey, setApiKeyModalOpen);
 
     const {
@@ -113,8 +114,11 @@ const App: React.FC = () => {
     const {
         isVeoGenerating,
         isVideoGenerating,
+        generateVeoPrompt,
         handleGenerateAllVeoPrompts,
-        handleGenerateAllVideos
+        handleGenerateAllVideos,
+        suggestVeoPresets,
+        applyPresetToAll
     } = useVideoGeneration(state, updateStateAndRecord, userApiKey, setApiKeyModalOpen);
 
     // Hotkeys
@@ -138,15 +142,7 @@ const App: React.FC = () => {
 
     // State Hydration
     useEffect(() => {
-        const genyuToken = localStorage.getItem('genyuToken');
-        const recaptchaToken = localStorage.getItem('recaptchaToken');
-        if (genyuToken || recaptchaToken) {
-            updateStateAndRecord(s => ({
-                ...s,
-                genyuToken: genyuToken || s.genyuToken,
-                recaptchaToken: recaptchaToken || s.recaptchaToken
-            }));
-        }
+        // Hydration logic if any
     }, [updateStateAndRecord]);
 
     // Derived Handlers
@@ -239,7 +235,6 @@ const App: React.FC = () => {
                 canDownload={state.scenes.some(s => s.generatedImage) || state.characters.some(c => c.masterImage) || state.products.some(p => p.masterImage)}
                 isContinuityMode={isContinuityMode}
                 toggleContinuityMode={() => setIsContinuityMode(!isContinuityMode)}
-                onGenyuClick={() => setGenyuModalOpen(true)}
                 onUndo={undo}
                 onRedo={redo}
                 canUndo={history.past.length > 0}
@@ -317,6 +312,9 @@ const App: React.FC = () => {
                             isStopping={isStopping}
                             stopBatchGeneration={stopBatchGeneration}
                             handleGenerateAllVeoPrompts={handleGenerateAllVeoPrompts}
+                            generateVeoPrompt={generateVeoPrompt}
+                            suggestVeoPresets={suggestVeoPresets}
+                            applyPresetToAll={applyPresetToAll}
                             isVeoGenerating={isVeoGenerating}
                             handleGenerateAllVideos={handleGenerateAllVideos}
                             isVideoGenerating={isVideoGenerating}
@@ -325,14 +323,14 @@ const App: React.FC = () => {
                             onDetailedScriptChange={(val) => updateStateAndRecord(s => ({ ...s, detailedScript: val }))}
                             onCleanAll={() => {
                                 if (confirm('⚠️ Bạn có chắc muốn xóa toàn bộ kịch bản?')) {
-                                    updateStateAndRecord(s => ({ ...s, scenes: [], detailedScript: '' }));
+                                    updateStateAndRecord(s => ({ ...s, scenes: [], sceneGroups: [], detailedScript: '' }));
                                 }
                             }}
                             createGroup={addSceneGroup} // Assuming these might be renamed or available via hook
                             updateGroup={updateSceneGroup}
                             deleteGroup={deleteSceneGroup}
                             assignSceneToGroup={assignSceneToGroup}
-                            sceneGroups={state.sceneGroups}
+                            sceneGroups={state.sceneGroups || []}
                             draggedSceneIndex={draggedSceneIndex}
                             setDraggedSceneIndex={setDraggedSceneIndex}
                             dragOverIndex={dragOverIndex}
@@ -369,20 +367,6 @@ const App: React.FC = () => {
                 }}
             />
 
-            <GenyuTokenModal
-                isOpen={genyuModalOpen}
-                onClose={() => setGenyuModalOpen(false)}
-                token={state.genyuToken || ''}
-                setToken={(token) => {
-                    updateStateAndRecord(s => ({ ...s, genyuToken: token }));
-                    localStorage.setItem('genyuToken', token);
-                }}
-                recaptchaToken={state.recaptchaToken || ''}
-                setRecaptchaToken={(token) => {
-                    updateStateAndRecord(s => ({ ...s, recaptchaToken: token }));
-                    localStorage.setItem('recaptchaToken', token);
-                }}
-            />
 
             <ScriptGeneratorModal
                 isOpen={isScriptModalOpen}
@@ -402,6 +386,7 @@ const App: React.FC = () => {
                 onGenerateMoodboard={generateGroupConcept}
                 scriptModel={state.scriptModel || 'gemini-2.5-flash'}
                 onScriptModelChange={(e) => updateStateAndRecord(s => ({ ...s, scriptModel: e.target.value }))}
+                onSmartMapAssets={handleSmartMapAssets}
             />
 
             <ScreenplayModal
@@ -416,7 +401,8 @@ const App: React.FC = () => {
                 character={state.characters.find(c => c.id === editingCharacterId) || null}
                 updateCharacter={updateCharacter}
                 setDefault={setDefaultCharacter}
-                onMasterUpload={handleMasterImageUpload}
+                onAnalyze={analyzeCharacterImage}
+                onGenerateSheets={generateCharacterSheets}
                 onEditImage={openEditor}
                 onOpenCharGen={(id) => setCharGenState({ isOpen: true, charId: id })}
                 onDelete={deleteCharacter}
@@ -427,10 +413,11 @@ const App: React.FC = () => {
                 onClose={() => setCharGenState({ isOpen: false, charId: null })}
                 onSave={handleCharGenSave}
                 apiKey={userApiKey}
-                genyuToken={state.genyuToken}
                 model={state.imageModel}
                 charId={charGenState.charId}
                 updateCharacter={updateCharacter}
+                generateCharacterImage={generateCharacterImage}
+                characters={state.characters}
             />
 
             <AdvancedImageEditor
@@ -439,7 +426,6 @@ const App: React.FC = () => {
                 sourceImage={editingImage?.image || ''}
                 onSave={handleEditorSave}
                 apiKey={userApiKey}
-                genyuToken={state.genyuToken}
                 initialHistory={editingImage?.history}
                 character={editingImage?.type && ['master', 'face', 'body', 'side', 'back', 'prop'].includes(editingImage.type) ? state.characters.find(c => c.id === editingImage.id) : undefined}
                 product={editingImage?.type === 'product' ? state.products.find(p => p.id === editingImage.id) : undefined}

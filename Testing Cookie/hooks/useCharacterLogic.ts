@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { ProjectState, Character } from '../types';
-import { generateId, cleanToken } from '../utils/helpers';
-import { GLOBAL_STYLES } from '../constants/presets';
+import { generateId } from '../utils/helpers';
+import { GLOBAL_STYLES, CHARACTER_STYLES } from '../constants/presets';
 import { callGeminiAPI } from '../utils/geminiUtils';
 
 export function useCharacterLogic(
@@ -67,77 +67,10 @@ export function useCharacterLogic(
         }));
     }, [updateStateAndRecord]);
 
-    const pollCharacterWorkflows = useCallback(async (
-        charId: string,
-        token: string,
-        faceWorkflowId: string | null,
-        bodyWorkflowId: string | null
-    ) => {
-        const cleanedToken = cleanToken(token);
-        let faceUrl: string | null = null;
-        let bodyUrl: string | null = null;
-        let attempts = 0;
-        const maxAttempts = 40;
-
-        const pollWorkflow = async (workflowId: string): Promise<string | null> => {
-            try {
-                const res = await fetch('http://localhost:3001/api/proxy/google/workflow/status', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: cleanedToken, workflowId })
-                });
-                const data = await res.json();
-                if (data.state === 'SUCCEEDED' && data.media && data.media.length > 0) {
-                    const m = data.media[0];
-                    return m.fifeUrl || m.url || m.image?.fifeUrl || null;
-                }
-                if (data.state === 'FAILED') return null;
-                return 'pending';
-            } catch (err) {
-                console.error("Poll error:", err);
-                return null;
-            }
-        };
-
-        while (attempts < maxAttempts && (!faceUrl || !bodyUrl)) {
-            await new Promise(r => setTimeout(r, 3000));
-            attempts++;
-            if (faceWorkflowId && !faceUrl) {
-                const result = await pollWorkflow(faceWorkflowId);
-                if (result && result !== 'pending') faceUrl = result;
-            }
-            if (bodyWorkflowId && !bodyUrl) {
-                const result = await pollWorkflow(bodyWorkflowId);
-                if (result && result !== 'pending') bodyUrl = result;
-            }
-            if ((faceUrl && !bodyWorkflowId) || (bodyUrl && !faceWorkflowId) || (faceUrl && bodyUrl)) {
-                updateStateAndRecord(s => ({
-                    ...s,
-                    characters: s.characters.map(c => c.id === charId ? {
-                        ...c,
-                        faceImage: faceUrl || c.faceImage,
-                        bodyImage: bodyUrl || c.bodyImage,
-                        workflowStatus: 'succeeded' as const,
-                        faceWorkflowId: undefined,
-                        bodyWorkflowId: undefined
-                    } : c)
-                }));
-                return;
-            }
-        }
-
-        if (attempts >= maxAttempts) {
-            updateStateAndRecord(s => ({
-                ...s,
-                characters: s.characters.map(c => c.id === charId ? { ...c, workflowStatus: 'failed' as const } : c)
-            }));
-        }
-    }, [updateStateAndRecord]);
-
-    const handleMasterImageUpload = useCallback(async (id: string, image: string) => {
+    const analyzeCharacterImage = useCallback(async (id: string, image: string) => {
         const rawApiKey = userApiKey || (process.env as any).API_KEY;
         const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
-        updateCharacter(id, { masterImage: image, isAnalyzing: true });
+        updateCharacter(id, { isAnalyzing: true });
 
         if (!apiKey) {
             updateCharacter(id, { isAnalyzing: false });
@@ -168,114 +101,169 @@ export function useCharacterLogic(
                 });
             }
 
-            const analyzePrompt = `Analyze this character. Return JSON: {"name": "Suggest Name", "description": "Vietnamese description physical features, clothing, style, colors."}`;
+            const analyzePrompt = `Analyze this character's main features. Return JSON: {"name": "Suggest a concise name", "description": "Short Vietnamese description (2-3 sentences) of key physical traits, clothing, and overall vibe. Focus on what makes them unique."}`;
             const analysisRes = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3-flash-preview',
                 contents: { parts: [{ inlineData: { data, mimeType } }, { text: analyzePrompt }] },
-                config: { responseMimeType: "application/json" }
+                config: {
+                    responseMimeType: "application/json",
+                    thinkingConfig: { thinkingLevel: 'low' as any }
+                }
             });
 
             let json = { name: "", description: "" };
             try {
-                json = JSON.parse(analysisRes.text.replace(/```json/g, '').replace(/```/g, '').trim());
+                const text = (analysisRes as any).text();
+                json = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
             } catch (e) {
-                console.error("JSON parse error", e);
-            }
-
-            updateCharacter(id, { name: json.name, description: json.description });
-
-            const genyuToken = state.genyuToken;
-            const currentStyle = GLOBAL_STYLES.find(s => s.value === state.stylePrompt)?.prompt || "Cinematic photorealistic, 8k, high quality";
-
-            const consistencyInstruction = `
-            **MANDATORY CONSISTENCY:** 
-            - You MUST match the background tone, lighting (color temperature, shadows), and environment of the provided "Ảnh Gốc". 
-            - The character's face, hair, and clothing MUST be exactly as seen in the reference.
-            - Maintain the same cinematic style: ${currentStyle}.
-            `.trim();
-
-            const facePrompt = `${consistencyInstruction}\n\n(STRICT CAMERA: EXTREME CLOSE-UP - FACE ID) Generate a highly detailed Face ID close-up of this character: ${json.description}. Focus on capturing the exact facial features and expression from the reference.`;
-            const bodyPrompt = `${consistencyInstruction}\n\n(STRICT CAMERA: FULL BODY WIDE SHOT) Generate a Full Body character design sheet (Front View, T-Pose or A-Pose) for: ${json.description}. The clothing must match the reference image's color and texture exactly.`;
-            const sidePrompt = `${consistencyInstruction}\n\n(STRICT CAMERA: FULL BODY SIDE PROFILE) Generate a Full Body Side Profile for: ${json.description}. Maintain the same clothing and body proportions as the body view.`;
-            const backPrompt = `${consistencyInstruction}\n\n(STRICT CAMERA: FULL BODY BACK VIEW) Generate a Full Body Back View for: ${json.description}. Ensure the back of the clothing reflects the design seen in the front.`;
-
-            if (apiKey) {
-                const model = state.imageModel || 'gemini-2.5-flash-image';
-                const [faceUrl, bodyUrl, sideUrl, backUrl] = await Promise.all([
-                    callGeminiAPI(apiKey, facePrompt, "1:1", model, image),
-                    callGeminiAPI(apiKey, bodyPrompt, "9:16", model, image),
-                    callGeminiAPI(apiKey, sidePrompt, "9:16", model, image),
-                    callGeminiAPI(apiKey, backPrompt, "9:16", model, image)
-                ]);
-
-                updateCharacter(id, {
-                    faceImage: faceUrl || undefined,
-                    bodyImage: bodyUrl || undefined,
-                    sideImage: sideUrl || undefined,
-                    backImage: backUrl || undefined,
-                    isAnalyzing: false,
-                });
-            } else if (genyuToken) {
-                const callProxy = async (prompt: string, aspect: string): Promise<string | { workflowId: string } | null> => {
-                    const res = await fetch('http://localhost:3001/api/proxy/genyu/image', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            token: genyuToken,
-                            recaptchaToken: state.recaptchaToken,
-                            prompt,
-                            aspect,
-                            style: "3D Model / Character Sheet"
-                        })
-                    });
-                    const d = await res.json();
-                    if (!res.ok) return null;
-                    if (d.media && d.media.length > 0) {
-                        const m = d.media[0];
-                        if (m.fifeUrl || m.url) return m.fifeUrl || m.url;
-                        if (m.image?.generatedImage?.encodedImage) return `data:image/jpeg;base64,${m.image.generatedImage.encodedImage}`;
-                        if (m.workflowId) return { workflowId: m.workflowId };
-                    }
-                    return null;
-                };
-
-                const [faceResult, bodyResult] = await Promise.all([
-                    callProxy(facePrompt, "IMAGE_ASPECT_RATIO_SQUARE"),
-                    callProxy(bodyPrompt, "IMAGE_ASPECT_RATIO_PORTRAIT")
-                ]);
-
-                const faceUrl = typeof faceResult === 'string' ? faceResult : null;
-                const bodyUrl = typeof bodyResult === 'string' ? bodyResult : null;
-                const faceWorkflowId = typeof faceResult === 'object' ? faceResult?.workflowId : null;
-                const bodyWorkflowId = typeof bodyResult === 'object' ? bodyResult?.workflowId : null;
-
-                if (faceWorkflowId || bodyWorkflowId) {
-                    updateStateAndRecord(s => ({
-                        ...s,
-                        characters: s.characters.map(c => c.id === id ? {
-                            ...c,
-                            faceWorkflowId: faceWorkflowId || undefined,
-                            bodyWorkflowId: bodyWorkflowId || undefined,
-                            workflowStatus: 'active' as const,
-                            isAnalyzing: false
-                        } : c)
-                    }));
-                    pollCharacterWorkflows(id, genyuToken, faceWorkflowId, bodyWorkflowId);
-                } else {
-                    updateCharacter(id, { faceImage: faceUrl || undefined, bodyImage: bodyUrl || undefined, isAnalyzing: false });
+                try {
+                    const text = (analysisRes as any).text || "";
+                    json = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
+                } catch (e2) {
+                    console.error("JSON parse error", e2);
                 }
             }
+
+            updateCharacter(id, {
+                name: json.name || "Unnamed Character",
+                description: json.description || "",
+                isAnalyzing: false
+            });
+
         } catch (error: any) {
             console.error("Analysis Failed", error);
             updateCharacter(id, { isAnalyzing: false });
         }
-    }, [userApiKey, updateCharacter, setApiKeyModalOpen, state.imageModel, state.genyuToken, state.stylePrompt, state.recaptchaToken, pollCharacterWorkflows]);
+    }, [userApiKey, updateCharacter, setApiKeyModalOpen]);
+
+    const generateCharacterSheets = useCallback(async (id: string) => {
+        const char = state.characters.find(c => c.id === id);
+        if (!char || !char.masterImage) return;
+
+        updateCharacter(id, { isAnalyzing: true });
+
+        try {
+            const rawApiKey = userApiKey || (process.env as any).API_KEY;
+            const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
+            const currentStyle = GLOBAL_STYLES.find(s => s.value === state.stylePrompt)?.prompt || "Cinematic photorealistic, 8k, high quality";
+
+            const consistencyInstruction = `
+            **MANDATORY CONSISTENCY:** 
+            - BACKGROUND: MUST be a Pure Solid White Studio Background. 
+            - CHARACTER: The character's face, hair, and clothing MUST be exactly as seen in the reference.
+            - MASTER REFERENCE STYLE: You must strictly adhere to the following artistic style for all character details: "${currentStyle}".
+            - LIGHTING: Professional studio lighting with rim lights for clear character silhouette.
+            - QUALITY: 8K resolution, hyper-detailed, clean sharp focus.
+            `.trim();
+
+            const description = char.description || "Character";
+            const facePrompt = `${consistencyInstruction}\n\n(STRICT CAMERA: EXTREME CLOSE-UP - FACE ID ON WHITE BACKGROUND) Generate a highly detailed Face ID close-up of this character: ${description}. Focus on capturing the exact facial features and expression from the reference. The background must be pure solid white.`;
+            const bodyPrompt = `${consistencyInstruction}\n\n(STRICT CAMERA: FULL BODY HEAD-TO-TOE WIDE SHOT ON WHITE BACKGROUND) Generate a Full Body character design sheet (Front View, T-Pose or A-Pose). MUST CAPTURE HEAD-TO-TOE INCLUDING VISIBLE FEET. Description: ${description}. The clothing must match the reference image's color and texture exactly. The background must be pure solid white.`;
+
+            if (!apiKey) {
+                updateCharacter(id, { isAnalyzing: false });
+                setApiKeyModalOpen(true);
+                return;
+            }
+
+            const model = state.imageModel || 'gemini-3-pro-image-preview';
+
+            const [faceUrl, bodyUrl] = await Promise.all([
+                callGeminiAPI(apiKey, facePrompt, "1:1", model, char.masterImage),
+                callGeminiAPI(apiKey, bodyPrompt, "9:16", model, char.masterImage),
+            ]);
+
+            updateCharacter(id, {
+                faceImage: faceUrl || undefined,
+                bodyImage: bodyUrl || undefined,
+                isAnalyzing: false
+            });
+
+        } catch (e) {
+            console.error("Generation Sheets Failed", e);
+            updateCharacter(id, { isAnalyzing: false });
+        }
+    }, [userApiKey, state.imageModel, state.stylePrompt, updateCharacter, state.characters]);
+
+    const generateCharacterImage = useCallback(async (
+        charId: string,
+        params: {
+            prompt: string,
+            style: string,
+            customStyle?: string,
+            aspectRatio: string,
+            resolution: string,
+            model: string
+        }
+    ) => {
+        const { prompt, style, customStyle, aspectRatio, model } = params;
+        updateCharacter(charId, { isGenerating: true });
+
+        try {
+            const styleConfig = CHARACTER_STYLES.find(s => s.value === style);
+            const stylePrompt = style === 'custom' ? customStyle : (styleConfig?.prompt || styleConfig?.label || style);
+
+            const fullPrompt = `
+CHARACTER DESIGN TASK:
+Create a professional character sheet with the following specifications:
+
+STYLE PRESET:
+${stylePrompt}
+
+CHARACTER DESCRIPTION:
+${prompt}
+
+MANDATORY REQUIREMENTS:
+- Background: Pure Solid White Studio Background (RGB 255, 255, 255). No shadows on background, no textures.
+- Framing: FULL BODY HEAD-TO-TOE, clear silhouette, MUST INCLUDE FEET.
+- Pose: Standard A-Pose or T-Pose.
+- Lighting: Professional studio softbox lighting, high contrast, rim light for separation.
+- Quality: 8K, Ultra-Sharp focus, Hyper-detailed texture, Ray-tracing style.
+- Consistency: Unified style, no artifacts, clean lines.
+
+CRITICAL: The style MUST strictly follow the "STYLE PRESET" and Capturing the specific vibe described. Solid white background is non-negotiable.
+            `.trim();
+
+            const apiKey = (userApiKey || (process.env as any).API_KEY)?.trim();
+            if (!apiKey) {
+                setApiKeyModalOpen(true);
+                throw new Error("API Key is missing");
+            }
+
+            const ai = new GoogleGenAI({ apiKey });
+            const response = await ai.models.generateContent({
+                model: model,
+                contents: [{ parts: [{ text: fullPrompt }] }],
+                config: {
+                    imageConfig: {
+                        aspectRatio: aspectRatio
+                    }
+                }
+            });
+
+            const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+            if (imagePart?.inlineData) {
+                const base64ImageBytes = imagePart.inlineData.data;
+                const imageUrl = `data:${imagePart.inlineData.mimeType};base64,${base64ImageBytes}`;
+                updateCharacter(charId, { generatedImage: imageUrl, isGenerating: false });
+            } else {
+                throw new Error("AI không trả về ảnh.");
+            }
+
+        } catch (err: any) {
+            console.error("Background Gen Error:", err);
+            updateCharacter(charId, { isGenerating: false });
+            alert(`❌ Lỗi tạo ảnh: ${err.message}`);
+        }
+    }, [userApiKey, updateCharacter]);
 
     return {
         updateCharacter,
         addCharacter,
         deleteCharacter,
         setDefaultCharacter,
-        handleMasterImageUpload
+        analyzeCharacterImage,
+        generateCharacterSheets,
+        generateCharacterImage
     };
 }

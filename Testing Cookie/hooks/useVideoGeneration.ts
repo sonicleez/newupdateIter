@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { ProjectState } from '../types';
-import { cleanToken } from '../utils/helpers';
-import { CAMERA_ANGLES, LENS_OPTIONS } from '../constants/presets';
+import { CAMERA_ANGLES, LENS_OPTIONS, VEO_PRESETS } from '../constants/presets';
+import { Scene } from '../types';
 
 export function useVideoGeneration(
     state: ProjectState,
@@ -53,31 +53,49 @@ export function useVideoGeneration(
             const sceneProducts = (state.products || []).filter(p => (scene.productIds || []).includes(p.id));
             const productContext = sceneProducts.map(p => `Product: ${p.name} (${p.description})`).join('; ');
 
+            const selectedPreset = VEO_PRESETS.find(p => p.value === scene.veoPreset) || VEO_PRESETS[0];
+
             const promptText = `
-             Role: Expert Video Prompt Engineer for Google Veo 3.1.
+             Role: Expert Video Prompt Designer for Google Veo 3.1.
+             
+             **THE OFFICIAL VEO 3.1 FRAMEWORK:**
+             Follow this exact five-part formula for high-quality generation:
+             [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance] + [Soundstage (SFX/Ambient)] + [Emotion Tag]
+             
+             **EXPERIMENTAL FEATURE: TIMESTAMP PROMPTING**
+             For multi-shot sequences, use timestamps to direct precise cinematic pacing:
+             [00:00-00:02] [Action 1 with Shot Type]
+             [00:02-00:04] [Action 2 with Reverse Shot/Tracking]
+             [00:04-00:06] [Action 3 with Close-up]
+             ...and so on.
              
              **INPUT DATA:**
-             - Visual Reference: Keyframe Image provided.
-             - Context: "${context}"
-             - Scene Intent: "${promptName}"
+             - Vision: Keyframe Image Provided (Use as foundation).
+             - Scene Description: "${context}"
+             - Intent: "${promptName}"
              - Dialogue: "${scriptText}"
              - Featured Products: "${productContext}"
-             - Cinematography: "${scene.cameraAngleOverride === 'custom' ? scene.customCameraAngle : (CAMERA_ANGLES.find(a => a.value === scene.cameraAngleOverride)?.label || 'Auto')} | ${scene.lensOverride === 'custom' ? scene.customLensOverride : (LENS_OPTIONS.find(l => l.value === scene.lensOverride)?.label || 'Auto')}"
+             - Technical Directives: "${scene.cameraAngleOverride === 'custom' ? scene.customCameraAngle : (CAMERA_ANGLES.find(a => a.value === scene.cameraAngleOverride)?.label || 'Auto')} | ${scene.lensOverride === 'custom' ? scene.customLensOverride : (LENS_OPTIONS.find(l => l.value === scene.lensOverride)?.label || 'Auto')}"
+             - Preset Mode: "${selectedPreset.label}"
+             - PRESET INSTRUCTION: "${selectedPreset.prompt}"
              
-             **TASK:** 
-             Analyze the scene and generate the OPTIMAL text-to-video prompt.
-             Do NOT be rigid. Choose the best structure based on the scene content.
-             
-             **VEO 3.1 OPTIMIZATION CHECKLIST:**
-             - **Camera:** Use specific terms: "Truck Left", "Dolly In", "Rack Focus", "Low Angle", "Aerial Orbit".
-             - **Lighting:** Define source: "Volumetric fog", "Rembrandt lighting", "Neon rim light".
-             - **Micro-Movements (CRITICAL):**
-                - If Dialogue exists ("${scriptText}"): MUST include "character talking", "lips moving naturally", "expressive face".
-                - Background: "wind blowing hair", "dust particles", "flickering neon", "rain".
-             - **Style:** "Photorealistic, 4k, High Fidelity, Cinematic Motion Blur".
+             **GENERATION INSTRUCTIONS:**
+             1. **Mode Check:** 
+                - If Preset Mode indicates "Single Shot", generate one cohesive formula string starting with [00:00-00:06].
+                - If Preset Mode indicates "Multi-Shot", you MUST generate exactly 3-4 segments using timestamps (e.g., [00:00-00:02], [00:02-00:04], etc.).
+             2. **Formula Adherence:** Every segment (or single shot) MUST follow: [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance].
+             3. **Quality Examples:**
+                - *Single Shot Example:* [00:00-00:06] Wide shot, Kaya stands purposefully, in a rugged fur-lined tent with firelight flickering, photorealistic cinematic style. SFX: crackling fire. Emotion: Determination.
+                - *Multi-Shot Example:* 
+                  [00:00-00:02] Medium shot of Kaya looking at the camera, in a dim tent.
+                  [00:02-00:04] Close-up of Kaya's hands tightening a leather belt.
+                  [00:04-00:06] Reverse shot showing Kaya's resolute expression.
+                  Emotion: Readiness. SFX: leather creaking.
+             4. **Audio & Emotion:** Integrate SFX, Ambient, and Emotion tags as requested.
+             5. **Technical:** Incorporate Lens ("${scene.lensOverride}") and Angle ("${scene.cameraAngleOverride}") directives naturally.
              
              **OUTPUT:**
-             Return ONLY the final prompt string (in English). Do not include explanations.
+             Return ONLY the prompt string.
              `;
 
             const response = await ai.models.generateContent({
@@ -90,7 +108,7 @@ export function useVideoGeneration(
                 }
             });
 
-            const veoPrompt = response.text?.trim() || '';
+            const veoPrompt = (response as any).text?.trim?.() || (response as any).text || '';
             updateStateAndRecord(s => ({
                 ...s,
                 scenes: s.scenes.map(sc => sc.id === sceneId ? { ...sc, veoPrompt } : sc)
@@ -101,8 +119,8 @@ export function useVideoGeneration(
     }, [state.scenes, state.scriptLanguage, state.products, updateStateAndRecord, userApiKey]);
 
     const handleGenerateAllVeoPrompts = useCallback(async () => {
-        const scenesToProcess = state.scenes.filter(s => s.generatedImage && !s.veoPrompt);
-        if (scenesToProcess.length === 0) return alert("Không có phân cảnh nào cần tạo Veo prompt.");
+        const scenesToProcess = state.scenes.filter(s => s.generatedImage);
+        if (scenesToProcess.length === 0) return alert("Không có phân cảnh nào có ảnh để tạo Veo prompt.");
 
         setIsVeoGenerating(true);
         const rawApiKey = userApiKey || (process.env as any).API_KEY;
@@ -123,136 +141,79 @@ export function useVideoGeneration(
         }
     }, [state.scenes, userApiKey, generateVeoPrompt, setApiKeyModalOpen]);
 
-    const checkVideoStatus = useCallback(async (operationsToCheck: { sceneId: string, name: string }[], token: string) => {
-        if (operationsToCheck.length === 0) {
-            setIsVideoGenerating(false);
+    const handleGenerateAllVideos = useCallback(async () => {
+        alert("Video generation currently requires an external integration and is disabled in this version.");
+    }, []);
+
+    const suggestVeoPresets = useCallback(async () => {
+        const rawApiKey = userApiKey || (process.env as any).API_KEY;
+        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
+        if (!apiKey) {
+            setApiKeyModalOpen(true);
             return;
         }
-        const cleanT = cleanToken(token);
+
         try {
-            const payload = {
-                token: cleanT,
-                operations: operationsToCheck.map(op => ({
-                    operation: { name: op.name },
-                    sceneId: op.sceneId,
-                    status: "MEDIA_GENERATION_STATUS_ACTIVE"
-                }))
-            };
-            const response = await fetch('http://localhost:3001/api/proxy/google/video/status', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+            const ai = new GoogleGenAI({ apiKey });
+
+            const scenesInfo = state.scenes.map(s => `ID: ${s.id}, Context: ${s.contextDescription}, Script: ${s.vietnamese || s.language1}`).join('\n');
+            const presetsInfo = VEO_PRESETS.map(p => `${p.value}: ${p.label} - ${p.prompt}`).join('\n');
+
+            const suggestionPrompt = `
+            Task: Assign the best Veo 3.1 Video Preset for each scene based on the context and script.
+            
+            **PRESET SELECTION STRATEGY:**
+            - Use "action-sequence" (Multi-Shot) for scenes with physical movement, chases, or high energy.
+            - Use "storytelling-multi" (Multi-Shot) for scenes with dialogue or character interactions.
+            - Use "cinematic-master" (Single Shot) for artistic, steady, or high-production single-shot scenes.
+            - Use "macro-detail" for products or close-up textures.
+            
+            Available Presets:
+            ${presetsInfo}
+            
+            Scenes:
+            ${scenesInfo}
+            
+            Return ONLY a JSON object mapping scene ID to preset value: {"scene_id": "preset_value", ...}
+            `;
+
+            const result = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [{ parts: [{ text: suggestionPrompt }] }],
+                config: {
+                    responseMimeType: "application/json"
+                }
             });
-            if (!response.ok) return;
-            const data = await response.json();
-            const updates = data.operations;
-            if (!updates || !Array.isArray(updates)) {
-                setTimeout(() => checkVideoStatus(operationsToCheck, token), 5000);
-                return;
-            }
-            let pendingOps: { sceneId: string, name: string }[] = [];
-            const updateMap = new Map();
-            updates.forEach((u: any) => { if (u.sceneId) updateMap.set(u.sceneId, u); });
 
-            updateStateAndRecord(s => {
-                const newScenes = s.scenes.map(scene => {
-                    const op = operationsToCheck.find(o => o.sceneId === scene.id);
-                    if (!op) return scene;
-                    const update = updateMap.get(scene.id);
-                    if (!update) { pendingOps.push(op); return scene; }
-                    if (update.status === 'MEDIA_GENERATION_STATUS_SUCCEEDED') {
-                        const vidUrl = update.result?.video?.video?.url || update.result?.video?.url || update.result?.url;
-                        return { ...scene, generatedVideo: vidUrl, videoStatus: 'succeeded', isGenerating: false, videoOperationName: undefined };
-                    } else if (update.status === 'MEDIA_GENERATION_STATUS_FAILED') {
-                        return { ...scene, videoStatus: 'failed', isGenerating: false, error: "Gen Video Failed", videoOperationName: undefined };
-                    } else {
-                        pendingOps.push(op);
-                        return { ...scene, videoStatus: 'active' };
-                    }
-                });
-                return { ...s, scenes: newScenes };
-            });
-            if (pendingOps.length > 0) setTimeout(() => checkVideoStatus(pendingOps, token), 5000);
-            else setIsVideoGenerating(false);
-        } catch (e) {
-            console.error("Poll Error", e);
-            setIsVideoGenerating(false);
-        }
-    }, [updateStateAndRecord]);
+            const text = (result as any).text?.trim?.() || (result as any).text || '';
+            const mapping = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
 
-    const handleGenerateAllVideos = useCallback(async () => {
-        const rawToken = state.genyuToken;
-        if (!rawToken) return alert("Cần Genyu Token để tạo Video.");
-        const genyuTokenStr = cleanToken(rawToken);
-        const scenesToProcess = state.scenes.filter(s => (s.mediaId || s.generatedImage) && s.veoPrompt && !s.generatedVideo);
-        if (scenesToProcess.length === 0) return alert("Không tìm thấy phân cảnh nào đủ điều kiện!");
-
-        setIsVideoGenerating(true);
-        let startedOps: { sceneId: string, name: string }[] = [];
-        let errorMsg = "";
-
-        for (const scene of scenesToProcess) {
             updateStateAndRecord(s => ({
                 ...s,
-                scenes: s.scenes.map(sc => sc.id === scene.id ? { ...sc, isGenerating: true, videoStatus: 'starting' } : sc)
+                scenes: s.scenes.map(scene => ({
+                    ...scene,
+                    veoPreset: mapping[scene.id] || scene.veoPreset || 'cinematic-master'
+                }))
             }));
-            try {
-                let videoAspect = state.aspectRatio === "9:16" || state.aspectRatio === "3:4" ? "VIDEO_ASPECT_RATIO_PORTRAIT" : "VIDEO_ASPECT_RATIO_LANDSCAPE";
-                let imageBase64 = !scene.mediaId && scene.generatedImage ? scene.generatedImage.replace(/^data:image\/\w+;base64,/, "") : null;
+        } catch (e) {
+            console.error("Suggest Veo Presets failed", e);
+        }
+    }, [state.scenes, userApiKey, setApiKeyModalOpen, updateStateAndRecord]);
 
-                const response = await fetch('http://localhost:3001/api/proxy/google/video/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token: genyuTokenStr,
-                        recaptchaToken: state.recaptchaToken,
-                        prompt: scene.veoPrompt,
-                        mediaId: scene.mediaId,
-                        imageBase64: imageBase64,
-                        aspectRatio: videoAspect
-                    })
-                });
-                const data = await response.json();
-                if (data.requests && data.requests.length > 0) {
-                    const opName = data.requests[0].operation?.name;
-                    if (opName) {
-                        startedOps.push({ sceneId: scene.id, name: opName });
-                        updateStateAndRecord(s => ({
-                            ...s,
-                            scenes: s.scenes.map(sc => sc.id === scene.id ? { ...sc, videoOperationName: opName, videoStatus: 'active' } : sc)
-                        }));
-                    }
-                } else {
-                    let details = data.details?.error?.message || data.error?.message || "Unknown Error";
-                    errorMsg = details;
-                    updateStateAndRecord(s => ({
-                        ...s,
-                        scenes: s.scenes.map(sc => sc.id === scene.id ? { ...sc, isGenerating: false, error: details } : sc)
-                    }));
-                }
-                await new Promise(r => setTimeout(r, 500));
-            } catch (e: any) {
-                console.error("Start Video Error", e);
-                errorMsg = e.message;
-                updateStateAndRecord(s => ({
-                    ...s,
-                    scenes: s.scenes.map(sc => sc.id === scene.id ? { ...sc, isGenerating: false, error: "Req Error" } : sc)
-                }));
-            }
-        }
-        if (startedOps.length > 0) {
-            alert(`Đã khởi tạo thành công ${startedOps.length} video.`);
-            setTimeout(() => checkVideoStatus(startedOps, genyuTokenStr), 5000);
-        } else {
-            setIsVideoGenerating(false);
-            alert(`Lỗi: ${errorMsg}`);
-        }
-    }, [state.genyuToken, state.scenes, state.aspectRatio, state.recaptchaToken, updateStateAndRecord, checkVideoStatus]);
+    const applyPresetToAll = useCallback((presetValue: string) => {
+        updateStateAndRecord(s => ({
+            ...s,
+            scenes: s.scenes.map(scene => ({ ...scene, veoPreset: presetValue }))
+        }));
+    }, [updateStateAndRecord]);
 
     return {
         isVeoGenerating,
         isVideoGenerating,
+        generateVeoPrompt,
         handleGenerateAllVeoPrompts,
-        handleGenerateAllVideos
+        handleGenerateAllVideos,
+        suggestVeoPresets,
+        applyPresetToAll
     };
 }

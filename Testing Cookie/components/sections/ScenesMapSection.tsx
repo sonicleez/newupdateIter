@@ -4,7 +4,7 @@ import { SceneRow } from '../scenes/SceneRow';
 import { StoryBoardCard } from '../scenes/StoryBoardCard';
 import { Tooltip } from '../common/Tooltip';
 import { Scene, Character, Product } from '../../types';
-import { PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from '../../constants/presets';
+import { PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER, VEO_PRESETS } from '../../constants/presets';
 
 interface ScenesMapSectionProps {
     scenes: Scene[];
@@ -24,6 +24,9 @@ interface ScenesMapSectionProps {
     isStopping: boolean;
     stopBatchGeneration: () => void;
     handleGenerateAllVeoPrompts: () => void;
+    generateVeoPrompt: (sceneId: string) => void;
+    suggestVeoPresets: () => void;
+    applyPresetToAll: (preset: string) => void;
     isVeoGenerating: boolean;
     handleGenerateAllVideos: () => void;
     isVideoGenerating: boolean;
@@ -58,6 +61,9 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
     isStopping,
     stopBatchGeneration,
     handleGenerateAllVeoPrompts,
+    generateVeoPrompt,
+    suggestVeoPresets,
+    applyPresetToAll,
     isVeoGenerating,
     handleGenerateAllVideos,
     isVideoGenerating,
@@ -80,45 +86,126 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
             <div className="flex justify-between items-center mb-8">
                 <div className="flex items-center space-x-6">
                     <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-orange to-brand-red">Scenes Maps</h2>
-                    <div className="flex bg-gray-900/50 p-1 rounded-lg border border-gray-700/50">
+                    <div className="flex bg-gray-900/50 p-1 rounded-lg border border-gray-700/50 h-10 items-center">
                         <button
                             onClick={() => setViewMode('table')}
-                            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-brand-orange text-white shadow-lg shadow-brand-orange/20' : 'text-gray-400 hover:text-gray-200'}`}
+                            className={`flex items-center space-x-2 px-3 h-full rounded-md transition-all ${viewMode === 'table' ? 'bg-brand-orange text-white shadow-lg shadow-brand-orange/20' : 'text-gray-400 hover:text-gray-200'}`}
                         >
                             <Table size={14} />
-                            <span className="text-[11px] font-bold uppercase tracking-wider">Table</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest leading-none">Table</span>
                         </button>
                         <button
                             onClick={() => setViewMode('storyboard')}
-                            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md transition-all ${viewMode === 'storyboard' ? 'bg-brand-orange text-white shadow-lg shadow-brand-orange/20' : 'text-gray-400 hover:text-gray-200'}`}
+                            className={`flex items-center space-x-2 px-3 h-full rounded-md transition-all ${viewMode === 'storyboard' ? 'bg-brand-orange text-white shadow-lg shadow-brand-orange/20' : 'text-gray-400 hover:text-gray-200'}`}
                         >
                             <LayoutGrid size={14} />
-                            <span className="text-[11px] font-bold uppercase tracking-wider">Board</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest leading-none">Board</span>
                         </button>
                     </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                    <div className="flex items-center space-x-2">
-                        <button onClick={handleGenerateAllImages} disabled={isBatchGenerating} className={`px-4 py-2 font-semibold text-brand-cream rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed`}>
-                            {isBatchGenerating ? 'Đang tạo (Tuần tự)...' : '1. Tạo ảnh hàng loạt'}
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={handleGenerateAllImages}
+                        disabled={isBatchGenerating}
+                        className={`h-11 w-48 font-black text-[11px] text-brand-cream rounded-xl bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest`}
+                    >
+                        {isBatchGenerating ? '1. Đang tạo...' : '1. Tạo ảnh hàng loạt'}
+                    </button>
+
+                    <button
+                        onClick={handleGenerateAllVeoPrompts}
+                        disabled={isVeoGenerating}
+                        className={`h-11 w-48 font-black text-[11px] text-brand-cream rounded-xl bg-gradient-to-r from-brand-red to-brand-brown hover:from-brand-orange hover:to-brand-red shadow-lg shadow-brand-red/20 transition-all duration-300 transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 uppercase tracking-widest`}
+                    >
+                        {isVeoGenerating ? '2. Đang tạo...' : '2. Tạo Veo Prompts'}
+                    </button>
+
+                    <button
+                        onClick={handleGenerateAllVideos}
+                        disabled={isVideoGenerating}
+                        className={`h-11 w-48 font-black text-[11px] text-brand-cream rounded-xl bg-gradient-to-r from-brand-brown to-brand-orange hover:from-brand-red hover:to-brand-orange shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 uppercase tracking-widest`}
+                    >
+                        {isVideoGenerating ? '3. Đang tạo...' : '3. Tạo Video (Veo)'}
+                    </button>
+
+                    <button
+                        onClick={addScene}
+                        className={`h-11 w-32 font-black text-[11px] text-brand-cream rounded-xl bg-brand-orange hover:bg-brand-red shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-[1.02] active:scale-95 uppercase tracking-widest`}
+                    >
+                        + Scene
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            const allVisual = scenes.map(s => s.contextDescription || '').filter(t => t).join('\n\n');
+                            if (allVisual) {
+                                navigator.clipboard.writeText(allVisual).then(() => alert('📋 Copied all Visual Prompts!'));
+                            } else {
+                                alert('⚠️ No Visual Prompts to copy.');
+                            }
+                        }}
+                        className="h-11 w-11 flex items-center justify-center text-gray-400 hover:text-brand-cream bg-gray-900 border border-gray-700 rounded-xl transition-all shadow-xl active:scale-95"
+                        title="Copy All Visual Prompts (Image Generation)"
+                    >
+                        📋
+                    </button>
+
+                    {isBatchGenerating && (
+                        <button
+                            onClick={stopBatchGeneration}
+                            disabled={isStopping}
+                            className="h-11 px-4 font-black text-[11px] text-white rounded-xl bg-red-600 hover:bg-red-700 shadow-lg shadow-red-900/20 transition-all uppercase tracking-widest"
+                        >
+                            {isStopping ? '...' : 'STOP'}
                         </button>
-                        {isBatchGenerating && (
-                            <button
-                                onClick={stopBatchGeneration}
-                                disabled={isStopping}
-                                className={`px-4 py-2 font-semibold text-white rounded-lg bg-red-600 hover:bg-red-700 shadow-lg shadow-red-900/20 transition-all duration-300 transform hover:scale-105 disabled:opacity-50`}
-                            >
-                                {isStopping ? 'Đang dừng...' : 'Stop'}
-                            </button>
-                        )}
+                    )}
+                </div>
+            </div>
+
+            {/* SECONDARY ROW: VEO PRESET CONTROLS */}
+            <div className="flex justify-end mb-8">
+                <div className="flex items-center gap-1 bg-gray-900/80 p-1.5 rounded-xl border border-gray-700/50 h-11 backdrop-blur-md shadow-2xl">
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-3">Veo Expert Controls:</span>
+                    <div className="w-px h-4 bg-gray-700 mx-1"></div>
+                    <button
+                        onClick={suggestVeoPresets}
+                        disabled={isVeoGenerating}
+                        className="h-full px-4 text-[10px] font-black text-blue-400 hover:text-blue-300 transition-all uppercase tracking-widest flex items-center gap-2 hover:bg-blue-500/10 rounded-lg"
+                        title="AI sẽ tự động chọn Preset tốt nhất cho từng cảnh (Dựa trên hướng dẫn Veo 3.1)"
+                    >
+                        ✨ AI Suggest Presets
+                    </button>
+                    <div className="w-px h-4 bg-gray-700 mx-1"></div>
+                    <div className="flex items-center px-4 gap-3">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">Apply to All:</span>
+                        <select
+                            onChange={(e) => {
+                                if (e.target.value) applyPresetToAll(e.target.value);
+                            }}
+                            className="bg-gray-800 border border-gray-700 text-[10px] font-black text-brand-cream outline-none cursor-pointer px-3 py-1 rounded-md focus:border-brand-orange transition-all uppercase tracking-wider"
+                            defaultValue=""
+                        >
+                            <option value="" disabled>Select Preset...</option>
+                            {VEO_PRESETS.map(p => (
+                                <option key={p.value} value={p.value} className="bg-gray-900">{p.label}</option>
+                            ))}
+                        </select>
                     </div>
-                    <button onClick={handleGenerateAllVeoPrompts} disabled={isVeoGenerating} className={`px-4 py-2 font-semibold text-brand-cream rounded-lg bg-gradient-to-r from-brand-red to-brand-brown hover:from-brand-orange hover:to-brand-red shadow-lg shadow-brand-red/20 transition-all duration-300 transform hover:scale-105 disabled:opacity-50`}>
-                        {isVeoGenerating ? 'Đang tạo Prompt...' : '2. Tạo Veo Prompts'}
+                    <div className="w-px h-4 bg-gray-700 mx-1"></div>
+                    <button
+                        onClick={() => {
+                            const allVeo = scenes.map(s => s.veoPrompt || '').filter(t => t).join('\n\n');
+                            if (allVeo) {
+                                navigator.clipboard.writeText(allVeo).then(() => alert('📋 Copied all Veo Prompts!'));
+                            } else {
+                                alert('⚠️ No Veo Prompts to copy. Generate them first!');
+                            }
+                        }}
+                        className="h-full px-4 text-[10px] font-black text-brand-orange hover:text-white transition-all uppercase tracking-widest flex items-center gap-2 hover:bg-brand-orange/10 rounded-lg"
+                        title="Copy All Veo Prompts"
+                    >
+                        📋 Copy All Veo Prompts
                     </button>
-                    <button onClick={handleGenerateAllVideos} disabled={isVideoGenerating} className={`px-4 py-2 font-semibold text-brand-cream rounded-lg bg-gradient-to-r from-brand-brown to-brand-orange hover:from-brand-red hover:to-brand-orange shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-105 disabled:opacity-50`}>
-                        {isVideoGenerating ? 'Đang tạo Video...' : '3. Tạo Video (Veo)'}
-                    </button>
-                    <button onClick={addScene} className={`px-4 py-2 font-semibold text-brand-cream rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-105`}>+ Thêm Phân đoạn</button>
                 </div>
             </div>
 
@@ -170,8 +257,10 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                             currentGroupId = scene.groupId;
                             const group = sceneGroups?.find(g => g.id === currentGroupId);
 
+                            const groupIdToDelete = currentGroupId;
+                            const headerKey = `group-header-${currentGroupId || 'none'}-${index}`;
                             renderedScenes.push(
-                                <div key={`group-header-${currentGroupId || 'none'}`} className={`col-span-full py-4 flex items-center justify-between border-b border-gray-700/50 mb-2 ${viewMode === 'table' ? 'px-4' : ''}`}>
+                                <div key={headerKey} className={`col-span-full py-4 flex items-center justify-between border-b border-gray-700/50 mb-2 ${viewMode === 'table' ? 'px-4' : ''}`}>
                                     <div className="flex items-center space-x-3 flex-1">
                                         <div className={`w-2 h-10 rounded-full bg-gradient-to-b ${currentGroupId ? 'from-purple-500 to-blue-500' : 'from-gray-600 to-gray-800'}`}></div>
                                         <div className="flex-1">
@@ -230,7 +319,7 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                                 <button
                                                     onClick={() => {
                                                         if (confirm('Delete this group? Scenes will be unassigned.')) {
-                                                            deleteGroup(currentGroupId!);
+                                                            deleteGroup(groupIdToDelete!);
                                                         }
                                                     }}
                                                     className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-red-900/10 hover:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-900/30 transition-all flex items-center gap-1.5"
@@ -272,6 +361,7 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                             removeScene={removeScene}
                                             generateImage={() => performImageGeneration(scene.id)}
                                             generateEndFrame={() => performImageGeneration(scene.id, undefined, true)}
+                                            generateVeoPrompt={generateVeoPrompt}
                                             openImageViewer={() => handleOpenImageViewer(index)}
                                             onDragStart={(idx) => setDraggedSceneIndex(idx)}
                                             onDragOver={(idx) => {

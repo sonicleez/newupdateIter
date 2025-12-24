@@ -12,7 +12,6 @@ export interface HeaderProps {
     canDownload: boolean;
     isContinuityMode: boolean;
     toggleContinuityMode: () => void;
-    onGenyuClick: () => void;
     onUndo: () => void;
     onRedo: () => void;
     canUndo: boolean;
@@ -22,7 +21,7 @@ export interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
     isSticky, onApiKeyClick, onSave, onOpen, onNewProject,
     onDownloadAll, canDownload, isContinuityMode,
-    toggleContinuityMode, onGenyuClick,
+    toggleContinuityMode,
     onUndo, onRedo, canUndo, canRedo
 }) => (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isSticky ? 'bg-black/50 backdrop-blur-sm shadow-lg' : 'bg-transparent'}`}>
@@ -65,7 +64,6 @@ export const Header: React.FC<HeaderProps> = ({
                     <button onClick={onSave} className="px-3 py-2 text-xs md:text-sm font-semibold text-white bg-white/10 rounded-lg hover:bg-white/20 transition-colors">Lưu</button>
                     <button onClick={onOpen} className="px-3 py-2 text-xs md:text-sm font-semibold text-white bg-white/10 rounded-lg hover:bg-white/20 transition-colors">Mở</button>
                     {canDownload && <button onClick={onDownloadAll} className={`px-3 py-2 text-xs md:text-sm font-semibold text-white rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} transition-all`}>Tải Full ZIP</button>}
-                    <button onClick={onGenyuClick} className="px-3 py-2 text-xs md:text-sm font-semibold text-white bg-purple-600/50 rounded-lg hover:bg-purple-600/70 transition-colors">Genyu API</button>
                     <button onClick={onApiKeyClick} className="px-3 py-2 text-xs md:text-sm font-semibold text-white bg-white/10 rounded-lg hover:bg-white/20 transition-colors">API Key</button>
                 </div>
             </div>

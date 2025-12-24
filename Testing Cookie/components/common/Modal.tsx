@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
     isOpen: boolean;
@@ -18,7 +19,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
 
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose}>
             <div className="bg-gray-900 w-full max-w-2xl rounded-2xl border border-gray-700 shadow-2xl overflow-hidden scale-in" onClick={(e) => e.stopPropagation()}>
                 <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
@@ -31,6 +32,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
                     {children}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };

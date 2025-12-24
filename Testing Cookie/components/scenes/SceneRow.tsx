@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { GripVertical } from 'lucide-react';
 import { Scene, Character, Product } from '../../types';
 import { ExpandableTextarea } from '../common/ExpandableTextarea';
-import { CAMERA_ANGLES, LENS_OPTIONS, TRANSITION_TYPES, VEO_MODES } from '../../constants/presets';
+import { CAMERA_ANGLES, LENS_OPTIONS, TRANSITION_TYPES, VEO_MODES, VEO_PRESETS } from '../../constants/presets';
 
 export interface SceneRowProps {
     scene: Scene;
@@ -19,12 +19,14 @@ export interface SceneRowProps {
     onDragStart: (index: number) => void;
     onDragOver: (index: number) => void;
     onDrop: (index: number) => void;
+    generateVeoPrompt: (sceneId: string) => void;
 }
 
 export const SceneRow: React.FC<SceneRowProps> = ({
     scene, index, characters, products, sceneGroups, updateScene, assignSceneToGroup, removeScene,
     generateImage, generateEndFrame, openImageViewer,
-    onDragStart, onDragOver, onDrop
+    onDragStart, onDragOver, onDrop,
+    generateVeoPrompt
 }) => {
     const endFrameInputRef = useRef<HTMLInputElement>(null);
 
@@ -189,14 +191,32 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                 </div>
             </div>
 
-            {/* Veo Prompt */}
-            <div className="md:col-span-3 h-full">
+            <div className="md:col-span-3 h-full space-y-2">
+                <div className="flex items-center justify-between">
+                    <select
+                        value={scene.veoPreset || 'cinematic'}
+                        onChange={(e) => updateScene(scene.id, { veoPreset: e.target.value })}
+                        className="bg-gray-900 border border-blue-900/40 rounded px-2 py-1 text-[10px] text-blue-300 outline-none focus:border-blue-500 transition-all font-bold"
+                        title="Veo Motion Preset"
+                    >
+                        {VEO_PRESETS.map(p => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                    </select>
+                    <button
+                        onClick={() => generateVeoPrompt(scene.id)}
+                        className="text-[10px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+                        title="Tạo lại Veo Prompt"
+                    >
+                        <span>🔄 Gen</span>
+                    </button>
+                </div>
                 <ExpandableTextarea
                     value={scene.veoPrompt}
                     onChange={(val) => updateScene(scene.id, { veoPrompt: val })}
                     placeholder="(00:00-00:05) Prompt cho Google Veo..."
-                    rows={7}
-                    className="w-full h-[160px] bg-gray-900 border border-blue-900/30 rounded p-2 text-[11px] text-blue-200 focus:border-blue-500 font-mono resize-none leading-relaxed"
+                    rows={6}
+                    className="w-full h-[130px] bg-gray-900 border border-blue-900/30 rounded p-2 text-[11px] text-blue-200 focus:border-blue-500 font-mono resize-none leading-relaxed"
                     title="Veo Video Prompt"
                 />
             </div>

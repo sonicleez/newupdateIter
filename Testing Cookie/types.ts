@@ -19,6 +19,8 @@ export interface Character {
 
   isDefault: boolean;
   isAnalyzing?: boolean;
+  isGenerating?: boolean;
+  generatedImage?: string | null;
 
   // Google Labs Workflow Polling (for async Face/Body generation)
   faceWorkflowId?: string;
@@ -81,7 +83,7 @@ export interface Scene {
   videoStatus?: string; // Status: 'active', 'succeeded', 'failed'
   veoPrompt: string; // Prompt tối ưu cho Google Veo
 
-  // Veo 3.1 Mode Selection (NEW)
+  veoPreset?: string; // Preset style for Veo prompt
   veoMode?: 'image-to-video' | 'start-end-frame'; // Manual mode selection
   imageRole?: 'single' | 'start-frame' | 'end-frame'; // Role of generatedImage
   endFrameImage?: string | null; // End frame for Start/End Frame mode
@@ -151,8 +153,6 @@ export interface ProjectState {
   aspectRatio: string; // "16:9" | "9:16" | "1:1" | "4:3" | "3:4"
   resolution: string;
   scriptModel?: string; // Selected Script Gen Model (Gemini 3 series)
-  genyuToken?: string; // Optional: For Genyu.io API
-  recaptchaToken?: string; // Optional: For Google Labs Recaptcha
   scriptLanguage: string; // 'vietnamese' | 'language1' | 'custom'
   customScriptLanguage?: string; // User input for custom language
 

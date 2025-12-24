@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { ProjectState, Scene } from '../types';
+import { ProjectState, Scene, Character, Product } from '../types';
 import { getPresetById } from '../utils/scriptPresets';
 import { buildScriptPrompt, buildGroupRegenerationPrompt } from '../utils/promptBuilder';
 import { generateId } from '../utils/helpers';
@@ -38,6 +38,8 @@ export function useScriptGeneration(
                 : (state.scriptLanguage === 'vietnamese' ? 'Vietnamese' : 'English');
 
             const prompt = buildScriptPrompt(idea, activePreset, activeCharacters, activeProducts, count, effectiveLanguage, state.customScriptInstruction);
+
+            const [modelId, thinkingLevel] = (state.scriptModel || 'gemini-3-flash-preview|high').split('|');
 
             const ai = new GoogleGenAI({ apiKey });
 
@@ -77,40 +79,46 @@ export function useScriptGeneration(
                 sceneProperties.camera_angle = { type: Type.STRING };
             }
 
-            const response = await ai.models.generateContent({
-                model: state.scriptModel || 'gemini-3-flash',
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            detailed_story: { type: Type.STRING },
-                            scene_groups: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        id: { type: Type.STRING },
-                                        name: { type: Type.STRING },
-                                        description: { type: Type.STRING },
-                                        continuity_reference_group_id: { type: Type.STRING }
-                                    },
-                                    required: ["id", "name", "description"]
-                                }
-                            },
-                            scenes: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: sceneProperties,
-                                    required: ["scene_number", "visual_context", "prompt_name", "character_ids", "group_id"]
-                                }
+            const generationConfig: any = {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        detailed_story: { type: Type.STRING },
+                        scene_groups: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    id: { type: Type.STRING },
+                                    name: { type: Type.STRING },
+                                    description: { type: Type.STRING },
+                                    continuity_reference_group_id: { type: Type.STRING }
+                                },
+                                required: ["id", "name", "description"]
                             }
                         },
-                        required: ["detailed_story", "scene_groups", "scenes"]
-                    }
+                        scenes: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: sceneProperties,
+                                required: ["scene_number", "visual_context", "prompt_name", "character_ids", "group_id"]
+                            }
+                        }
+                    },
+                    required: ["detailed_story", "scene_groups", "scenes"]
                 }
+            };
+
+            if (thinkingLevel && thinkingLevel !== 'none') {
+                (generationConfig as any).thinkingConfig = { thinkingLevel };
+            }
+
+            const response = await ai.models.generateContent({
+                model: modelId,
+                contents: prompt,
+                config: generationConfig
             });
 
             const rawText = response.text || '{}';
@@ -129,7 +137,7 @@ export function useScriptGeneration(
         } finally {
             setIsScriptGenerating(false);
         }
-    }, [state, updateStateAndRecord, userApiKey, setApiKeyModalOpen]);
+    }, [state, userApiKey, setApiKeyModalOpen]);
 
     const handleRegenerateGroup = useCallback(async (detailedStory: string, groupToRegen: any, allGroups: any[]) => {
         const rawApiKey = userApiKey || (process.env as any).API_KEY;
@@ -161,13 +169,21 @@ export function useScriptGeneration(
                 groupToRegen.pacing
             );
 
+            const [modelId, thinkingLevel] = (state.scriptModel || 'gemini-3-flash-preview|high').split('|');
             const ai = new GoogleGenAI({ apiKey });
+
+            const generationConfig: any = {
+                responseMimeType: "application/json",
+            };
+
+            if (thinkingLevel && thinkingLevel !== 'none') {
+                (generationConfig as any).thinkingConfig = { thinkingLevel };
+            }
+
             const response = await ai.models.generateContent({
-                model: state.scriptModel || 'gemini-3-flash',
+                model: modelId,
                 contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                }
+                config: generationConfig
             });
 
             const rawText = response.text || '{}';
@@ -183,9 +199,67 @@ export function useScriptGeneration(
         }
     }, [state, userApiKey, setApiKeyModalOpen]);
 
+    const handleSmartMapAssets = useCallback(async (scenes: any[], characters: Character[], products: Product[]) => {
+        const rawApiKey = userApiKey || (process.env as any).API_KEY;
+        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
+        if (!apiKey) return null;
+
+        try {
+            const ai = new GoogleGenAI({ apiKey });
+
+            const mappingPrompt = `
+            **TASK:** Audit this list of scenes and map the correct Character and Product IDs to each scene based on their visual description and dialogue.
+            
+            **AVAILABLE ASSETS:**
+            Characters:
+            ${JSON.stringify(characters.map(c => ({ id: c.id, name: c.name, description: c.description })), null, 2)}
+            
+            Products:
+            ${JSON.stringify(products.map(p => ({ id: p.id, name: p.name, description: p.description })), null, 2)}
+            
+            **SCENES TO MAP:**
+            ${JSON.stringify(scenes.map(s => ({
+                scene_number: s.scene_number,
+                visual_context: s.visual_context,
+                dialogues: s.dialogues,
+                voiceover: s.voiceover
+            })), null, 2)}
+            
+            **RULES:**
+            1. Characters should ONLY be mapped if they are EXPLICITLY mentioned by name or have DIALOGUE in this specific scene.
+            2. DO NOT map characters based on ambiguous pronouns (like "he", "she", "they") unless their visual description is the primary focus of the "visual_context".
+            3. Products should be mapped if they are the primary focus or interactable item in the scene.
+            4. If a scene is environmental or purely landscape, both arrays should be empty.
+            3. Return ONLY a JSON object where keys are "scene_number" and values are objects containing "character_ids" and "product_ids" arrays.
+            
+            **EXAMPLE FORMAT:**
+            {
+              "1": { "character_ids": ["id1", "id2"], "product_ids": ["prod1"] },
+              "2": { "character_ids": ["id1"], "product_ids": [] }
+            }
+            `;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: mappingPrompt,
+                config: {
+                    responseMimeType: "application/json",
+                    thinkingConfig: { thinkingLevel: 'low' }
+                } as any
+            });
+
+            const rawText = response.text || '{}';
+            return JSON.parse(rawText);
+        } catch (error) {
+            console.error("Smart mapping failed:", error);
+            return null;
+        }
+    }, [userApiKey]);
+
     return {
         handleGenerateScript,
         handleRegenerateGroup,
+        handleSmartMapAssets,
         isScriptGenerating
     };
 }

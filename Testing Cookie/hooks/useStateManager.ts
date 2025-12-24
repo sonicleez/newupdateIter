@@ -69,7 +69,6 @@ export function useStateManager() {
         updateStateAndRecord(() => ({
             ...INITIAL_STATE,
             apiKey: state.apiKey,
-            genyuToken: state.genyuToken,
             imageModel: state.imageModel,
         }));
     }, [state.scenes.length, state.characters.length, state.projectName, state.apiKey, state.genyuToken, state.imageModel, updateStateAndRecord]);

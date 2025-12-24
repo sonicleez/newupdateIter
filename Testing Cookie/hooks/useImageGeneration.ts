@@ -29,7 +29,6 @@ export function useImageGeneration(
     const callAIImageAPI = async (
         prompt: string,
         apiKey: string | null,
-        genyuToken: string | null,
         model: string,
         aspectRatio: string,
         parts: any[] = []
@@ -56,56 +55,8 @@ export function useImageGeneration(
             } else {
                 throw new Error("Không nhận được ảnh từ API.");
             }
-        } else if (genyuToken) {
-            let genyuAspect = "IMAGE_ASPECT_RATIO_LANDSCAPE";
-            if (aspectRatio === "9:16" || aspectRatio === "3:4") genyuAspect = "IMAGE_ASPECT_RATIO_PORTRAIT";
-            if (aspectRatio === "1:1") genyuAspect = "IMAGE_ASPECT_RATIO_SQUARE";
-
-            const requestBody: any = {
-                token: genyuToken,
-                prompt: prompt,
-                aspect: genyuAspect,
-            };
-
-            if (stateRef.current.recaptchaToken) {
-                requestBody.recaptchaToken = stateRef.current.recaptchaToken;
-            }
-
-            const response = await fetch('http://localhost:3001/api/proxy/genyu/image', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) {
-                const errJson = await response.json();
-                throw new Error(errJson.error || "Genyu Proxy Failed");
-            }
-
-            const data = await response.json();
-            let imageUrl = null;
-            let mediaId = null;
-
-            if (data.submissionResults?.length > 0) {
-                const submission = data.submissionResults[0]?.submission;
-                const result = submission?.result || data.submissionResults[0]?.result;
-                imageUrl = result?.fifeUrl || result?.media?.fifeUrl;
-                mediaId = result?.mediaGenerationId || result?.media?.mediaGenerationId;
-            } else if (data.media?.length > 0) {
-                const mediaItem = data.media[0];
-                imageUrl = mediaItem.fifeUrl || mediaItem.url;
-                mediaId = mediaItem.id || mediaItem.mediaId || mediaItem.mediaGenerationId;
-            }
-
-            if (!imageUrl) imageUrl = data.url || data.imageUrl || data.data?.url;
-
-            if (imageUrl) {
-                return { imageUrl, mediaId };
-            } else {
-                throw new Error("Cannot find image URL.");
-            }
         } else {
-            throw new Error("Missing Credentials");
+            throw new Error("Missing Credentials (API Key)");
         }
     };
 
@@ -179,9 +130,25 @@ export function useImageGeneration(
                 charPrompt = `STRICT NEGATIVE: NO PEOPLE, NO CHARACTERS, NO HUMANS, NO FACES, NO BODY PARTS. EXPLICITLY REMOVE ALL HUMAN ELEMENTS. FOCUS ONLY ON ${cleanedContext.toUpperCase() || 'ENVIRONMENT'}.`;
             }
 
+            // --- 3.5 EXTRACT CORE ACTION ---
+            // Try to find the action part after "->" or at least pick key verbs
+            let coreAction = '';
+            if (cleanedContext.includes('->')) {
+                const parts = cleanedContext.split('->');
+                coreAction = parts[parts.length - 1].trim();
+            } else {
+                coreAction = cleanedContext; // Fallback
+            }
+            const coreActionPrompt = `CORE ACTION: ${coreAction.toUpperCase()}. (Ensure high dynamic energy, motion blur if applicable, realistic physics).`;
+
             // --- 4. FINAL PROMPT CONSTRUCTION (Priority Order) ---
-            // Shot Scale (Angle) is the ABSOLUTE PRIORITY, putting it at the very start
-            const scaleCmd = anglePrompt ? `AUTHORITATIVE SHOT SCALE: ${anglePrompt.toUpperCase()}.` : 'CINEMATIC WIDE SHOT.';
+            // STYLE & NEGATIVE CONSTRAINTS (Authoritative)
+            const isRealistic = effectiveStylePrompt === 'cinematic-realistic' || effectiveStylePrompt === 'vintage-film';
+            const negativeStyle = isRealistic ? '!!! STRICT NEGATIVE: NO ANIME, NO CARTOON, NO 2D, NO DRAWING, NO ILLUSTRATION, NO PAINTING, NO CGI-LOOK !!!' : '';
+            const authoritativeStyle = `AUTHORITATIVE STYLE: ${styleInstruction.toUpperCase()}. ${negativeStyle}`;
+
+            // Shot Scale (Angle) is the ABSOLUTE PRIORITY for composition
+            const scaleCmd = anglePrompt ? `SHOT SCALE: ${anglePrompt.toUpperCase()}.` : 'CINEMATIC WIDE SHOT.';
 
             // GLOBAL ENVIRONMENT ANCHOR (To prevent drift within group)
             let groupEnvAnchor = '';
@@ -192,7 +159,7 @@ export function useImageGeneration(
                 }
             }
 
-            let finalImagePrompt = `${scaleCmd} ${groupEnvAnchor} ${charPrompt} VISUALS: ${cleanedContext}. STYLE: ${styleInstruction} ${metaTokens}. TECHNICAL: (STRICT CAMERA: ${cinematographyPrompt ? cinematographyPrompt : 'High Quality'}).`.trim();
+            let finalImagePrompt = `${authoritativeStyle} ${scaleCmd} ${coreActionPrompt} ${groupEnvAnchor} ${charPrompt} FULL SCENE VISUALS: ${cleanedContext}. STYLE DETAILS: ${metaTokens}. TECHNICAL: (STRICT CAMERA: ${cinematographyPrompt ? cinematographyPrompt : 'High Quality'}).`.trim();
 
             if (refinementPrompt) {
                 finalImagePrompt = `REFINEMENT: ${refinementPrompt}. BASE PROMPT: ${finalImagePrompt}`;
@@ -202,60 +169,122 @@ export function useImageGeneration(
             const parts: any[] = [];
             let continuityInstruction = '';
 
-            // 5a. ENVIRONMENT CONTINUITY (Prioritize Recent Scene over Moodboard)
+            // 5a. ABSOLUTE SET LOCK (Master Anchor + Continuity Anchor)
             if (sceneToUpdate.groupId) {
                 const groupObj = currentState.sceneGroups?.find(g => g.id === sceneToUpdate.groupId);
 
+                // 1. MASTER ANCHOR: The very first image in the group (The "Set")
+                const firstSceneInGroup = currentState.scenes
+                    .filter(s => s.groupId === sceneToUpdate.groupId && s.generatedImage)
+                    .sort((a, b) => parseInt(a.scene_number) - parseInt(b.scene_number))[0];
+
+                // 2. CONTINUITY ANCHOR: The immediately preceding generated image
                 const precedingSceneInGroup = currentState.scenes
                     .slice(0, currentSceneIndex)
                     .filter(s => s.groupId === sceneToUpdate.groupId && s.generatedImage)
                     .reverse()[0];
 
-                if (precedingSceneInGroup?.generatedImage) {
+                if (firstSceneInGroup?.generatedImage) {
+                    const [header, data] = firstSceneInGroup.generatedImage.split(',');
+                    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                    const refLabel = `SCENE_MASTER_LOCK (Set Anchor)`;
+                    parts.push({ text: `[${refLabel}]: AUTHORITATIVE STRICT BACKGROUND for the physical environment. Match the architecture, props, weather, and lighting EXACTLY. This is a TIGHT SET LOCK. IGNORE the action in this reference, only follow its GEOMETRY and LIGHTING.` });
+                    parts.push({ inlineData: { data, mimeType } });
+                    continuityInstruction += `(STRICT SET LOCK: Follow ${refLabel}) `;
+                }
+
+                if (precedingSceneInGroup?.generatedImage && precedingSceneInGroup.id !== firstSceneInGroup?.id) {
                     const [header, data] = precedingSceneInGroup.generatedImage.split(',');
                     const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                    parts.push({ text: `[ENV REFERENCE (Previous Scene)]: MATCH ENVIRONMENT ONLY. VARY CAMERA ANGLE.` });
+                    const refLabel = `SHOT_CONTINUITY_ANCHOR (Last Shot)`;
+                    parts.push({ text: `[${refLabel}]: Match character clothing, hair state, and immediate action from this previous shot. Note: This shot is a PERSPECTIVE SHIFT from the Master Lock.` });
                     parts.push({ inlineData: { data, mimeType } });
-                    continuityInstruction += `ENV CONTINUITY: Match world-building from previous scene. `;
-                } else if (groupObj?.conceptImage) {
+                    continuityInstruction += `(SHOT CONTINUITY: Follow ${refLabel}) `;
+                } else if (!firstSceneInGroup && groupObj?.conceptImage) {
                     const [header, data] = groupObj.conceptImage.split(',');
                     const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                    parts.push({ text: `[ENV REFERENCE (Moodboard)]: MATCH ENVIRONMENT/LIGHTING ONLY.` });
+                    parts.push({ text: `[MOODBOARD REFERENCE]: Match lighting, color palette, and architectural style.` });
                     parts.push({ inlineData: { data, mimeType } });
-                    continuityInstruction += `MOODBOARD CONTINUITY: Match lighting and world-building basics. `;
+                    continuityInstruction += `(CONCEPT LOCK) `;
+                }
+
+                if (continuityInstruction) {
+                    continuityInstruction = `CAMERA PERSPECTIVE SHIFT: Only change the camera angle. Everything else is LOCKED. ${continuityInstruction}`;
                 }
             }
 
-            // 5b. CHARACTER & PRODUCT REFERENCES (Strict Mapping)
-            selectedChars.forEach((char, idx) => {
-                if (char.masterImage) {
-                    const [header, data] = char.masterImage.split(',');
-                    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                    const refLabel = `CHARACTER REF ${idx + 1}`;
-                    parts.push({ text: `[${refLabel}]: Visual anchor for ${char.name}. Match face, hair, and clothing exactly as seen here. Description: ${char.description}` });
-                    parts.push({ inlineData: { data, mimeType } });
-                    finalImagePrompt += ` (MANDATORY: Follow face and clothing from ${refLabel} for ${char.name.toUpperCase()}).`;
+            // 5b. CHARACTER & PRODUCT REFERENCES (Advanced Mapping for Gemini 3 Pro - 14 References)
+            const isPro = currentState.imageModel === 'gemini-3-pro-image-preview';
+            let referencePreamble = '';
+
+            selectedChars.forEach((char) => {
+                const charRefs: { type: string, img: string }[] = [];
+                if (char.faceImage) charRefs.push({ type: 'FACE ID', img: char.faceImage });
+                if (char.bodyImage) charRefs.push({ type: 'FULL BODY', img: char.bodyImage });
+
+                // Add more views if using Pro
+                if (isPro) {
+                    if (char.sideImage) charRefs.push({ type: 'SIDE VIEW', img: char.sideImage });
+                    if (char.backImage) charRefs.push({ type: 'BACK VIEW', img: char.backImage });
                 }
+
+                // Fallback to master if no specific views exist
+                if (charRefs.length === 0 && char.masterImage) {
+                    charRefs.push({ type: 'PRIMARY', img: char.masterImage });
+                }
+
+                charRefs.forEach(ref => {
+                    const [header, data] = ref.img.split(',');
+                    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                    const refLabel = `MASTER VISUAL: ${char.name.toUpperCase()} ${ref.type}`;
+                    parts.push({ text: `[${refLabel}]: AUTHORITATIVE identity anchor for ${char.name}. Match these exact face features. For clothing and pose, defer to SCENE_LOCK_REFERENCE if present. Description: ${char.description}` });
+                    parts.push({ inlineData: { data, mimeType } });
+                    referencePreamble += `(IDENTITY CONTINUITY: Match ${refLabel}) `;
+                });
             });
 
             const selectedProducts = currentState.products.filter(p => sceneToUpdate.productIds.includes(p.id));
-            selectedProducts.forEach((prod, idx) => {
-                if (prod.masterImage) {
-                    const [header, data] = prod.masterImage.split(',');
-                    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                    const refLabel = `PRODUCT REF ${idx + 1}`;
-                    parts.push({ text: `[${refLabel}]: Visual anchor for ${prod.name}. Match design and details exactly.` });
-                    parts.push({ inlineData: { data, mimeType } });
-                    finalImagePrompt += ` (MANDATORY: Follow ${refLabel} for ${prod.name.toUpperCase()}).`;
+            selectedProducts.forEach((prod) => {
+                const prodRefs: { type: string, img: string }[] = [];
+                if (prod.views?.front) prodRefs.push({ type: 'FRONT VIEW', img: prod.views.front });
+
+                // Add more views if using Pro
+                if (isPro) {
+                    const sideImg = prod.views?.left || prod.views?.right;
+                    if (sideImg) prodRefs.push({ type: 'SIDE VIEW', img: sideImg });
+                    if (prod.views?.back) prodRefs.push({ type: 'BACK VIEW', img: prod.views.back });
+                    if (prod.views?.top) prodRefs.push({ type: 'TOP VIEW', img: prod.views.top });
+                } else {
+                    const sideImg = prod.views?.left || prod.views?.right;
+                    if (sideImg) prodRefs.push({ type: 'SIDE VIEW', img: sideImg });
                 }
+
+                // Fallback to master if no specific views
+                if (prodRefs.length === 0 && prod.masterImage) {
+                    prodRefs.push({ type: 'PRIMARY', img: prod.masterImage });
+                }
+
+                prodRefs.forEach(ref => {
+                    const [header, data] = ref.img.split(',');
+                    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                    const refLabel = `MASTER VISUAL: ${prod.name.toUpperCase()} ${ref.type}`;
+                    parts.push({ text: `[${refLabel}]: AUTHORITATIVE visual anchor for ${prod.name}. Match the design, colors, and branding from this image exactly.` });
+                    parts.push({ inlineData: { data, mimeType } });
+                    referencePreamble += `(PRODUCT CONTINUITY: Match ${refLabel}) `;
+                });
             });
 
-            if (continuityInstruction) finalImagePrompt = `${continuityInstruction} ${finalImagePrompt}`;
+            if (continuityInstruction) {
+                finalImagePrompt = `${continuityInstruction.trim()} ${finalImagePrompt}`;
+            }
+
+            if (referencePreamble) {
+                finalImagePrompt = `${referencePreamble.trim()} ${finalImagePrompt}`;
+            }
 
             const { imageUrl, mediaId } = await callAIImageAPI(
                 finalImagePrompt,
                 userApiKey,
-                currentState.genyuToken || null,
                 currentState.imageModel || 'gemini-3-pro-image-preview',
                 currentState.aspectRatio,
                 isHighRes ? parts : []
@@ -284,9 +313,8 @@ export function useImageGeneration(
     const generateGroupConcept = useCallback(async (groupName: string, groupDescription: string, styleOverride?: string, customStyleOverride?: string) => {
         const currentState = stateRef.current;
         const apiKey = userApiKey || (process.env as any).API_KEY;
-        const genyuToken = currentState.genyuToken;
 
-        if (!apiKey && !genyuToken) {
+        if (!apiKey) {
             setApiKeyModalOpen(true);
             return null;
         }
@@ -311,7 +339,6 @@ export function useImageGeneration(
             const { imageUrl } = await callAIImageAPI(
                 conceptPrompt,
                 userApiKey,
-                genyuToken || null,
                 currentState.imageModel || 'gemini-3-pro-image-preview',
                 currentState.aspectRatio
             );

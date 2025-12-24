@@ -9,27 +9,38 @@ export interface CharacterGeneratorModalProps {
     onClose: () => void;
     onSave: (image: string) => void;
     apiKey: string;
-    genyuToken?: string;
     model: string;
     charId: string | null;
     updateCharacter: (id: string, updates: Partial<Character>) => void;
+    generateCharacterImage: (id: string, params: any) => Promise<void>;
+    characters: Character[];
 }
-
-export const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = ({ isOpen, onClose, onSave, apiKey, genyuToken, model, charId, updateCharacter }) => {
+export const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = ({
+    isOpen,
+    onClose,
+    onSave,
+    apiKey,
+    model,
+    charId,
+    updateCharacter,
+    generateCharacterImage,
+    characters
+}) => {
     const [prompt, setPrompt] = useState('');
     const [style, setStyle] = useState('pixar');
     const [resolution, setResolution] = useState('1K');
     const [aspectRatio, setAspectRatio] = useState('9:16');
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [generatedImage, setGeneratedImage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [selectedModel, setSelectedModel] = useState(model);
     const [customStyle, setCustomStyle] = useState('');
 
+    const character = charId ? characters.find(c => c.id === charId) : null;
+    const isGenerating = character?.isGenerating || false;
+    const generatedImage = character?.generatedImage || null;
+
     useEffect(() => {
         if (isOpen) {
             setPrompt('');
-            setGeneratedImage(null);
             setError(null);
             setSelectedModel(model);
             setResolution('1K');
@@ -39,141 +50,22 @@ export const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = (
     }, [isOpen, model]);
 
     const handleGenerate = async () => {
-        if (!prompt.trim()) return;
+        if (!prompt.trim() || !charId) return;
 
-        if (!apiKey && !genyuToken) {
-            setError("Vui lòng nhập API Key (Gemini) hoặc Token (Genyu).");
+        if (!apiKey) {
+            setError("Vui lòng nhập API Key (Gemini).");
             return;
         }
 
-        setIsGenerating(true);
         setError(null);
-
-        try {
-            const styleConfig = CHARACTER_STYLES.find(s => s.value === style);
-            const stylePrompt = style === 'custom' ? customStyle : (styleConfig?.prompt || styleConfig?.label || style);
-
-            const fullPrompt = `
-CHARACTER DESIGN TASK:
-Create a professional character sheet with the following specifications:
-
-${stylePrompt}
-
-CHARACTER DESCRIPTION:
-${prompt}
-
-MANDATORY REQUIREMENTS:
-- Background: Solid neutral background (White/Dark Grey) for easy masking.
-- Framing: Full body, clear silhouette.
-- Pose: Standard A-Pose or T-Pose.
-- Lighting: Studio softbox lighting, rim light for separation, high contrast.
-- Quality: 8K, Ultra-Sharp focus, Hyper-detailed texture, Ray-tracing style.
-- Consistency: Unified style, no artifacts, clean lines.
-
-CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate from the specified aesthetic.
-            `.trim();
-
-            if (!apiKey && genyuToken) {
-                // >>> ROUTE 1: GENYU PROXY <<<
-                console.log("Using Genyu Proxy for Character...");
-
-                let genyuAspect = "IMAGE_ASPECT_RATIO_PORTRAIT";
-                if (aspectRatio === "16:9") genyuAspect = "IMAGE_ASPECT_RATIO_LANDSCAPE";
-                if (aspectRatio === "1:1") genyuAspect = "IMAGE_ASPECT_RATIO_SQUARE";
-                if (aspectRatio === "4:3") genyuAspect = "IMAGE_ASPECT_RATIO_LANDSCAPE";
-
-                const response = await fetch('http://localhost:3001/api/proxy/genyu/image', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token: genyuToken,
-                        prompt: fullPrompt,
-                        aspect: genyuAspect,
-                        style: styleConfig?.label || style
-                    })
-                });
-
-                if (!response.ok) {
-                    const errJson = await response.json();
-                    throw new Error(errJson.error || "Genyu Proxy Failed");
-                }
-
-                const data = await response.json();
-                console.log("Genyu Char Response:", data);
-
-                let genyuImage = null;
-                if (data.submissionResults && data.submissionResults.length > 0) {
-                    const submission = data.submissionResults[0]?.submission;
-                    const result = submission?.result || data.submissionResults[0]?.result;
-                    genyuImage = result?.fifeUrl || result?.media?.fifeUrl;
-                } else if (data.media && data.media.length > 0) {
-                    const mediaItem = data.media[0];
-                    genyuImage = mediaItem.fifeUrl || mediaItem.url;
-
-                    if (!genyuImage && mediaItem.image) {
-                        const img = mediaItem.image;
-                        genyuImage = img.fifeUrl || img.url;
-
-                        if (!genyuImage && img.generatedImage) {
-                            const genImg = img.generatedImage;
-                            genyuImage = genImg.fifeUrl || genImg.url || (typeof genImg === 'string' ? genImg : null);
-                        }
-
-                        if (!genyuImage && typeof img === 'string') {
-                            genyuImage = img;
-                        }
-                    }
-                }
-
-                if (!genyuImage) {
-                    genyuImage = data.data?.images?.[0]?.url || data.data?.url || data.url || data.imageUrl;
-                }
-
-                if (genyuImage) {
-                    setGeneratedImage(genyuImage);
-                } else {
-                    let errorMsg = `Cannot find image URL. Keys: ${Object.keys(data).join(', ')}`;
-                    setError(errorMsg);
-                    alert(`❌ ${errorMsg}`);
-                    throw new Error(errorMsg);
-                }
-
-            } else {
-                // >>> ROUTE 2: GEMINI DIRECT <<<
-                const trimmedKey = apiKey?.trim();
-                const ai = new GoogleGenAI({ apiKey: trimmedKey });
-                const response = await ai.models.generateContent({
-                    model: selectedModel,
-                    contents: [{ parts: [{ text: fullPrompt }] }],
-                    config: {
-                        imageConfig: {
-                            aspectRatio: aspectRatio
-                        }
-                    }
-                });
-
-                const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                if (imagePart?.inlineData) {
-                    const base64ImageBytes = imagePart.inlineData.data;
-                    const imageUrl = `data:${imagePart.inlineData.mimeType};base64,${base64ImageBytes}`;
-                    setGeneratedImage(imageUrl);
-                } else {
-                    setError("AI không trả về ảnh. Thử lại.");
-                    alert('❌ AI không trả về ảnh. Vui lòng thử lại.');
-                }
-            }
-
-        } catch (err: any) {
-            console.error(err);
-            const errorMsg = err.message || "Lỗi tạo ảnh.";
-            setError(errorMsg);
-            alert(`❌ ${errorMsg}`);
-        } finally {
-            setIsGenerating(false);
-            if (charId) {
-                updateCharacter(charId, { isAnalyzing: false });
-            }
-        }
+        await generateCharacterImage(charId, {
+            prompt,
+            style,
+            customStyle,
+            aspectRatio,
+            resolution,
+            model: selectedModel
+        });
     };
 
     if (!isOpen) return null;
@@ -260,9 +152,6 @@ CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate fr
                         </div>
                     </div>
                 </div>
-                {resolution !== '1K' && selectedModel === 'gemini-2.5-flash-image' && (
-                    <p className="text-[10px] text-yellow-400 mt-1">* 2K/4K yêu cầu Nano Banana Pro</p>
-                )}
 
                 <div className="w-full aspect-square bg-gray-950 rounded-lg border-2 border-dashed border-gray-700 flex items-center justify-center overflow-hidden relative">
                     {isGenerating ? (
@@ -284,12 +173,9 @@ CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate fr
                         <button
                             onClick={() => {
                                 if (!prompt.trim()) return;
-                                if (!apiKey && !genyuToken) {
-                                    setError("Vui lòng nhập API Key (Gemini) hoặc Token (Genyu).");
+                                if (!apiKey) {
+                                    setError("Vui lòng nhập API Key (Gemini).");
                                     return;
-                                }
-                                if (charId) {
-                                    updateCharacter(charId, { isAnalyzing: true });
                                 }
                                 handleGenerate();
                             }}
@@ -310,7 +196,7 @@ CRITICAL: The style must be STRICTLY enforced. Do not blend styles or deviate fr
                                 onClick={() => {
                                     onSave(generatedImage);
                                     onClose();
-                                    setGeneratedImage(null);
+                                    updateCharacter(charId!, { generatedImage: null });
                                 }}
                                 className={`flex-[2] py-3 font-bold text-white rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} transition-all shadow-lg transform hover:scale-105`}
                             >

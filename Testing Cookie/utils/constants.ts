@@ -46,7 +46,6 @@ export const GLOBAL_STYLES = [
 
 // --- IMAGE MODELS ---
 export const IMAGE_MODELS = [
-    { value: 'gemini-2.5-flash-image', label: 'Google Nano Banana (Fast)' },
     { value: 'gemini-3-pro-image-preview', label: 'Google Nano Banana Pro (High Quality)' },
 ];
 
@@ -76,7 +75,7 @@ export const generateId = () => `${Date.now()}_${Math.random().toString(36).subs
 export const createInitialState = (): ProjectState => ({
     projectName: '',
     stylePrompt: 'cinematic-realistic',
-    imageModel: 'gemini-2.5-flash-image',
+    imageModel: 'gemini-3-pro-image-preview',
     aspectRatio: '16:9',
     genyuToken: '',
     resolution: '1K',

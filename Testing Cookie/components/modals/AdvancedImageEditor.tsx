@@ -12,7 +12,6 @@ interface AdvancedImageEditorProps {
     sourceImage: string;
     onSave: (editedImage: string, history: { id: string, image: string, prompt: string }[], viewKey?: string) => void;
     apiKey: string;
-    genyuToken?: string;
     initialHistory?: { id: string; image: string; prompt: string }[];
     character?: Character;
     product?: Product;
@@ -27,7 +26,6 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
     sourceImage,
     onSave,
     apiKey,
-    genyuToken: genyuTokenProp,
     initialHistory,
     character,
     product,
@@ -75,13 +73,7 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
     // Dimensions for the canvas
     const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
     const containerRef = useRef<HTMLDivElement>(null);
-    const [genyuToken, setGenyuToken] = useState<string | null>(null);
 
-    // Load Token from localStorage
-    useEffect(() => {
-        const t = localStorage.getItem('genyuToken');
-        if (t) setGenyuToken(t);
-    }, []);
 
     // Initial Load & CORS Handling
     useEffect(() => {
@@ -1036,53 +1028,25 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                 </div>
 
                 {/* Bottom Bar: Prompt & Actions */}
-                <div className="p-6 bg-[#1a1a1a] border-t border-gray-800 flex items-end justify-center gap-4 z-40">
-                    <div className="max-w-4xl w-full flex gap-3">
-                        <div className="flex-1 relative group">
-                            <textarea
-                                value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
-                                rows={1}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        handleGenerate();
-                                    }
-                                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-                                        e.preventDefault();
-                                        if (e.shiftKey) {
-                                            handlePromptRedo();
-                                        } else {
-                                            handlePromptUndo();
-                                        }
-                                    }
-                                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
-                                        e.preventDefault();
-                                        handlePromptRedo();
-                                    }
-                                }}
-                                placeholder={
-                                    activeTab === 'layers' && layerImage ? "Describe how to composite the layer..." :
-                                        activeTab === 'layers' && styleRefImage ? "Describe style adjustments..." :
-                                            "Describe what to change (e.g., 'Change hair to blue', 'Add a cat')..."
-                                }
-                                className="w-full bg-[#0d0d0d] border border-gray-700 rounded-xl py-4 pl-6 pr-6 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-inner text-base min-h-[60px] max-h-[150px] transition-all resize-none"
-                                style={{ height: 'auto' }}
-                                onInput={(e) => {
-                                    const target = e.target as HTMLTextAreaElement;
-                                    target.style.height = 'auto';
-                                    target.style.height = `${Math.min(target.scrollHeight, 150)}px`;
-                                }}
-                            />
-                            <div className="absolute right-3 bottom-3 flex items-center gap-3">
-                                <span className={`text-[10px] font-mono transition-opacity ${prompt.length > 0 ? 'opacity-40' : 'opacity-0'} mr-2`}>
-                                    {prompt.length} chars
+                <div className="p-6 bg-[#1a1a1a] border-t border-gray-800 flex justify-center z-40">
+                    <div className="max-w-5xl w-full flex flex-col gap-3">
+                        {/* Tools Header */}
+                        <div className="flex items-center justify-between px-1">
+                            <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-3 bg-purple-500 rounded-full shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                    Vẽ hoặc sửa ảnh bằng AI
                                 </span>
-                                <div className="flex items-center gap-1 bg-gray-900/80 backdrop-blur-sm p-1 rounded-lg border border-gray-800">
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className={`text-[10px] font-mono transition-opacity ${prompt.length > 0 ? 'opacity-40' : 'opacity-0'}`}>
+                                    {prompt.length} characters
+                                </span>
+                                <div className="flex items-center gap-1 bg-gray-900/80 backdrop-blur-sm p-1 rounded-lg border border-gray-800 shadow-sm">
                                     <button
                                         onClick={handlePromptUndo}
                                         disabled={promptIndex <= 0}
-                                        className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-all disabled:opacity-20"
+                                        className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-all disabled:opacity-20"
                                         title="Undo (Ctrl+Z)"
                                     >
                                         <Undo size={14} />
@@ -1091,7 +1055,7 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                                     <button
                                         onClick={handlePromptRedo}
                                         disabled={promptIndex >= promptHistory.length - 1}
-                                        className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-all disabled:opacity-20"
+                                        className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-all disabled:opacity-20"
                                         title="Redo (Ctrl+Y)"
                                     >
                                         <Redo size={14} />
@@ -1100,29 +1064,70 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-3 sm:flex-row">
-                            <button
-                                onClick={handleGenerate}
-                                disabled={isGenerating || !prompt.trim()}
-                                className="h-[60px] px-8 bg-gradient-to-br from-purple-600 to-blue-700 hover:from-purple-500 hover:to-blue-600 text-white font-black rounded-xl shadow-[0_4px_15px_rgba(168,85,247,0.3)] transform transition-all active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center space-x-3 group/gen min-w-[160px]"
-                            >
-                                {isGenerating ? (
-                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/20 border-t-white"></div>
-                                ) : (
-                                    <>
-                                        <Wand2 size={20} className="group-hover/gen:rotate-12 transition-transform" />
-                                        <span className="uppercase tracking-widest text-sm">Generate</span>
-                                    </>
-                                )}
-                            </button>
+                        {/* Input Row */}
+                        <div className="flex items-end gap-3">
+                            <div className="flex-1 relative group">
+                                <textarea
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
+                                    rows={1}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleGenerate();
+                                        }
+                                        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                                            e.preventDefault();
+                                            if (e.shiftKey) {
+                                                handlePromptRedo();
+                                            } else {
+                                                handlePromptUndo();
+                                            }
+                                        }
+                                        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                                            e.preventDefault();
+                                            handlePromptRedo();
+                                        }
+                                    }}
+                                    placeholder={
+                                        activeTab === 'layers' && layerImage ? "Describe how to composite the layer..." :
+                                            activeTab === 'layers' && styleRefImage ? "Describe style adjustments..." :
+                                                "Describe what to change (e.g., 'Change hair to blue', 'Add a cat')..."
+                                    }
+                                    className="w-full bg-[#0d0d0d] border border-gray-700/50 rounded-2xl py-4 pl-6 pr-6 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/10 shadow-inner text-base min-h-[60px] max-h-[160px] transition-all resize-none overflow-hidden"
+                                    style={{ height: 'auto' }}
+                                    onInput={(e) => {
+                                        const target = e.target as HTMLTextAreaElement;
+                                        target.style.height = 'auto';
+                                        target.style.height = `${Math.min(target.scrollHeight, 160)}px`;
+                                    }}
+                                />
+                            </div>
 
-                            <button
-                                onClick={() => { onSave(currentImage, history, currentView); onClose(); }}
-                                className="h-[60px] px-8 bg-[#f5f5f5] hover:bg-white text-black font-black rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center space-x-3 group/save border border-gray-200 min-w-[120px]"
-                            >
-                                <Download size={20} className="group-hover/save:-translate-y-0.5 transition-transform" />
-                                <span className="uppercase tracking-widest text-sm">Save</span>
-                            </button>
+                            <div className="flex gap-3 h-[60px]">
+                                <button
+                                    onClick={handleGenerate}
+                                    disabled={isGenerating || !prompt.trim()}
+                                    className="h-full px-8 bg-gradient-to-br from-purple-600 via-purple-700 to-blue-800 hover:from-purple-500 hover:to-blue-700 text-white font-black rounded-2xl shadow-lg shadow-purple-900/20 transform transition-all active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center space-x-3 group/gen min-w-[180px]"
+                                >
+                                    {isGenerating ? (
+                                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/20 border-t-white"></div>
+                                    ) : (
+                                        <>
+                                            <Wand2 size={20} className="group-hover/gen:rotate-12 transition-transform" />
+                                            <span className="uppercase tracking-widest text-sm">Generate</span>
+                                        </>
+                                    )}
+                                </button>
+
+                                <button
+                                    onClick={() => { onSave(currentImage, history, currentView); onClose(); }}
+                                    className="h-full px-8 bg-white hover:bg-gray-50 text-black font-black rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center space-x-3 group/save border border-gray-200 min-w-[140px]"
+                                >
+                                    <Download size={20} className="group-hover/save:translate-y-0.5 transition-transform" />
+                                    <span className="uppercase tracking-widest text-sm text-black">Save</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

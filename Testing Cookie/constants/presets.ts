@@ -8,17 +8,17 @@ export const GLOBAL_STYLES = [
     {
         value: 'cinematic-realistic',
         label: 'Cinematic Realistic (Phim điện ảnh)',
-        prompt: 'Cinematic movie screengrab, shot on Arri Alexa, photorealistic, 8k, highly detailed texture, dramatic lighting, shallow depth of field, color graded, film grain, masterpiece, award winning, trending on artstation, aesthetics, highly detailed, sharp focus.'
+        prompt: 'LIVE-ACTION MOVIE SCREENGRAB, shot on Arri Alexa, 35mm film, hyper-realistic, photorealistic, 8k, highly detailed skin texture, pores, dramatic natural lighting, shallow depth of field, color graded, film grain, masterpiece. NEGATIVE: (STRICT NO ANIME, NO CARTOON, NO 2D, NO DRAWING, NO ILLUSTRATION, NO PAINTING).'
     },
     {
         value: '3d-pixar',
         label: '3D Animation (Pixar/Disney)',
-        prompt: '3D render style, Pixar animation style, octane render, unreal engine 5, cute, vibrant lighting, soft smooth textures, expressive, volumetric lighting, masterpiece, redshift, disney pixar style, high fidelity, 8k.'
+        prompt: '3D RENDER STYLE, Pixar animation style, octane render, unreal engine 5, cute, vibrant lighting, soft smooth textures, expressive, volumetric lighting, masterpiece, high fidelity, 8k. NEGATIVE: (STRICT NO PHOTOREALISM, NO REAL-LIFE, NO 2D, NO SKETCH).'
     },
     {
         value: 'anime-makoto',
         label: 'Anime (Makoto Shinkai Style)',
-        prompt: 'Anime style, Makoto Shinkai art style, high quality 2D animation, beautiful sky, detailed background, vibrant colors, emotional atmosphere, cell shading, masterpiece, best quality, official art, key visual, 4k, detailed illustration.'
+        prompt: 'ANIME STYLE, Makoto Shinkai art style, high quality 2D animation, beautiful sky, detailed background, vibrant colors, emotional atmosphere, cell shading, masterpiece, official art, 4k. NEGATIVE: (STRICT NO PHOTOREALISM, NO 3D RENDER, NO REAL-LIFE).'
     },
     {
         value: 'vintage-film',
@@ -108,6 +108,45 @@ export const VEO_MODES = [
     { value: 'start-end-frame', label: '🎞️ Start/End Frame', hint: 'Hai ảnh làm điểm đầu & cuối' },
 ];
 
+export const VEO_PRESETS = [
+    {
+        value: 'cinematic-master',
+        label: '🎬 Cinematic Master (Single Shot)',
+        prompt: 'Generate a high-end SINGLE-SHOT sequence. Follow the formula: [00:00-00:06] [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]. Professional Arri Alexa look, steady motion.',
+        keywords: 'steady cam, Arri Alexa, balanced composition, 6-second single shot'
+    },
+    {
+        value: 'storytelling-multi',
+        label: '🗣️ Storytelling (Multi-Shot Timestamp)',
+        prompt: 'Generate a MULTI-SHOT sequence with 2-second segments. Use timestamps [00:00-00:02], [00:02-00:04], [00:04-00:06]. Focus on character interaction and dialogue sync. Each segment should have its own Camera/Shot type.',
+        keywords: 'cross-cutting, dialogue exchange, multiple angles, synchronized sound'
+    },
+    {
+        value: 'action-sequence',
+        label: '⚡ Action Sequence (Multi-Shot)',
+        prompt: 'STRICT REQUIREMENT: Generate 4 distinct shots using timestamps [00:00-00:02], [00:02-00:04], [00:04-00:06], [00:06-00:08]. Use high-energy camera movements (Arc, Dolly, Crane) in EACH segment to create kinetic motion blur.',
+        keywords: 'rapid cuts, kinetic energy, motion blur, 4-shot sequence, professional editing'
+    },
+    {
+        value: 'mood-atmosphere',
+        label: '☁️ Mood & Atmosphere',
+        prompt: 'Single shot focusing on lighting and emotion. Formula: [00:00-00:06] [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]. Use Emotion and SFX tags heavily.',
+        keywords: 'Emotion: Melancholy, volumetric lighting, atmospheric fog, slow movement'
+    },
+    {
+        value: 'macro-detail',
+        label: '🔭 Macro / Detail',
+        prompt: 'Extreme close-up single shot. Focus on textures and micro-movements using macro lens and shallow depth of field.',
+        keywords: 'Macro lens, extreme close-up, shallow depth of field, sharp textures'
+    },
+    {
+        value: 'epic-establishment',
+        label: '🚁 Epic Establishment',
+        prompt: 'Wide aerial or high-angle crane shot. Single long take (6-8 seconds) revealing the vast scale of the environment.',
+        keywords: 'Aerial view, crane shot, wide-angle lens, epic scale, reveal'
+    }
+];
+
 export const IMAGE_ROLES = [
     { value: 'single', label: '📷 Single Image', color: 'gray' },
     { value: 'start-frame', label: '🟢 Start Frame', color: 'green' },
@@ -115,15 +154,17 @@ export const IMAGE_ROLES = [
 ];
 
 export const IMAGE_MODELS = [
-    { value: 'gemini-2.5-flash-image', label: 'Google Nano Banana (Fast)' },
     { value: 'gemini-3-pro-image-preview', label: 'Google Nano Banana Pro (High Quality)' },
 ];
 
 export const SCRIPT_MODELS = [
-    { value: 'gemini-3-pro-high', label: 'Gemini 3 Pro (High)' },
-    { value: 'gemini-3-pro-low', label: 'Gemini 3 Pro (Low)' },
-    { value: 'gemini-3-flash', label: 'Gemini 3 Flash (New)' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Default)' },
+    { value: 'gemini-3-pro-preview|high', label: 'Gemini 3 Pro (High Reasoning)' },
+    { value: 'gemini-3-pro-preview|low', label: 'Gemini 3 Pro (Low Latency)' },
+    { value: 'gemini-3-flash-preview|high', label: 'Gemini 3 Flash (Smart)' },
+    { value: 'gemini-3-flash-preview|medium', label: 'Gemini 3 Flash (Balanced)' },
+    { value: 'gemini-3-flash-preview|low', label: 'Gemini 3 Flash (Fast)' },
+    { value: 'gemini-3-flash-preview|minimal', label: 'Gemini 3 Flash (Minimal Thinking)' },
+    { value: 'gemini-2.5-flash|none', label: 'Gemini 2.5 Flash (Legacy)' },
 ];
 
 export const ASPECT_RATIOS = [
@@ -138,32 +179,32 @@ export const CHARACTER_STYLES = [
     {
         value: 'pixar',
         label: '3D Animation (Pixar/Disney Style)',
-        prompt: 'STRICT STYLE: 3D rendered character in Pixar/Disney animation style. MUST have: soft rounded features, smooth gradient shading, large expressive eyes, glossy reflections. ENVIRONMENTAL CONSISTENCY: Match the background atmosphere, soft ambient lighting (rim lights), and lighting temperature from the "Ảnh Gốc". No hard edges, clean subsurface scattering.'
+        prompt: 'STRICT STYLE: High-end 3D character render (Pixar/Disney style). TECHNICAL TOKENS: [Volumetric Subsurface Scattering, PBR Materials, Ray-traced Reflections, Octane Render quality, 8k resolution]. SIGNATURE: Soft rounded features, highly expressive eyes with glossy iris reflections, realistic fabric textures on stylized clothing. BACKGROUND: Pure Solid White Studio Background (RGB 255, 255, 255). LIGHTING: Global illumination, soft rim lights for 3D depth.'
     },
     {
         value: 'anime',
         label: 'Anime / Manga',
-        prompt: 'STRICT STYLE: Japanese anime/manga illustration. MUST have: large detailed eyes, sharp clean lineart, cel-shaded coloring with minimal gradients. ENVIRONMENTAL CONSISTENCY: Replicate the background color palette, sky/lighting conditions, and overall atmospheric mood from the "Ảnh Gốc".'
+        prompt: 'STRICT STYLE: Masterpiece Japanese Anime illustration. TECHNICAL TOKENS: [Sharp Vector Lineart, Dynamic Cell Shading, Cinematic Atmospheric Perspective, High-detail IRIS lighting]. SIGNATURE: Crisp edges, vibrant hair highlights, clean gradients, expressive facial topology. BACKGROUND: Pure Solid White Studio Background (RGB 255, 255, 255). LIGHTING: Clean studio key lighting.'
     },
     {
         value: 'cinematic',
         label: 'Realistic Cinematic',
-        prompt: 'STRICT STYLE: Photorealistic cinematic rendering. MUST have: realistic skin texture, accurate anatomy, natural hair. ENVIRONMENTAL CONSISTENCY: Strictly match the lighting (key/fill/rim light), color grading (LUT/tint), field depth (bokeh), and background location environment seen in the "Ảnh Gốc".'
+        prompt: 'STRICT STYLE: Hyper-realistic cinematic portrait. META TOKENS: [Ultra-detailed skin pores, Hyper-fine hair strands, Subsurface Scattering (SSS) on skin, Natural skin variations/freckles, Micro-displacement textures, NO-PLASTIC-LOOK]. SIGNATURE: Biological realism, accurate anatomical light occlusion, realistic eye moisture. BACKGROUND: Pure Solid White Studio Background (RGB 255, 255, 255). LIGHTING: High-end professional studio lighting (Key, Fill, Rim) for maximal skin texture definition.'
     },
     {
         value: 'comic',
         label: 'American Comic Book',
-        prompt: 'STRICT STYLE: American comic book illustration. MUST have: bold black ink outlines, strong contrast shadows, halftone dots. ENVIRONMENTAL CONSISTENCY: Use the same background color scheme and dramatic lighting contrast provided in the "Ảnh Gốc".'
+        prompt: 'STRICT STYLE: Modern American Comic Book art. TECHNICAL TOKENS: [Hand-drawn Hatching, Ben-Day dot shading, High-contrast Inkwork, dynamic silhouette]. SIGNATURE: Bold outlines, graphic shadows, vibrant primary color palettes, dramatic composition. BACKGROUND: Pure Solid White Studio Background (RGB 255, 255, 255).'
     },
     {
         value: 'fantasy',
         label: 'Digital Fantasy Art',
-        prompt: 'STRICT STYLE: Epic fantasy digital painting. MUST have: painterly brush strokes, rich atmospheric lighting, detailed costumes. ENVIRONMENTAL CONSISTENCY: Preserve the magical glows, atmospheric fog, and background architecture/landscape style from the "Ảnh Gốc".'
+        prompt: 'STRICT STYLE: High-fantasy digital concept art. TECHNICAL TOKENS: [Intricate armor engravings, ethereal magical glow, layered painterly textures, sharp rim highlights]. SIGNATURE: Majestic presence, highly detailed costume materials (leather, steel, silk), atmospheric particles. BACKGROUND: Pure Solid White Studio Background (RGB 255, 255, 255).'
     },
     {
         value: 'clay',
         label: 'Claymation / Stop Motion',
-        prompt: 'STRICT STYLE: Claymation/stop-motion puppet style. MUST have: fingerprint textures on clay, handmade appearance, matte finish. ENVIRONMENTAL CONSISTENCY: Match the physical set lighting, studio shadows, and miniature background style from the "Ảnh Gốc".'
+        prompt: 'STRICT STYLE: Professional Claymation puppet style. TECHNICAL TOKENS: [Visible fingerprint textures, Hand-kneaded clay marks, Matte organic finish, Soft-shadow occlusion]. SIGNATURE: Tactile physical appearance, handcrafted imperfections, vibrant colored clay. BACKGROUND: Pure Solid White Studio Background (RGB 255, 255, 255). LIGHTING: Soft studio setup.'
     },
 ];
 
@@ -172,10 +213,9 @@ export const generateId = () => `id_${Date.now()}_${Math.random().toString(36).s
 export const INITIAL_STATE: ProjectState = {
     projectName: '',
     stylePrompt: 'cinematic-realistic',
-    imageModel: 'gemini-2.5-flash-image',
-    scriptModel: 'gemini-2.5-flash',
+    imageModel: 'gemini-3-pro-image-preview',
+    scriptModel: 'gemini-3-pro-preview|high',
     aspectRatio: '16:9',
-    genyuToken: '',
     resolution: '1K',
     scriptLanguage: 'vietnamese',
     activeScriptPreset: 'film-animation',

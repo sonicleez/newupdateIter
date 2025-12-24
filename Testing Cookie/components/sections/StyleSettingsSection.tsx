@@ -114,7 +114,7 @@ export const StyleSettingsSection: React.FC<StyleSettingsSectionProps> = ({
                                 onChange={(e) => onResolutionChange(e.target.value)}
                                 className="w-full bg-gray-700 text-white px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 border border-gray-600 appearance-none"
                             >
-                                <option value="1K">1K (Standard) - Genyu/Gemini</option>
+                                <option value="1K">1K (Standard) - Gemini</option>
                                 <option value="2K">2K (High Res) - Google Pro Only</option>
                                 <option value="4K">4K (Ultra) - Google Pro Only</option>
                             </select>

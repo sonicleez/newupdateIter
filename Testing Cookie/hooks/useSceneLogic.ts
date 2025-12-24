@@ -97,11 +97,19 @@ export function useSceneLogic(
     }, [updateStateAndRecord]);
 
     const deleteGroup = useCallback((id: string) => {
-        updateStateAndRecord(s => ({
-            ...s,
-            sceneGroups: (s.sceneGroups || []).filter(g => g.id !== id),
-            scenes: s.scenes.map(sc => sc.groupId === id ? { ...sc, groupId: undefined } : sc)
-        }));
+        if (!id) return;
+        updateStateAndRecord(s => {
+            const currentGroups = s.sceneGroups || [];
+            const newGroups = currentGroups.filter(g => g.id !== id);
+            const newScenes = s.scenes.map(sc =>
+                sc.groupId === id ? { ...sc, groupId: undefined } : sc
+            );
+            return {
+                ...s,
+                sceneGroups: newGroups,
+                scenes: newScenes
+            };
+        });
     }, [updateStateAndRecord]);
 
     const assignSceneToGroup = useCallback((sceneId: string, groupId: string | undefined) => {

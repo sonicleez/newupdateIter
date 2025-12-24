@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { PRIMARY_GRADIENT } from '../../constants/presets';
 
 interface TextExpanderModalProps {
@@ -24,7 +25,7 @@ export const TextExpanderModal: React.FC<TextExpanderModalProps> = ({ isOpen, on
 
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={onClose}>
             <div className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-4 border-b border-gray-700">
@@ -51,7 +52,8 @@ export const TextExpanderModal: React.FC<TextExpanderModalProps> = ({ isOpen, on
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -66,6 +68,16 @@ export interface ExpandableTextareaProps {
 
 export const ExpandableTextarea: React.FC<ExpandableTextareaProps> = ({ value, onChange, placeholder, rows = 3, className = '', title = 'Chỉnh sửa nội dung' }) => {
     const [isExpanded, setIsExpanded] = useState(false);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const prevExpanded = useRef(isExpanded);
+
+    useEffect(() => {
+        if (prevExpanded.current && !isExpanded) {
+            // Modal just closed, return focus to the trigger button
+            triggerRef.current?.focus();
+        }
+        prevExpanded.current = isExpanded;
+    }, [isExpanded]);
 
     return (
         <>
@@ -78,6 +90,7 @@ export const ExpandableTextarea: React.FC<ExpandableTextareaProps> = ({ value, o
                     className={className}
                 />
                 <button
+                    ref={triggerRef}
                     onClick={() => setIsExpanded(true)}
                     className="absolute top-1 right-1 w-5 h-5 bg-gray-700/80 hover:bg-brand-orange text-gray-400 hover:text-white rounded flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all"
                     title="Mở rộng để chỉnh sửa"
