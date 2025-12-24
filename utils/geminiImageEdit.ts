@@ -16,6 +16,21 @@ export interface GeneratedImage {
     mimeType: string;
 }
 
+// Helper function to convert URL to base64
+const urlToBase64 = async (url: string): Promise<{ data: string; mimeType: string }> => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Failed to fetch image from URL');
+    const blob = await response.blob();
+    const mimeType = blob.type || 'image/jpeg';
+    const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+    return { data: base64, mimeType };
+};
+
 export const editImageWithMask = async (
     apiKey: string,
     base64ImageData: string,
@@ -27,9 +42,25 @@ export const editImageWithMask = async (
 ): Promise<GeneratedImage> => {
     try {
         const ai = getAi(apiKey);
-        console.log("Sending to Gemini - Image Length:", base64ImageData.length, "Mask Length:", base64MaskData.length);
 
-        const cleanImage = base64ImageData.includes(',') ? base64ImageData.split(',')[1] : base64ImageData;
+        // Handle URL images by converting to Base64
+        let imageData = base64ImageData;
+        let imageMimeType = mimeType;
+
+        if (base64ImageData && base64ImageData.startsWith('http')) {
+            console.log('[EditMask] 🌐 Converting URL image to Base64...');
+            const converted = await urlToBase64(base64ImageData);
+            imageData = converted.data;
+            imageMimeType = converted.mimeType;
+        }
+
+        if (!imageData || !base64MaskData) {
+            throw new Error('Image data or mask data is missing.');
+        }
+
+        console.log("Sending to Gemini - Image Length:", imageData.length, "Mask Length:", base64MaskData.length);
+
+        const cleanImage = imageData.includes(',') ? imageData.split(',')[1] : imageData;
         const cleanMask = base64MaskData.includes(',') ? base64MaskData.split(',')[1] : base64MaskData;
 
         const response = await ai.models.generateContent({
@@ -39,7 +70,7 @@ export const editImageWithMask = async (
                     {
                         inlineData: {
                             data: cleanImage,
-                            mimeType: mimeType,
+                            mimeType: imageMimeType,
                         },
                     },
                     {
