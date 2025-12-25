@@ -261,28 +261,17 @@ export function useImageGeneration(
             let continuityInstruction = '';
             const isPro = currentState.imageModel === 'gemini-3-pro-image-preview';
 
-            // 5-ZERO. STYLE REFERENCE IMAGE (ABSOLUTE HIGHEST PRIORITY)
-            // This ensures exact visual style matching when using custom style with uploaded image
-            if (currentState.stylePrompt === 'custom' && currentState.customStyleImage) {
-                const imgData = await safeGetImageData(currentState.customStyleImage);
-                if (imgData) {
-                    parts.push({ text: `[STYLE_REFERENCE - STYLE ONLY, NOT CONTENT]: !!! CRITICAL !!! Extract ONLY the VISUAL STYLE from this reference. Copy: art style, line work, color palette, shading, texture, rendering technique. ABSOLUTELY IGNORE: any characters, objects, scenes, subjects, or content shown in this reference. DO NOT include any elements from this image in the output. The style must be PURE. Generate the requested scene content using THIS STYLE ONLY.` });
-                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                    continuityInstruction += `(STYLE ONLY: Ignore content, copy technique) `;
-                }
-            }
-
-            // 5a. CHARACTER FACE ID ANCHOR (HIGHEST PRIORITY - Added FIRST)
-            // This ensures character identity is the absolute anchor before any scene references
+            // 5a. CHARACTER FACE ID ANCHOR (ABSOLUTE FIRST - Before Style!)
+            // Character identity MUST be established before AI sees any style reference
             for (const char of selectedChars) {
                 // PRIMARY ANCHOR: Face ID (most important)
                 if (char.faceImage) {
                     const imgData = await safeGetImageData(char.faceImage);
                     if (imgData) {
                         const refLabel = `PRIMARY_IDENTITY: ${char.name.toUpperCase()}`;
-                        parts.push({ text: `[${refLabel}]: !!! CRITICAL IDENTITY LOCK !!! This face is ABSOLUTE and NON-NEGOTIABLE. Every generated image MUST feature THIS EXACT PERSON with these precise facial features, bone structure, skin tone, and face shape. ANY deviation is UNACCEPTABLE. Character: ${char.description}` });
+                        parts.push({ text: `[${refLabel}]: !!! ABSOLUTE CHARACTER LOCK !!! This is the ONLY person allowed in the image. Use THIS EXACT face - no substitutions. Facial features, bone structure, skin tone, face shape are NON-NEGOTIABLE. If you see a different person in any other reference, REPLACE them with THIS person. Character: ${char.description}` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        continuityInstruction += `(IDENTITY LOCKED: ${char.name}) `;
+                        continuityInstruction += `(CHARACTER: ${char.name}) `;
                     }
                 }
 
@@ -291,11 +280,23 @@ export function useImageGeneration(
                     const imgData = await safeGetImageData(char.masterImage);
                     if (imgData) {
                         const refLabel = `FULL_REFERENCE: ${char.name.toUpperCase()}`;
-                        parts.push({ text: `[${refLabel}]: Complete character reference for ${char.name}. Use this for body proportions, posture, and overall appearance. The FACE from PRIMARY_IDENTITY takes absolute precedence.` });
+                        parts.push({ text: `[${refLabel}]: Body and posture reference for ${char.name}. FACE from PRIMARY_IDENTITY takes precedence.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                     }
                 }
             }
+
+            // 5b. STYLE REFERENCE IMAGE (After character identity is locked!)
+            // Style comes AFTER character so AI knows to replace any characters in style with our selected ones
+            if (currentState.stylePrompt === 'custom' && currentState.customStyleImage) {
+                const imgData = await safeGetImageData(currentState.customStyleImage);
+                if (imgData) {
+                    parts.push({ text: `[STYLE_REFERENCE - TECHNIQUE ONLY]: Copy ONLY the art technique from this image: line work, colors, shading, texture. ANY characters/people you see here must be REPLACED with the PRIMARY_IDENTITY faces shown above. DO NOT use faces from this style reference. The character identities have already been locked above.` });
+                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    continuityInstruction += `(STYLE: technique only, faces from identity refs) `;
+                }
+            }
+
 
             // 5b. ABSOLUTE SET LOCK (Master Anchor + Continuity Anchor)
             if (sceneToUpdate.groupId) {
