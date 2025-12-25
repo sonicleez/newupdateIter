@@ -223,8 +223,23 @@ export function useImageGeneration(
             // --- 5. CONTINUITY & MULTI-IMAGE REFERENCES ---
             const parts: any[] = [];
             let continuityInstruction = '';
+            const isPro = currentState.imageModel === 'gemini-3-pro-image-preview';
 
-            // 5a. ABSOLUTE SET LOCK (Master Anchor + Continuity Anchor)
+            // 5a. CHARACTER FACE ID ANCHOR (HIGHEST PRIORITY - Added FIRST)
+            // This ensures character identity is the absolute anchor before any scene references
+            for (const char of selectedChars) {
+                if (char.faceImage) {
+                    const imgData = await safeGetImageData(char.faceImage);
+                    if (imgData) {
+                        const refLabel = `CHARACTER_ANCHOR: ${char.name.toUpperCase()}`;
+                        parts.push({ text: `[${refLabel}]: THIS IS THE ABSOLUTE CHARACTER IDENTITY. Match this EXACT face in EVERY generated image. This person's facial features, skin tone, and bone structure are NON-NEGOTIABLE. Description: ${char.description}` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        continuityInstruction += `(ANCHOR: ${char.name} face LOCKED) `;
+                    }
+                }
+            }
+
+            // 5b. ABSOLUTE SET LOCK (Master Anchor + Continuity Anchor)
             if (sceneToUpdate.groupId) {
                 const groupObj = currentState.sceneGroups?.find(g => g.id === sceneToUpdate.groupId);
 
@@ -298,8 +313,7 @@ export function useImageGeneration(
             }
 
 
-            // 5b. CHARACTER & PRODUCT REFERENCES (Advanced Mapping for Gemini 3 Pro - 14 References)
-            const isPro = currentState.imageModel === 'gemini-3-pro-image-preview';
+            // 5c. CHARACTER BODY/VIEWS & PRODUCT REFERENCES (Advanced Mapping for Gemini 3 Pro)
             let referencePreamble = '';
 
             for (const char of selectedChars) {
