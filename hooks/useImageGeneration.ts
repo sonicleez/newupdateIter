@@ -266,9 +266,9 @@ export function useImageGeneration(
             if (currentState.stylePrompt === 'custom' && currentState.customStyleImage) {
                 const imgData = await safeGetImageData(currentState.customStyleImage);
                 if (imgData) {
-                    parts.push({ text: `[STYLE_REFERENCE - ABSOLUTE LOCK]: !!! CRITICAL STYLE CONSTRAINT !!! Match the EXACT visual style of this reference image. Copy the art style, line work, color palette, shading technique, and texture PRECISELY. FORBIDDEN: NO mixing styles, NO 3D elements in 2D style, NO realistic backgrounds in stylized art, NO illustration in anime, NO anime in photorealistic. The style must be PURE and UNMIXED. If the reference is anime, output MUST be 100% anime. If illustration, 100% illustration.` });
+                    parts.push({ text: `[STYLE_REFERENCE - STYLE ONLY, NOT CONTENT]: !!! CRITICAL !!! Extract ONLY the VISUAL STYLE from this reference. Copy: art style, line work, color palette, shading, texture, rendering technique. ABSOLUTELY IGNORE: any characters, objects, scenes, subjects, or content shown in this reference. DO NOT include any elements from this image in the output. The style must be PURE. Generate the requested scene content using THIS STYLE ONLY.` });
                     parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                    continuityInstruction += `(STYLE LOCKED: Match reference exactly) `;
+                    continuityInstruction += `(STYLE ONLY: Ignore content, copy technique) `;
                 }
             }
 
