@@ -258,13 +258,24 @@ export function useImageGeneration(
             // 5a. CHARACTER FACE ID ANCHOR (HIGHEST PRIORITY - Added FIRST)
             // This ensures character identity is the absolute anchor before any scene references
             for (const char of selectedChars) {
+                // PRIMARY ANCHOR: Face ID (most important)
                 if (char.faceImage) {
                     const imgData = await safeGetImageData(char.faceImage);
                     if (imgData) {
-                        const refLabel = `CHARACTER_ANCHOR: ${char.name.toUpperCase()}`;
-                        parts.push({ text: `[${refLabel}]: THIS IS THE ABSOLUTE CHARACTER IDENTITY. Match this EXACT face in EVERY generated image. This person's facial features, skin tone, and bone structure are NON-NEGOTIABLE. Description: ${char.description}` });
+                        const refLabel = `PRIMARY_IDENTITY: ${char.name.toUpperCase()}`;
+                        parts.push({ text: `[${refLabel}]: !!! CRITICAL IDENTITY LOCK !!! This face is ABSOLUTE and NON-NEGOTIABLE. Every generated image MUST feature THIS EXACT PERSON with these precise facial features, bone structure, skin tone, and face shape. ANY deviation is UNACCEPTABLE. Character: ${char.description}` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        continuityInstruction += `(ANCHOR: ${char.name} face LOCKED) `;
+                        continuityInstruction += `(IDENTITY LOCKED: ${char.name}) `;
+                    }
+                }
+
+                // SECONDARY ANCHOR: Master Image (full body reference)
+                if (char.masterImage && char.masterImage !== char.faceImage) {
+                    const imgData = await safeGetImageData(char.masterImage);
+                    if (imgData) {
+                        const refLabel = `FULL_REFERENCE: ${char.name.toUpperCase()}`;
+                        parts.push({ text: `[${refLabel}]: Complete character reference for ${char.name}. Use this for body proportions, posture, and overall appearance. The FACE from PRIMARY_IDENTITY takes absolute precedence.` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                     }
                 }
             }
@@ -292,14 +303,14 @@ export function useImageGeneration(
                     .filter(s => s.groupId === sceneToUpdate.groupId)
                     .slice(0, 2);
 
-                // Action Continuity: Pick last 2 shots REGARDLESS of group, but prioritize shared characters
+                // Action Continuity: Pick ONLY 1 shot to minimize noise and prevent identity drift
                 const actionContinuityScenes = absolutePrecedingScenes
                     .filter(s => {
                         // Include if in same group OR shares at least one character
                         const hasSharedChar = s.characterIds.some(id => sceneToUpdate.characterIds.includes(id));
                         return s.groupId === sceneToUpdate.groupId || hasSharedChar;
                     })
-                    .slice(0, 2);
+                    .slice(0, 1); // REDUCED from 2 to 1 to prevent identity drift
 
                 if (firstSceneInGroup?.generatedImage) {
                     const imgData = await safeGetImageData(firstSceneInGroup.generatedImage);
@@ -401,6 +412,19 @@ export function useImageGeneration(
                         parts.push({ text: `[${refLabel}]: AUTHORITATIVE visual anchor for ${prod.name}. Match the design, colors, and branding from this image exactly.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                         referencePreamble += `(PRODUCT CONTINUITY: Match ${refLabel}) `;
+                    }
+                }
+            }
+
+            // 5d. IDENTITY REINFORCEMENT (SANDWICH PATTERN - Face ID again at END)
+            // This reinforces character identity after scene references to prevent drift
+            for (const char of selectedChars) {
+                if (char.faceImage) {
+                    const imgData = await safeGetImageData(char.faceImage);
+                    if (imgData) {
+                        const refLabel = `FINAL_IDENTITY_CHECK: ${char.name.toUpperCase()}`;
+                        parts.push({ text: `[${refLabel}]: !!! FINAL VERIFICATION !!! Re-confirming that the generated image features THIS EXACT PERSON. Cross-check against PRIMARY_IDENTITY. If there is ANY face mismatch, regenerate.` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                     }
                 }
             }
