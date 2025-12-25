@@ -231,9 +231,10 @@ ${allGroups.map(g => `- ${g.name}: ${g.description}`).join('\n')}
 ---
 
 **REQUIREMENTS:**
-1. Create a logical sequence of 2-4 scenes for THIS GROUP ONLY.
+1. Create a logical sequence of 4-8 scenes for THIS GROUP ONLY. Ensure a complete and rich narrative flow for this specific location.
 1. Return ONLY the JSON. No conversational filler.
 2. Write in ${language}.
+
 
 **AVAILABLE CHARACTERS:**
 ${characterListString}

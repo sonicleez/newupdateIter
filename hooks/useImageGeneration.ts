@@ -340,9 +340,11 @@ export function useImageGeneration(
                 if (!firstSceneInGroup && groupObj?.conceptImage) {
                     const imgData = await safeGetImageData(groupObj.conceptImage);
                     if (imgData) {
-                        parts.push({ text: `[MOODBOARD REFERENCE]: Match lighting, color palette, and architectural style. IGNORE any characters or props.` });
+                        const refLabel = `ENVIRONMENT_ANCHOR (Global Concept)`;
+                        // Stronger instruction for concept art as base environment
+                        parts.push({ text: `[${refLabel}]: Use this as the AUTHORITATIVE template for the environment. Match: architectural style, layout, color palette, lighting, textures, and general geometry. ABSOLUTELY IGNORE characters. This is the master reference for this entire location.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        continuityInstruction += `(CONCEPT LOCK) `;
+                        continuityInstruction += `(CONCEPT ENVIRONMENT LOCK) `;
                     }
                 }
 
@@ -484,7 +486,13 @@ export function useImageGeneration(
             const activePreset = getPresetById(currentState.activeScriptPreset, currentState.customScriptPresets);
             const metaTokens = currentState.customMetaTokens || DEFAULT_META_TOKENS[activePreset?.category || 'custom'] || DEFAULT_META_TOKENS['custom'];
 
-            const conceptPrompt = `STRICT ENVIRONMENT CONCEPT ART: Location "${groupName}". DESCRIPTION: ${groupDescription}. STYLE: ${styleInstruction} ${metaTokens}. MANDATORY: Cinematic landscape/interior, architectural focus, atmospheric lighting. !!! ABSOLUTELY NO PEOPLE, NO HUMANS, NO CHARACTERS, NO FACES !!! focus purely on set design.`.trim();
+            // Enhanced concept art prompt with specific artistic keywords
+            const conceptPrompt = `PROFESSIONAL ENVIRONMENT CONCEPT ART: Location "${groupName}". 
+            DESCRIPTION: ${groupDescription}. 
+            STYLE: ${styleInstruction} ${metaTokens}. 
+            COMPOSITION: Master shot, architectural visualization, cinematic wide angle, high-level set design, matte painting, Unreal Engine 5 render style. 
+            MANDATORY: Focus on spatial layout, atmospheric lighting, and materials (wood, stone, metal). 
+            !!! ABSOLUTELY NO PEOPLE, NO HUMANS, NO CHARACTERS, NO FACES !!! focus purely on the empty world and set design.`.trim();
 
             const { imageUrl } = await callAIImageAPI(
                 conceptPrompt,
