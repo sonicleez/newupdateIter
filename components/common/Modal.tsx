@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 interface ModalProps {
@@ -9,6 +9,8 @@ interface ModalProps {
 }
 
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+    const mouseDownTarget = useRef<EventTarget | null>(null);
+
     useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
@@ -19,8 +21,24 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
 
     if (!isOpen) return null;
 
+    const handleMouseDown = (e: React.MouseEvent) => {
+        mouseDownTarget.current = e.target;
+    };
+
+    const handleMouseUp = (e: React.MouseEvent) => {
+        // Only close if both mousedown AND mouseup happened on the backdrop (same target)
+        if (mouseDownTarget.current === e.target && e.target === e.currentTarget) {
+            onClose();
+        }
+        mouseDownTarget.current = null;
+    };
+
     return createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+        <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+        >
             <div className="bg-gray-900 w-full max-w-2xl rounded-2xl border border-gray-700 shadow-2xl overflow-hidden scale-in" onClick={(e) => e.stopPropagation()}>
                 <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
                     <h3 className="text-xl font-bold text-white tracking-tight">{title}</h3>
