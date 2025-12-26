@@ -95,6 +95,12 @@ ${selectedPreset.prompt}
 5. Add MOTION that makes sense for what's in the image
 6. Include SFX and Emotion tags appropriate to the scene
 
+**AUDIO RULES (CRITICAL):**
+- NO background music, NO orchestral score, NO musical soundtrack
+- ONLY use SFX: for environmental/action sound effects (footsteps, water, wind, impacts)
+- ONLY use Dialogue: "[speech]" or Voiceover: "[narration]" if there's actual speech
+- Use Ambient noise: for environmental soundscape (city hum, forest sounds, room tone)
+
 **PRESET-SPECIFIC RULES:**
 - If "Single Shot": One continuous 6-second animation of the image, subtle camera movement
 - If "Dialogue/Multi-Shot": Describe the character from the image speaking, use shot/reverse if applicable
