@@ -1,7 +1,7 @@
-import { ScriptPreset, Character, Product } from '../types';
+import { ScriptPreset, Character, Product, DirectorPreset } from '../types';
 
 /**
- * Build AI prompt for script generation based on selected preset
+ * Build AI prompt for script generation based on selected preset and director
  */
 export function buildScriptPrompt(
     userIdea: string,
@@ -10,7 +10,8 @@ export function buildScriptPrompt(
     products: Product[],
     sceneCount: number,
     language: string,
-    customInstruction?: string
+    customInstruction?: string,
+    director?: DirectorPreset
 ): string {
     // Filter characters with names
     const availableCharacters = characters
@@ -48,6 +49,15 @@ export function buildScriptPrompt(
 2. **Visual Precision**: Mô tả cực kỳ chi tiết hình dáng, chất liệu, màu sắc của sản phẩm trong visual_context để đảm bảo tính nhất quán.`
         : '';
 
+    // Build Director instructions
+    const directorInstructions = director
+        ? `\n**DIRECTORIAL VISION (Mandatory Style):**
+PHẢI viết kịch bản và mô tả hình ảnh theo phong cách của đạo diễn: **${director.name}**.
+- **Mô tả phong cách**: ${director.description}
+- **Visual DNA (Technical Keywords)**: ${director.dna}
+- **Narrative Influence**: Đảm bảo cấu trúc câu, lời thoại và nhịp điệu phân cảnh phản ánh đúng linh hồn của đạo diễn này. Nếu phong cách là 'Vua đối xứng', hãy mô tả bố cục đối xứng trong visual_context. Nếu là 'Neon Noir', hãy tập trung vào ánh sáng neon và bóng đổ.`
+        : '';
+
     // Build output format instructions based on preset
     let outputFormatInstructions = `\n**OUTPUT FORMAT (JSON Object):**\n`;
 
@@ -63,7 +73,7 @@ export function buildScriptPrompt(
 ],
 - "scenes": [
     {
-        "visual_context": "BẮT ĐẦU bằng SHOT TYPE (VD: CLOSE UP (CU), MEDIUM SHOT (MS), WIDE SHOT (WS), EXTREME CLOSE UP (ECU), BIRD VIEW, LOW ANGLE, OTS). Tiếp theo là mô tả visual chi tiết bao gồm: subject, action, environment, lighting, atmosphere. Tối ưu cho AI image generation.",
+        "visual_context": "BẮT ĐẦU bằng SHOT TYPE. Tiếp theo là [CINEMATIC PURPOSE]. NGUYÊN LÝ: Nhân vật là DUY NHẤT. Nếu góc OTS/Back View cho cảnh có 1 nhân vật, hãy đặt camera SAU VAI họ để họ làm tiền cảnh (mờ), tiêu điểm là vật họ đang nhìn. TUYỆT ĐỐI KHÔNG vẽ nhân vật đó lần thứ 2 ở hậu cảnh (Ghosting).",
         "scene_number": "1",
         "group_id": "group_id",
         "prompt_name": "Tiêu đề cảnh",
@@ -88,19 +98,25 @@ export function buildScriptPrompt(
 
 **IMPORTANT RULES (IMAGE GENERATION OPTIMIZED):**
 1. **Shot Type First**: Mọi visual_context PHẢI bắt đầu bằng SHOT TYPE rõ ràng (CLOSE UP, MEDIUM SHOT, WIDE SHOT, etc.).
-2. **Visual Description Formula**: Cấu trúc: SHOT TYPE + Subject details + Action/Pose + Environment + Lighting + Atmosphere/Mood.
-3. **Material & Texture**: Mô tả chi tiết chất liệu, kết cấu (VD: "lông thú thô ráp", "vải lanh nếp nhăn", "da sần sùi").
-4. **Lighting Focus**: Luôn mô tả ánh sáng cụ thể (VD: "Rim light tạo đường viền trắng bạc", "ánh sáng bình minh vàng ấm").
-5. **No Timestamps**: KHÔNG sử dụng mốc thời gian [00:00-00:05]. Format này tối ưu cho ẢNH, không phải video.
-6. **No SFX/Emotion**: KHÔNG thêm SFX hoặc Emotion vào visual_context. Chỉ mô tả những gì NHÌN THẤY được.
-7. **Cinematic Shot Progression**: Đảm bảo sự chuyển động góc máy logic (WIDE SHOT -> MEDIUM -> CLOSE UP).
-8. **No Ghost People**: NẾU KHÔNG CÓ character_ids, visual_context TUYỆT ĐỐI KHÔNG mô tả bất kỳ người nào.
-9. **Integrity**: Chỉ sử dụng các character_id/product_id được cung cấp trong danh sách.
-10. **CONTINUITY TAGS**: Sử dụng các thẻ sau trong visual_context khi cần thiết:
+2. **Visual Description Formula**: Cấu trúc: SHOT TYPE + [CINEMATIC PURPOSE] + Subject details (inc. Costume Anchor) + Action/Pose + Environment (inc. **SET LANDMARKS** e.g. "near the fireplace", "by the kitchen counter") + Lighting + Atmosphere.
+3. **Cinematic Objective**: Mỗi cảnh PHẢI có một mục đích kể chuyện rõ ràng. Nếu có đạo cụ mới xuất hiện, PHẢI có ít nhất 1 cảnh nhân vật nhặt/lấy nó.
+4. **POV Connection**: Ưu tiên sử dụng góc máy POV (Point of View) để kết nối cái nhìn của nhân vật với các chi tiết quan trọng hoặc đạo cụ. 
+5. **Set Integrity**: Luôn giữ vững vị trí các vật thể lớn cố định trong bối cảnh (Landmarks) làm mỏ neo thị giác.
+6. **No Timestamps**: KHÔNG sử dụng mốc thời gian [00:00-00:05]. 
+7. **No SFX/Emotion**: KHÔNG thêm SFX hoặc Emotion vào visual_context.
+8. **CONTINUITY TAGS**: Sử dụng các thẻ sau:
     - [SAME_OUTFIT]: Đảm bảo trang phục y hệt cảnh trước.
     - [SAME_LIGHTING]: Đảm bảo hướng và màu sắc ánh sáng nhất quán.
     - [SAME_LOCATION]: Đảm bảo các chi tiết bối cảnh xung quanh không thay đổi.
-11. **TRANSITION HINTS**: Mô tả ngắn gọn sự thay đổi tư thế/vị trí so với cảnh trước (VD: "Tiếp nối cảnh trước, Kaya hạ tay xuống...").
+9. **TRANSITION HINTS**: Mô tả ngắn gọn sự thay đổi tư thế/vị trí so với cảnh trước.
+10. **OTS & BACK VIEW (IDENTITY SINGULARITY & ANTI-GHOSTING)**: 
+    - **Nguyên lý Độc bản (Singularity)**: Mỗi nhân vật (vd: Chú mèo) là DUY NHẤT. Tuyệt đối không được xuất hiện 2 lần trong 1 khung hình.
+    - **Single Character Scene (Cảnh 1 nhân vật)**: Nếu cảnh chỉ có 1 nhân vật, khi dùng góc OTS:
+        *   **Cấu trúc**: Nhân vật đó PHẢI là người đứng ở tiền cảnh (tiếp giáp camera, mờ). Khung hình phải nhìn xuyên qua vai họ để thấy bối cảnh/đồ vật.
+        *   **Cấm kỵ**: Tuyệt đối KHÔNG được vẽ thêm nhân vật đó một lần nữa ở trung cảnh hay hậu cảnh.
+    - **Mô tả điểm nhìn**: Nếu chú mèo đang ngồi nhìn lò sưởi, góc OTS sẽ là: "[OTS] shot behind the Cat's shoulder, looking at the glowing fireplace. THE CAT IS ONLY VISUALIZED AS A BLURRED SHOULDER IN FOREGROUND. The focal point is the FIREPLACE. No other cats visible."
+    - **Khóa Tham Chiếu**: Luôn dùng: "Same outfit, features, and lighting as reference, UNCHANGED. NO NEW CHARACTERS."
+    - **Nội suy**: Mô tả bối cảnh nhân vật đang nhìn thấy thay vì lặp lại bối cảnh cũ.
 `;
 
 
@@ -126,6 +142,7 @@ ${productInstructions}
 **TONE & STYLE:**
 ${preset.toneKeywords.join(', ')}
 ${customInstructionBlock}
+${directorInstructions}
 
 **LANGUAGE REQUIREMENT:**
 Write all dialogues, voiceovers, and narration in ${language}.

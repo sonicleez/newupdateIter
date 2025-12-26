@@ -11,7 +11,8 @@ export function useCharacterLogic(
     updateStateAndRecord: (updater: (prevState: ProjectState) => ProjectState) => void,
     userApiKey: string | null,
     setApiKeyModalOpen: (open: boolean) => void,
-    userId?: string
+    userId?: string,
+    addToGallery?: (image: string, type: string, prompt?: string, sourceId?: string) => void
 ) {
     const updateCharacter = useCallback((id: string, updates: Partial<Character>) => {
         updateStateAndRecord(s => ({
@@ -452,6 +453,7 @@ CRITICAL: The style MUST strictly follow the "STYLE PRESET" and Capturing the sp
                 }
 
                 updateCharacter(charId, { generatedImage: imageUrl, isGenerating: false });
+                if (addToGallery) addToGallery(imageUrl, 'character', prompt, charId);
             } else {
                 throw new Error("AI không trả về ảnh.");
             }

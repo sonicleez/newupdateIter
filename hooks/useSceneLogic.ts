@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { ProjectState, Scene } from '../types';
+import { ProjectState, Scene, DirectorPreset } from '../types';
 import { generateId } from '../utils/helpers';
 
 export function useSceneLogic(
@@ -193,7 +193,7 @@ export function useSceneLogic(
         document.getElementById('script-upload-input')?.click();
     }, []);
 
-    const applyGeneratedScript = useCallback((detailedStory: string, groups: any[], scenes: any[]) => {
+    const applyGeneratedScript = useCallback((detailedStory: string, groups: any[], scenes: any[], director?: DirectorPreset) => {
         updateStateAndRecord(s => {
             const groupMap: Record<string, string> = {};
             const newGroups = groups.map(g => {
@@ -239,7 +239,9 @@ export function useSceneLogic(
                 ...s,
                 detailedScript: detailedStory,
                 sceneGroups: [...(s.sceneGroups || []), ...finalizedGroups],
-                scenes: [...s.scenes, ...newScenes]
+                scenes: [...s.scenes, ...newScenes],
+                activeDirectorId: director?.id,
+                customDirectors: director?.isCustom ? [...(s.customDirectors || []), director] : s.customDirectors
             };
         });
     }, [updateStateAndRecord]);

@@ -26,7 +26,15 @@ export interface Character {
   faceWorkflowId?: string;
   bodyWorkflowId?: string;
   workflowStatus?: 'pending' | 'active' | 'succeeded' | 'failed';
-  editHistory?: { id: string; image: string; prompt: string }[];
+
+  // Separate Histories for different views
+  masterEditHistory?: { id: string; image: string; prompt: string }[];
+  faceEditHistory?: { id: string; image: string; prompt: string }[];
+  bodyEditHistory?: { id: string; image: string; prompt: string }[];
+  sideEditHistory?: { id: string; image: string; prompt: string }[];
+  backEditHistory?: { id: string; image: string; prompt: string }[];
+
+  editHistory?: { id: string; image: string; prompt: string }[]; // Deprecated, kept for compat
 }
 
 export interface SceneDialogue {
@@ -96,6 +104,10 @@ export interface Scene {
   imageRole?: 'single' | 'start-frame' | 'end-frame'; // Role of generatedImage
   endFrameImage?: string | null; // End frame for Start/End Frame mode
 
+  // Prop & Vision Reference (User-defined or copy from other scenes)
+  referenceImage?: string | null; // Base64 or URL
+  referenceImageDescription?: string; // What to focus on in this reference (e.g. "Cái chảo")
+
   // UI state
   isGenerating: boolean;
   error: string | null;
@@ -134,6 +146,17 @@ export interface ScriptPreset {
   createdAt: string;
 }
 
+// Director Preset System
+export interface DirectorPreset {
+  id: string;
+  name: string;
+  origin: 'Âu' | 'Á';
+  description: string;
+  dna: string;
+  quote?: string;
+  isCustom?: boolean;
+}
+
 // Advanced Image Editor
 export interface DetectedObject {
   id: string;
@@ -148,6 +171,15 @@ export interface EditHistory {
   image: string; // base64
   timestamp: number;
   operation: string; // "Original", "Removed person", "Style transfer", etc.
+}
+
+export interface GalleryAsset {
+  id: string;
+  image: string;
+  type: string; // 'scene', 'character', 'product', 'edit'
+  timestamp: number;
+  prompt?: string;
+  sourceId?: string; // id of scene/char/product it came from
 }
 
 export type EditingMode = 'remove' | 'add' | 'style' | 'inpaint' | 'text-edit';
@@ -177,10 +209,15 @@ export interface ProjectState {
   customStyleInstruction?: string; // Custom full style prompt when Global Style is 'custom'
   customStyleImage?: string; // Custom style reference IMAGE for exact visual style matching
 
+  // Director System (NEW)
+  activeDirectorId?: string;
+  customDirectors?: DirectorPreset[];
+
   characters: Character[];
   products: Product[]; // List of Products/Props
   scenes: Scene[];
   sceneGroups?: SceneGroup[]; // Optional: List of SceneGroups (Scenes Group feature)
+  assetGallery?: GalleryAsset[]; // Session gallery
 }
 
 export interface Product {
@@ -197,4 +234,5 @@ export interface Product {
   };
   isAnalyzing: boolean;
   editHistory?: { id: string; image: string; prompt: string }[];
+  viewEditHistories?: Record<string, { id: string; image: string; prompt: string }[]>;
 }

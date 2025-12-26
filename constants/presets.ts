@@ -255,6 +255,9 @@ export const INITIAL_STATE: ProjectState = {
     ],
     scenes: [],
     sceneGroups: [],
+    activeDirectorId: undefined,
+    customDirectors: [],
+    assetGallery: [],
 };
 
 export const CREATIVE_PRESETS = [

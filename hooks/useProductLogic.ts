@@ -10,7 +10,8 @@ export function useProductLogic(
     updateStateAndRecord: (updater: (prevState: ProjectState) => ProjectState) => void,
     userApiKey: string | null,
     setApiKeyModalOpen: (open: boolean) => void,
-    userId?: string
+    userId?: string,
+    addToGallery?: (image: string, type: string, prompt?: string, sourceId?: string) => void
 ) {
     const addProduct = useCallback(() => {
         const newProduct: Product = {
@@ -118,6 +119,14 @@ export function useProductLogic(
             }
 
             updateProduct(id, { views: { front, back, left, right, top }, isAnalyzing: false });
+
+            if (addToGallery) {
+                if (front) addToGallery(front, 'product', `Front View: ${json.name}`, id);
+                if (back) addToGallery(back, 'product', `Back View: ${json.name}`, id);
+                if (left) addToGallery(left, 'product', `Left View: ${json.name}`, id);
+                if (right) addToGallery(right, 'product', `Right View: ${json.name}`, id);
+                if (top) addToGallery(top, 'product', `Top View: ${json.name}`, id);
+            }
         } catch (error) {
             console.error("Product Analysis Error:", error);
             updateProduct(id, { isAnalyzing: false });

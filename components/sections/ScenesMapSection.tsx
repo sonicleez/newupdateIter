@@ -3,7 +3,7 @@ import { Table, LayoutGrid, Trash2, Plus, ImageMinus, ChevronDown, ChevronRight,
 import { SceneRow } from '../scenes/SceneRow';
 import { StoryBoardCard } from '../scenes/StoryBoardCard';
 import { Tooltip } from '../common/Tooltip';
-import { Scene, Character, Product } from '../../types';
+import { Scene, Character, Product, SceneGroup } from '../../types';
 import { PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER, VEO_PRESETS } from '../../constants/presets';
 
 interface ScenesMapSectionProps {
@@ -12,7 +12,7 @@ interface ScenesMapSectionProps {
     setViewMode: (mode: 'table' | 'storyboard') => void;
     characters: Character[];
     products: Product[];
-    sceneGroups: any[];
+    sceneGroups: SceneGroup[];
     updateScene: (id: string, updates: Partial<Scene>) => void;
     removeScene: (id: string) => void;
     insertScene: (index: number) => void;
@@ -27,6 +27,8 @@ interface ScenesMapSectionProps {
     generateVeoPrompt: (sceneId: string) => void;
     suggestVeoPresets: () => void;
     applyPresetToAll: (preset: string) => void;
+    analyzeRaccord: (sceneId: string) => any[];
+    suggestNextShot: (lastSceneId: string) => any;
     isVeoGenerating: boolean;
     handleGenerateAllVideos: () => void;
     isVideoGenerating: boolean;
@@ -44,8 +46,6 @@ interface ScenesMapSectionProps {
     setDragOverIndex: (idx: number | null) => void;
     onClearAllImages: () => void;
     onInsertAngles?: (sceneId: string, selections: { value: string; customPrompt?: string }[], sourceImage: string) => void;
-    onGenerateGroupImages?: (groupId: string) => void;
-    onClearGroupImages?: (groupId: string) => void;
 }
 
 export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
@@ -86,11 +86,13 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
     setDragOverIndex,
     onClearAllImages,
     onInsertAngles,
-    onGenerateGroupImages,
-    onClearGroupImages
+    analyzeRaccord,
+    suggestNextShot
 }) => {
     const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
     const [activeGroupMenu, setActiveGroupMenu] = React.useState<string | null>(null);
+    const [showDOP, setShowDOP] = React.useState(false);
+    const [showDetailedScript, setShowDetailedScript] = React.useState(false);
 
     const toggleGroupCollapse = (groupId: string | undefined) => {
         const id = groupId || 'none';
@@ -107,58 +109,67 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
         newCollapsed['none'] = collapse;
         setCollapsedGroups(newCollapsed);
     };
+
     return (
         <div className="my-16">
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center space-x-6">
-                    <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-orange to-brand-red">Scenes Maps</h2>
-                    <div className="flex bg-gray-900/50 p-1 rounded-lg border border-gray-700/50 h-10 items-center">
+            <div className="flex justify-between items-center mb-6 bg-gray-950/40 p-3 rounded-2xl border border-gray-800/50 backdrop-blur-md">
+                <div className="flex items-center space-x-6 pl-2">
+                    <h2 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-brand-orange to-brand-red tracking-tighter">SCENES MAP</h2>
+                    <div className="flex items-center gap-2">
                         <button
-                            onClick={() => setViewMode('table')}
-                            className={`flex items-center space-x-2 px-3 h-full rounded-md transition-all ${viewMode === 'table' ? 'bg-brand-orange text-white shadow-lg shadow-brand-orange/20' : 'text-gray-400 hover:text-gray-200'}`}
+                            onClick={() => setShowDOP(!showDOP)}
+                            className={`h-8 px-3 flex items-center gap-2 font-black text-[9px] rounded-lg transition-all uppercase tracking-widest border shadow-inner ${showDOP ? 'bg-blue-600 text-white border-blue-500 shadow-blue-500/20' : 'bg-gray-900/80 text-blue-400 border-gray-700/50 hover:border-blue-500/50'}`}
+                            title="DOP Assistant (Director of Photography) - Raccord & Flow"
                         >
-                            <Table size={14} />
-                            <span className="text-[10px] font-black uppercase tracking-widest leading-none">Table</span>
-                        </button>
-                        <button
-                            onClick={() => setViewMode('storyboard')}
-                            className={`flex items-center space-x-2 px-3 h-full rounded-md transition-all ${viewMode === 'storyboard' ? 'bg-brand-orange text-white shadow-lg shadow-brand-orange/20' : 'text-gray-400 hover:text-gray-200'}`}
-                        >
-                            <LayoutGrid size={14} />
-                            <span className="text-[10px] font-black uppercase tracking-widest leading-none">Board</span>
+                            <Zap size={11} className={showDOP ? 'animate-pulse' : ''} />
+                            DOP Assistant
                         </button>
                     </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
-                    <button
-                        onClick={handleGenerateAllImages}
-                        disabled={isBatchGenerating}
-                        className={`h-11 w-48 font-black text-[11px] text-brand-cream rounded-xl bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest`}
-                    >
-                        {isBatchGenerating ? '1. Đang tạo...' : '1. Tạo ảnh hàng loạt'}
-                    </button>
 
-                    <button
-                        onClick={handleGenerateAllVeoPrompts}
-                        disabled={isVeoGenerating}
-                        className={`h-11 w-48 font-black text-[11px] text-brand-cream rounded-xl bg-gradient-to-r from-brand-red to-brand-brown hover:from-brand-orange hover:to-brand-red shadow-lg shadow-brand-red/20 transition-all duration-300 transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 uppercase tracking-widest`}
-                    >
-                        {isVeoGenerating ? '2. Đang tạo...' : '2. Tạo Veo Prompts'}
-                    </button>
+                <div className="flex items-center gap-3">
+                    {/* Primary Action Group (1, 2, 3) */}
+                    <div className="flex items-center bg-black/40 p-1 rounded-xl border border-gray-800/80 shadow-2xl">
+                        <button
+                            onClick={handleGenerateAllImages}
+                            disabled={isBatchGenerating}
+                            className={`h-9 px-4 font-black text-[9px] text-brand-cream rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} transition-all duration-300 disabled:opacity-50 uppercase tracking-widest flex items-center gap-2`}
+                        >
+                            <ImageIcon size={14} />
+                            {isBatchGenerating ? '1. Tạo...' : '1. Tạo ảnh'}
+                        </button>
 
-                    <button
-                        onClick={handleGenerateAllVideos}
-                        disabled={isVideoGenerating}
-                        className={`h-11 w-48 font-black text-[11px] text-brand-cream rounded-xl bg-gradient-to-r from-brand-brown to-brand-orange hover:from-brand-red hover:to-brand-orange shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 uppercase tracking-widest`}
-                    >
-                        {isVideoGenerating ? '3. Đang tạo...' : '3. Tạo Video (Veo)'}
-                    </button>
+                        <div className="w-px h-4 bg-gray-800 mx-1"></div>
+
+                        <button
+                            onClick={handleGenerateAllVeoPrompts}
+                            disabled={isVeoGenerating}
+                            className={`h-9 px-4 font-black text-[9px] text-brand-cream rounded-lg hover:bg-white/5 transition-all duration-300 disabled:opacity-50 uppercase tracking-widest flex items-center gap-2 ${isVeoGenerating ? 'text-brand-orange' : 'text-gray-400'}`}
+                        >
+                            <Zap size={14} />
+                            {isVeoGenerating ? '2. Prompts...' : '2. Veo Prompts'}
+                        </button>
+
+                        <div className="w-px h-4 bg-gray-800 mx-1"></div>
+
+                        <button
+                            onClick={handleGenerateAllVideos}
+                            disabled={isVideoGenerating}
+                            className={`h-9 px-4 font-black text-[9px] text-brand-cream rounded-lg hover:bg-white/5 transition-all duration-300 disabled:opacity-50 uppercase tracking-widest flex items-center gap-2 ${isVideoGenerating ? 'text-brand-orange' : 'text-gray-400'}`}
+                        >
+                            <Wind size={14} />
+                            {isVideoGenerating ? '3. Video...' : '3. Video'}
+                        </button>
+                    </div>
+
+                    <div className="h-6 w-px bg-gray-800 mx-1"></div>
 
                     <button
                         onClick={addScene}
-                        className={`h-11 w-32 font-black text-[11px] text-brand-cream rounded-xl bg-brand-orange hover:bg-brand-red shadow-lg shadow-brand-orange/20 transition-all duration-300 transform hover:scale-[1.02] active:scale-95 uppercase tracking-widest`}
+                        className={`h-9 px-4 font-black text-[9px] text-brand-cream rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-all uppercase tracking-widest flex items-center gap-2`}
                     >
-                        + Scene
+                        <Plus size={14} />
+                        Scene
                     </button>
 
                     <button
@@ -170,17 +181,17 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                 alert('⚠️ No Visual Prompts to copy.');
                             }
                         }}
-                        className="h-11 w-11 flex items-center justify-center text-gray-400 hover:text-brand-cream bg-gray-900 border border-gray-700 rounded-xl transition-all shadow-xl active:scale-95"
-                        title="Copy All Visual Prompts (Image Generation)"
+                        className="h-9 w-9 flex items-center justify-center text-gray-400 hover:text-brand-cream bg-gray-900 border border-gray-800 rounded-lg transition-all active:scale-95"
+                        title="Copy All Visual Prompts"
                     >
-                        📋
+                        <ImageIcon size={14} />
                     </button>
 
                     {isBatchGenerating && (
                         <button
                             onClick={stopBatchGeneration}
                             disabled={isStopping}
-                            className="h-11 px-4 font-black text-[11px] text-white rounded-xl bg-red-600 hover:bg-red-700 shadow-lg shadow-red-900/20 transition-all uppercase tracking-widest"
+                            className="h-9 px-4 font-black text-[9px] text-white rounded-lg bg-red-600 hover:bg-red-700 transition-all uppercase tracking-widest"
                         >
                             {isStopping ? '...' : 'STOP'}
                         </button>
@@ -188,108 +199,236 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
 
                     <button
                         onClick={() => {
-                            if (confirm('⚠️ Xóa TẤT CẢ ảnh đã tạo trong scenes? Hành động này không thể hoàn tác.')) {
+                            if (confirm('⚠️ Xóa TẤT CẢ ảnh?')) {
                                 onClearAllImages();
                             }
                         }}
-                        className="h-11 px-4 flex items-center gap-2 font-black text-[11px] text-red-400 rounded-xl bg-red-900/20 hover:bg-red-900/40 border border-red-900/50 shadow-lg transition-all uppercase tracking-widest"
-                        title="Xóa tất cả ảnh đã tạo trong scenes"
+                        className="h-9 w-9 flex items-center justify-center text-red-500 hover:text-white hover:bg-red-600/20 bg-gray-900 border border-red-900/30 rounded-lg transition-all"
+                        title="Xóa tất cả ảnh"
                     >
-                        <ImageMinus size={16} />
-                        Xóa hết ảnh
+                        <Trash2 size={14} />
                     </button>
-
-                    <div className="flex bg-gray-900/50 p-1 rounded-lg border border-gray-700/50 h-10 items-center">
-                        <button
-                            onClick={() => toggleAllGroups(true)}
-                            className="flex items-center space-x-2 px-3 h-full rounded-md text-gray-400 hover:text-gray-200 transition-all text-[9px] font-bold uppercase"
-                            title="Collapse All Groups"
-                        >
-                            <ChevronRight size={12} />
-                            <span>Collapse</span>
-                        </button>
-                        <button
-                            onClick={() => toggleAllGroups(false)}
-                            className="flex items-center space-x-2 px-3 h-full rounded-md text-gray-400 hover:text-gray-200 transition-all text-[9px] font-bold uppercase"
-                            title="Expand All Groups"
-                        >
-                            <ChevronDown size={12} />
-                            <span>Expand</span>
-                        </button>
-                    </div>
                 </div>
             </div>
 
+            {/* DOP DASHBOARD OVERLAY */}
+            {showDOP && (
+                <div className="mb-8 p-6 bg-blue-900/10 border border-blue-500/30 rounded-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
+                                <Zap size={20} />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-black text-blue-100 uppercase tracking-tighter">DOP Continuity Logic (Raccord)</h3>
+                                <p className="text-[10px] text-blue-400/80 font-bold uppercase">Giám sát tính nhất quán của bối cảnh & đạo cụ</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <span className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-[8px] font-black text-blue-300 uppercase">Automated Guard v1.0</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-gray-950/50 rounded-xl p-4 border border-blue-500/10">
+                            <h4 className="text-[10px] font-black text-blue-300 uppercase mb-3 flex items-center gap-2">
+                                <div className="w-1 h-1 rounded-full bg-blue-400"></div>
+                                Phân tích Raccord (Scene Mới Nhất)
+                            </h4>
+                            <div className="space-y-2">
+                                {scenes.filter(s => s.generatedImage).length > 0 ? (
+                                    (() => {
+                                        const lastGenScene = [...scenes].reverse().find(s => s.generatedImage);
+                                        const insights = analyzeRaccord(lastGenScene!.id);
+                                        if (insights.length === 0) return <p className="text-[10px] text-gray-500 font-bold">Mọi thứ đều ổn định (Perfect Raccord).</p>;
+                                        return insights.map((ins, i) => (
+                                            <div key={i} className={`p-2 rounded border ${ins.severity === 'warning' ? 'bg-amber-500/5 border-amber-500/20 text-amber-200' : 'bg-blue-500/5 border-blue-500/20 text-blue-200'} text-[10px]`}>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="font-black uppercase tracking-widest">{ins.type}</span>
+                                                    <span className="text-[8px] opacity-70 italic font-bold">Severity: {ins.severity}</span>
+                                                </div>
+                                                <p className="font-bold opacity-90">{ins.message}</p>
+                                                {ins.suggestion && <p className="mt-1 text-[9px] text-white/50 leading-relaxed italic">💡 Suggestion: {ins.suggestion}</p>}
+                                            </div>
+                                        ));
+                                    })()
+                                ) : (
+                                    <p className="text-[10px] text-gray-600 font-bold italic">Chưa có scene nào được tạo để bắt đầu phân tích raccord.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-950/50 rounded-xl p-4 border border-blue-500/10">
+                            <h4 className="text-[10px] font-black text-blue-300 uppercase mb-3 flex items-center gap-2">
+                                <div className="w-1 h-1 rounded-full bg-blue-400"></div>
+                                Gợi ý DOP cho cảnh tiếp theo
+                            </h4>
+                            {scenes.length > 0 ? (
+                                (() => {
+                                    const lastScene = scenes[scenes.length - 1];
+                                    const suggestion = suggestNextShot(lastScene.id);
+                                    if (!suggestion) return null;
+                                    return (
+                                        <div className="space-y-3">
+                                            <div className="flex items-start gap-3">
+                                                <div className="px-2 py-1 bg-brand-orange/20 border border-brand-orange/40 rounded text-brand-orange text-[10px] font-black uppercase">
+                                                    {suggestion.action}
+                                                </div>
+                                                <div>
+                                                    <p className="text-[11px] font-black text-brand-cream">{suggestion.recommendation.label}</p>
+                                                    <p className="text-[10px] text-gray-500 font-medium leading-tight mt-1">{suggestion.recommendation.reason}</p>
+                                                </div>
+                                            </div>
+                                            <div className="pt-3 border-t border-gray-800">
+                                                <p className="text-[9px] text-gray-400 uppercase font-black leading-none mb-2">Tip: Raccord de Story Flow</p>
+                                                <p className="text-[10px] text-gray-500 italic">"Giữ nhịp điệu: Đừng quên nhân vật còn đang ở trạng thái tâm lý [VUI VẺ/LO LẮNG] từ cảnh {lastScene.sceneNumber}."</p>
+                                            </div>
+                                        </div>
+                                    );
+                                })()
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* SECONDARY ROW: VEO PRESET CONTROLS */}
-            <div className="flex justify-end mb-8">
-                <div className="flex items-center gap-1 bg-gray-900/80 p-1.5 rounded-xl border border-gray-700/50 h-11 backdrop-blur-md shadow-2xl">
-                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-3">Veo Expert Controls:</span>
-                    <div className="w-px h-4 bg-gray-700 mx-1"></div>
+            <div className="flex justify-end mb-6">
+                <div className="flex items-center gap-1 bg-gray-950/60 p-1 rounded-xl border border-gray-800/80 backdrop-blur-md shadow-xl h-10">
+                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest px-3 border-r border-gray-800 h-full flex items-center">Veo Tools:</span>
                     <button
                         onClick={suggestVeoPresets}
                         disabled={isVeoGenerating}
-                        className="h-full px-4 text-[10px] font-black text-blue-400 hover:text-blue-300 transition-all uppercase tracking-widest flex items-center gap-2 hover:bg-blue-500/10 rounded-lg"
-                        title="AI sẽ tự động chọn Preset tốt nhất cho từng cảnh (Dựa trên hướng dẫn Veo 3.1)"
+                        className="h-full px-3 text-[9px] font-black text-blue-400 hover:text-blue-300 transition-all uppercase tracking-widest flex items-center gap-2 hover:bg-blue-500/5 rounded-lg"
+                        title="AI sẽ tự động chọn Preset tốt nhất"
                     >
-                        ✨ AI Suggest Presets
+                        AI Suggest
                     </button>
-                    <div className="w-px h-4 bg-gray-700 mx-1"></div>
-                    <div className="flex items-center px-4 gap-3">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase">Apply to All:</span>
+                    <div className="w-px h-3 bg-gray-800"></div>
+                    <div className="flex items-center px-3 gap-2">
+                        <span className="text-[8px] font-bold text-gray-500 uppercase">Preset:</span>
                         <select
                             onChange={(e) => {
                                 if (e.target.value) applyPresetToAll(e.target.value);
                             }}
-                            className="bg-gray-800 border border-gray-700 text-[10px] font-black text-brand-cream outline-none cursor-pointer px-3 py-1 rounded-md focus:border-brand-orange transition-all uppercase tracking-wider"
+                            className="bg-transparent border-none text-[9px] font-black text-brand-cream outline-none cursor-pointer p-0 transition-all uppercase tracking-wider"
                             defaultValue=""
                         >
-                            <option value="" disabled>Select Preset...</option>
+                            <option value="" disabled>Select...</option>
                             {VEO_PRESETS.map(p => (
                                 <option key={p.value} value={p.value} className="bg-gray-900">{p.label}</option>
                             ))}
                         </select>
                     </div>
-                    <div className="w-px h-4 bg-gray-700 mx-1"></div>
+                    <div className="w-px h-3 bg-gray-800"></div>
                     <button
                         onClick={() => {
                             const allVeo = scenes.map(s => s.veoPrompt || '').filter(t => t).join('\n\n');
                             if (allVeo) {
                                 navigator.clipboard.writeText(allVeo).then(() => alert('📋 Copied all Veo Prompts!'));
                             } else {
-                                alert('⚠️ No Veo Prompts to copy. Generate them first!');
+                                alert('⚠️ No Veo Prompts to copy.');
                             }
                         }}
-                        className="h-full px-4 text-[10px] font-black text-brand-orange hover:text-white transition-all uppercase tracking-widest flex items-center gap-2 hover:bg-brand-orange/10 rounded-lg"
+                        className="h-full px-3 text-[9px] font-black text-brand-orange hover:text-white transition-all uppercase tracking-widest flex items-center gap-2 hover:bg-brand-orange/5 rounded-lg"
                         title="Copy All Veo Prompts"
                     >
-                        📋 Copy All Veo Prompts
+                        Copy All
                     </button>
                 </div>
             </div>
 
             {/* === DETAILED SCRIPT SECTION === */}
-            <div className="mb-8 p-6 bg-gray-800/40 rounded-xl border border-gray-700/50 backdrop-blur-sm">
-                <div className="flex justify-between items-center mb-3">
-                    <label className="flex items-center text-sm font-bold text-gray-200">
-                        <span className="text-xl mr-2">📜</span> Kịch bản Chi tiết (Detailed Story)
-                    </label>
-                    <span className="text-xs text-brand-orange bg-brand-orange/10 px-2 py-1 rounded">Read-only / Reference</span>
+            <div className="mb-6 bg-gray-900/30 rounded-2xl border border-gray-800/50 overflow-hidden transition-all duration-300">
+                <div
+                    onClick={() => setShowDetailedScript(!showDetailedScript)}
+                    className="flex justify-between items-center p-4 cursor-pointer hover:bg-white/5 transition-colors"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className={`p-1.5 rounded-lg transition-all ${showDetailedScript ? 'bg-brand-orange text-white' : 'bg-gray-800 text-gray-500'}`}>
+                            {showDetailedScript ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </div>
+                        <label className="flex items-center text-[11px] font-black text-gray-400 uppercase tracking-widest cursor-pointer">
+                            <span className="text-lg mr-2">📜</span> Kịch bản Chi tiết (Detailed Story)
+                        </label>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {!showDetailedScript && detailedScript && (
+                            <span className="text-[9px] text-gray-600 font-bold truncate max-w-md italic">
+                                {detailedScript.substring(0, 100)}...
+                            </span>
+                        )}
+                        <span className="text-[9px] font-black text-brand-orange bg-brand-orange/10 px-2 py-0.5 rounded uppercase tracking-wider">Reference Mode</span>
+                    </div>
                 </div>
-                <textarea
-                    value={detailedScript}
-                    onChange={(e) => onDetailedScriptChange(e.target.value)}
-                    placeholder="Nội dung cốt truyện chi tiết sẽ được hiển thị ở đây giúp bạn nắm bắt mạch chuyện..."
-                    className="w-full h-48 bg-gray-900/50 text-gray-300 px-4 py-3 rounded-lg border border-gray-700/50 focus:outline-none focus:ring-1 focus:ring-brand-orange text-sm leading-relaxed scrollbar-thin scrollbar-thumb-gray-600 font-mono"
-                />
-                <div className="flex justify-end mt-2">
-                    <button
-                        onClick={onCleanAll}
-                        className="flex items-center space-x-2 px-3 py-1.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded border border-red-900/50 transition-colors"
-                        title="Xóa toàn bộ kịch bản và scene để làm lại từ đầu"
-                    >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Xóa sạch & Làm mới (Clean All)</span>
-                    </button>
+
+                {showDetailedScript && (
+                    <div className="px-4 pb-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <textarea
+                            value={detailedScript}
+                            onChange={(e) => onDetailedScriptChange(e.target.value)}
+                            placeholder="Nội dung cốt truyện chi tiết sẽ được hiển thị ở đây giúp bạn nắm bắt mạch chuyện..."
+                            className="w-full h-48 bg-black/40 text-gray-300 px-4 py-3 rounded-xl border border-gray-800/50 focus:outline-none focus:ring-1 focus:ring-brand-orange text-xs leading-relaxed scrollbar-thin scrollbar-thumb-gray-600 font-mono mb-3"
+                        />
+                        <div className="flex justify-end">
+                            <button
+                                onClick={onCleanAll}
+                                className="flex items-center space-x-2 px-3 py-1.5 text-[9px] font-black text-red-500 hover:text-white hover:bg-red-600/20 rounded-lg border border-red-900/30 transition-all uppercase tracking-widest"
+                                title="Xóa toàn bộ kịch bản và scene để làm lại từ đầu"
+                            >
+                                <Trash2 size={12} />
+                                <span>Xóa sạch dự án (Clean All)</span>
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* === LOCAL UTILITY TOOLBAR === */}
+            <div className="flex items-center justify-between mb-4 bg-gray-800/20 p-2 rounded-xl border border-gray-700/30">
+                <div className="flex items-center gap-3">
+                    {/* View Mode Toggle */}
+                    <div className="flex bg-gray-900/80 p-0.5 rounded-lg border border-gray-700/50 h-9 items-center">
+                        <button
+                            onClick={() => setViewMode('table')}
+                            className={`flex items-center space-x-2 px-3 h-full rounded-md transition-all ${viewMode === 'table' ? 'bg-brand-orange text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}
+                        >
+                            <Table size={12} />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Table</span>
+                        </button>
+                        <button
+                            onClick={() => setViewMode('storyboard')}
+                            className={`flex items-center space-x-2 px-3 h-full rounded-md transition-all ${viewMode === 'storyboard' ? 'bg-brand-orange text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}
+                        >
+                            <LayoutGrid size={12} />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Board</span>
+                        </button>
+                    </div>
+
+                    {/* Group View Controls (Collapse/Expand) */}
+                    <div className="flex bg-gray-900/80 p-0.5 rounded-lg border border-gray-700/50 h-9 items-center">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); toggleAllGroups(true); }}
+                            className="flex items-center space-x-2 px-3 h-full rounded-md text-gray-500 hover:text-gray-200 transition-all text-[9px] font-bold uppercase"
+                        >
+                            <ChevronRight size={12} />
+                            <span>Collapse</span>
+                        </button>
+                        <div className="w-px h-3 bg-gray-700 mx-1"></div>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); toggleAllGroups(false); }}
+                            className="flex items-center space-x-2 px-3 h-full rounded-md text-gray-500 hover:text-gray-200 transition-all text-[9px] font-bold uppercase"
+                        >
+                            <ChevronDown size={12} />
+                            <span>Expand</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                        {scenes.length} Scenes / {sceneGroups.length} Groups
+                    </span>
                 </div>
             </div>
 
@@ -303,6 +442,7 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                     <div className="col-span-3 text-center">Ảnh</div>
                 </div>
             )}
+
             {/* === SCENES LIST WITH GROUPS === */}
             <div className={`mt-4 ${viewMode === 'storyboard' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6' : 'space-y-4'}`}>
                 {(() => {
@@ -384,29 +524,6 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                     </div>
 
                                     <div className="flex items-center space-x-3" onClick={(e) => e.stopPropagation()}>
-                                        {currentGroupId && (
-                                            <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => onGenerateGroupImages && onGenerateGroupImages(currentGroupId!)}
-                                                    className="p-2 text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-600 rounded-lg border border-purple-500/30 transition-all flex items-center gap-1.5 text-[9px] font-bold"
-                                                    title="Tạo ảnh hàng loạt cho riêng nhóm này"
-                                                >
-                                                    <Zap size={10} /> Tạo ảnh nhóm
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        if (confirm(`Xóa toàn bộ ảnh trong nhóm "${group?.name || 'này'}"?`)) {
-                                                            onClearGroupImages && onClearGroupImages(currentGroupId!);
-                                                        }
-                                                    }}
-                                                    className="p-2 text-gray-500 hover:text-red-400 bg-gray-800 hover:bg-red-500/10 rounded-lg border border-gray-700 transition-all"
-                                                    title="Flush group images"
-                                                >
-                                                    <Trash2 size={12} />
-                                                </button>
-                                            </div>
-                                        )}
-
                                         {!currentGroupId ? (
                                             <button
                                                 onClick={() => {
@@ -487,6 +604,7 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
 
                                         <SceneRow
                                             scene={scene}
+                                            scenes={scenes}
                                             index={index}
                                             characters={characters}
                                             products={products}
@@ -515,7 +633,6 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                             onDragOver={(idx) => {
                                                 if (dragOverIndex !== idx) {
                                                     setDragOverIndex(idx);
-                                                    (window as any).dragOverIndex = idx;
                                                 }
                                             }}
                                             onDrop={(targetIdx) => {
@@ -524,7 +641,6 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                                 }
                                                 setDraggedSceneIndex(null);
                                                 setDragOverIndex(null);
-                                                (window as any).dragOverIndex = null;
                                             }}
                                             onInsertAngles={onInsertAngles}
                                         />
@@ -562,7 +678,6 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                         onDragOver={(idx) => {
                                             if (dragOverIndex !== idx) {
                                                 setDragOverIndex(idx);
-                                                (window as any).dragOverIndex = idx;
                                             }
                                         }}
                                         onDrop={(targetIdx) => {
@@ -571,7 +686,6 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                             }
                                             setDraggedSceneIndex(null);
                                             setDragOverIndex(null);
-                                            (window as any).dragOverIndex = null;
                                         }}
                                     />
                                 )}

@@ -57,7 +57,8 @@ export function useImageGeneration(
     setApiKeyModalOpen: (open: boolean) => void,
     isContinuityMode: boolean,
     userId?: string,
-    isOutfitLockMode?: boolean
+    isOutfitLockMode?: boolean,
+    addToGallery?: (image: string, type: string, prompt?: string, sourceId?: string) => void
 ) {
     const [isBatchGenerating, setIsBatchGenerating] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
@@ -180,7 +181,7 @@ export function useImageGeneration(
 
             if (selectedChars.length > 0) {
                 const charDesc = selectedChars.map(c => `[${c.name}: ${c.description}]`).join(' ');
-                const outfitConstraint = isOutfitLockMode ? ' (STRICT OUTFIT LOCK: Use EXACT clothes/colors from reference images.)' : '';
+                const outfitConstraint = ' (MANDATORY COSTUME LOCK: Character MUST be wearing the exact clothing/uniform shown in their FULL BODY reference image. ABSOLUTELY NO NAKEDNESS.)';
                 charPrompt = `Appearing Characters: ${charDesc}${outfitConstraint}`;
             } else if (isDocumentary) {
                 // DOCUMENTARY MODE: Allow anonymous people (crowds, subjects, etc.)
@@ -211,13 +212,22 @@ export function useImageGeneration(
             // Shot Scale (Angle) is the ABSOLUTE PRIORITY for composition
             const scaleCmd = anglePrompt ? `SHOT SCALE: ${anglePrompt.toUpperCase()}.` : 'CINEMATIC WIDE SHOT.';
 
+            // NO DRIFT GUARD: Prevent "Chibi" or distortion if style is realistic
+            const noDriftGuard = isRealistic ? "!!! MANDATORY CONSISTENCY: Maintain realistic human/object dimensions. NO DISTORTIONS. !!!" : "";
+
+            // SCALE LOCK: If it's a close-up, reference the previous shot's scale
+            let scaleLockInstruction = '';
+            if (anglePrompt.toUpperCase().includes('CLOSE UP') || anglePrompt.toUpperCase().includes('POV')) {
+                scaleLockInstruction = '[SCALE LOCK]: Reference the object/subject dimensions from previous wide shots. Match texture and relative size exactly. ';
+            }
+
             // GLOBAL ENVIRONMENT ANCHOR (To prevent drift within group)
             let groupEnvAnchor = '';
             let timeWeatherLock = '';
             if (sceneToUpdate.groupId) {
                 const groupObj = currentState.sceneGroups?.find(g => g.id === sceneToUpdate.groupId);
                 if (groupObj) {
-                    groupEnvAnchor = `GLOBAL SETTING: ${groupObj.description.toUpperCase()}.`;
+                    groupEnvAnchor = `GLOBAL SETTING: ${groupObj.description.toUpperCase()}. [SET ANCHOR]: Maintain fixed positions of furniture, windows, and architectural landmarks (e.g. fireplace, counter).`;
 
                     // TIME & WEATHER CONSISTENCY LOCK
                     const timeParts: string[] = [];
@@ -244,13 +254,18 @@ export function useImageGeneration(
                     }
 
                     if (timeParts.length > 0) {
-                        timeWeatherLock = `[TIME/WEATHER LOCK - STRICT CONSISTENCY]: ${timeParts.join(', ')}. ALL scenes in this group MUST have IDENTICAL lighting direction, shadow angles, sky color, and atmospheric conditions.`;
+                        timeWeatherLock = `[GLOBAL ATMOSPHERE LOCK]: ${timeParts.join(', ')}. MANDATORY: ALL scenes in this group MUST have IDENTICAL lighting direction, shadow intensity, sky color, and atmospheric mood. No variations allowed.`;
                     }
                 }
             }
 
 
-            let finalImagePrompt = `${authoritativeStyle} ${scaleCmd} ${coreActionPrompt} ${groupEnvAnchor} ${timeWeatherLock} ${charPrompt} FULL SCENE VISUALS: ${cleanedContext}. STYLE DETAILS: ${metaTokens}. TECHNICAL: (STRICT CAMERA: ${cinematographyPrompt ? cinematographyPrompt : 'High Quality'}).`.trim();
+            let finalImagePrompt = `${authoritativeStyle} ${scaleCmd} ${scaleLockInstruction} ${noDriftGuard} ${coreActionPrompt} ${groupEnvAnchor} ${timeWeatherLock} ${charPrompt} FULL SCENE VISUALS: ${cleanedContext}. STYLE DETAILS: ${metaTokens}. TECHNICAL: (STRICT CAMERA: ${cinematographyPrompt ? cinematographyPrompt : 'High Quality'}).`.trim();
+
+            // PROP ANCHOR TEXT INJECTION (High Priority)
+            if (sceneToUpdate.referenceImage && sceneToUpdate.referenceImageDescription) {
+                finalImagePrompt = `!!! MANDATORY OBJECT LOCK: ${sceneToUpdate.referenceImageDescription.toUpperCase()} !!! Draw the following objects EXACTLY as shown in the [AUTHORITATIVE_VISUAL_REFERENCE] image: ${sceneToUpdate.referenceImageDescription.toUpperCase()}. Match design, material, and color. ${finalImagePrompt}`;
+            }
 
             if (refinementPrompt) {
                 finalImagePrompt = `REFINEMENT: ${refinementPrompt}. BASE PROMPT: ${finalImagePrompt}`;
@@ -270,9 +285,9 @@ export function useImageGeneration(
                     if (imgData) {
                         const refLabel = `IDENTITY_${char.name.toUpperCase()}`;
                         // Google pattern: explicit name + "use as reference for how X should look"
-                        parts.push({ text: `[${refLabel}]: Use this supplied image as the AUTHORITATIVE reference for how ${char.name} should look. This person's face is the ONLY face allowed for ${char.name}. Keep the same person in every image. ${char.description}` });
+                        parts.push({ text: `[${refLabel}]: MANDATORY IDENTITY LOCK. Use this supplied image as the ONLY AUTHORITATIVE reference for how ${char.name} should look. Match face structure, features, and identity 100%. ABSOLUTELY NO VARIATION in facial structure allowed. ${char.description}` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        continuityInstruction += `(KEEP SAME PERSON: ${char.name}) `;
+                        continuityInstruction += `(STRICT IDENTITY LOCK: ${char.name}) `;
                     }
                 }
 
@@ -281,7 +296,8 @@ export function useImageGeneration(
                     const imgData = await safeGetImageData(char.masterImage);
                     if (imgData) {
                         const refLabel = `FULLBODY_${char.name.toUpperCase()}`;
-                        parts.push({ text: `[${refLabel}]: Full body reference for ${char.name}. Use for proportions and posture. Face from IDENTITY_${char.name.toUpperCase()} takes precedence.` });
+                        // STRONGER COSTUME LOCK
+                        parts.push({ text: `[${refLabel}]: MANDATORY COSTUME REFERENCE for ${char.name}. Match clothing, colors, uniform, and textures 100%. If character has clothes in this image, they MUST HAVE CLOTHES in the output.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                     }
                 }
@@ -292,10 +308,9 @@ export function useImageGeneration(
                 const imgData = await safeGetImageData(currentState.customStyleImage);
                 const charNames = selectedChars.map(c => c.name).join(', ');
                 if (imgData) {
-                    parts.push({ text: `[STYLE_REFERENCE]: Apply the art style of this image (line work, colors, shading, texture) while MAINTAINING the facial features from the IDENTITY references above${charNames ? ` (${charNames})` : ''}. Do NOT use faces from this style image.` });
+                    parts.push({ text: `[STYLE_REFERENCE]: Apply ONLY the artistic rendering style of this image (shading, colors, texture) while RIGIDLY MAINTAINING the facial identity from ${charNames ? `IDENTITY references for ${charNames}` : 'above'}. DO NOT let this image influence the person's face structure or identity.` });
                     parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                    continuityInstruction += `(APPLY STYLE, KEEP IDENTITY) `;
-
+                    continuityInstruction += `(STYLE ISOLATION: APPLY STYLE TO ENVIRONMENT/RENDER ONLY) `;
                 }
             }
 
@@ -306,7 +321,7 @@ export function useImageGeneration(
                     const imgData = await safeGetImageData(char.faceImage);
                     if (imgData) {
                         const refLabel = `FACE_OVERRIDE: ${char.name.toUpperCase()}`;
-                        parts.push({ text: `[${refLabel}]: !!! OVERRIDE WARNING !!! IGNORE any faces you saw in STYLE_REFERENCE above. USE THIS FACE ONLY for ${char.name}. This person's face REPLACES any other face you may have seen. This is the authoritative facial reference.` });
+                        parts.push({ text: `[${refLabel}]: !!! IDENTITY GUARD !!! ABSOLUTELY REJECT any facial variations introduced by style. RE-ESTABLISH this exact person. This face is the ONLY valid person for ${char.name}.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                     }
                 }
@@ -325,11 +340,11 @@ export function useImageGeneration(
                 if (firstSceneInGroup?.generatedImage) {
                     const imgData = await safeGetImageData(firstSceneInGroup.generatedImage);
                     if (imgData) {
-                        const refLabel = `BACKGROUND_LOCK (Environment Only)`;
+                        const refLabel = `ENVIRONMENT_ONLY_LOCK`;
                         // CLEAN REFERENCE: Only use for background, explicitly ignore characters/props
-                        parts.push({ text: `[${refLabel}]: Extract ONLY the BACKGROUND ENVIRONMENT from this image. Match: architecture, scenery, weather, lighting, time of day, sky. ABSOLUTELY IGNORE: any people, characters, props, objects, or items shown. DO NOT copy character poses, clothing, or accessories. This is for ENVIRONMENTAL CONSISTENCY ONLY.` });
+                        parts.push({ text: `[${refLabel}]: Use this as the RIGID template for architecture and lighting ONLY. Match: layout, wall textures, room geometry, furniture placement, and lighting source. ABSOLUTELY IGNORE characters, clothing, and small props. This is a background-only consistency anchor.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        continuityInstruction += `(BACKGROUND ONLY from first scene) `;
+                        continuityInstruction += `(BACKGROUND LOCK FROM MASTER SCENE) `;
                     }
                 }
 
@@ -409,21 +424,56 @@ export function useImageGeneration(
                     const imgData = await safeGetImageData(ref.img);
                     if (imgData) {
                         const refLabel = `MASTER VISUAL: ${prod.name.toUpperCase()} ${ref.type}`;
-                        parts.push({ text: `[${refLabel}]: AUTHORITATIVE visual anchor for ${prod.name}. Match the design, colors, and branding from this image exactly.` });
+                        // STRONGER RACCORD FOR PROPS
+                        parts.push({ text: `[${refLabel}]: AUTHORITATIVE visual anchor for ${prod.name} (PROP RACCORD). Match the design, colors, material, and branding from this image EXACTLY. Maintain consistent scale relative to the character.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        referencePreamble += `(PRODUCT CONTINUITY: Match ${refLabel}) `;
+                        referencePreamble += `(PROP CONTINUITY: Match ${refLabel}) `;
                     }
                 }
             }
 
-            // 5d. IDENTITY REINFORCEMENT (SANDWICH PATTERN - Face ID again at END)
-            // This reinforces character identity after scene references to prevent drift
+            // 5e. SCALE ANCHOR FROM PREVIOUS SHOT (New)
+            // Only use if no explicit user reference image is provided (to avoid conflicting references)
+            if (currentSceneIndex > 0 && !sceneToUpdate.referenceImage) {
+                const prevSceneWithImage = currentState.scenes.slice(0, currentSceneIndex).reverse().find(s => s.generatedImage);
+                if (prevSceneWithImage?.generatedImage) {
+                    const imgData = await safeGetImageData(prevSceneWithImage.generatedImage);
+                    if (imgData) {
+                        parts.push({ text: `[SCALE_ANCHOR_PREVIOUS]: Use as reference for object proportions and relative scale. Ensure item in this scene matches the size/color of the same item in this previous shot.` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    }
+                }
+            }
+
+            // 5e. EXPLICIT PRODUCT/PROP REFERENCE (User-defined Override)
+            if (sceneToUpdate.referenceImage) {
+                const imgData = await safeGetImageData(sceneToUpdate.referenceImage);
+                if (imgData) {
+                    const focus = sceneToUpdate.referenceImageDescription || 'props and environment';
+                    parts.push({ text: `[AUTHORITATIVE_VISUAL_REFERENCE]: USE THIS IMAGE as the primary reference for the design, color, and texture of the ${focus}. Match the objects shown here exactly in the new scene. IGNORE any text descriptions of these specific objects that conflict with this image.` });
+                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    // Add to top of parts if it's really important? No, index-wise handles it.
+                }
+            }
+
+
+            // 5f. IDENTITY & OUTFIT REINFORCEMENT (SANDWICH PATTERN - Face & Body again at END)
+            // This reinforces character identity and costume after scene references to prevent drift
             for (const char of selectedChars) {
                 if (char.faceImage) {
                     const imgData = await safeGetImageData(char.faceImage);
                     if (imgData) {
-                        const refLabel = `FINAL_IDENTITY_CHECK: ${char.name.toUpperCase()}`;
-                        parts.push({ text: `[${refLabel}]: !!! FINAL VERIFICATION !!! Re-confirming that the generated image features THIS EXACT PERSON. Cross-check against PRIMARY_IDENTITY. If there is ANY face mismatch, regenerate.` });
+                        const refLabel = `FINAL_IDENTITY_ANCHOR: ${char.name.toUpperCase()}`;
+                        parts.push({ text: `[${refLabel}]: !!! FINAL IDENTITY CHECK !!! Match face structure 100%.` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    }
+                }
+
+                if (char.bodyImage || char.masterImage) {
+                    const imgData = await safeGetImageData(char.bodyImage || char.masterImage || '');
+                    if (imgData) {
+                        const refLabel = `FINAL_OUTFIT_ANCHOR: ${char.name.toUpperCase()}`;
+                        parts.push({ text: `[${refLabel}]: !!! FINAL OUTFIT CHECK !!! Character MUST BE CLOTHED according to this reference. No nakedness.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                     }
                 }
@@ -452,6 +502,11 @@ export function useImageGeneration(
                     error: null
                 } : sc)
             }));
+
+            // Add to session gallery
+            if (addToGallery) {
+                addToGallery(imageUrl, isEndFrame ? 'end-frame' : 'scene', finalImagePrompt, sceneId);
+            }
 
         } catch (error) {
             console.error("Image generation failed:", error);
@@ -500,6 +555,10 @@ export function useImageGeneration(
                 currentState.imageModel || 'gemini-3-pro-image-preview',
                 currentState.aspectRatio
             );
+
+            if (imageUrl && addToGallery) {
+                addToGallery(imageUrl, 'concept', conceptPrompt, groupName);
+            }
 
             return imageUrl;
         } catch (error) {

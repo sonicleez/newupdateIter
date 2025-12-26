@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { GripVertical, Copy, Download, Layers } from 'lucide-react';
+import { GripVertical, Copy, Download, Layers, Play, Plus, RefreshCw, Trash, User, Box, Sparkles, Wand2, Image as ImageIcon } from 'lucide-react';
 import { Scene, Character, Product } from '../../types';
 import { ExpandableTextarea } from '../common/ExpandableTextarea';
 import { CAMERA_ANGLES, LENS_OPTIONS, TRANSITION_TYPES, VEO_MODES, VEO_PRESETS } from '../../constants/presets';
@@ -19,6 +19,7 @@ const INSERT_ANGLE_OPTIONS = [
 
 export interface SceneRowProps {
     scene: Scene;
+    scenes: Scene[];
     index: number;
     characters: Character[];
     products: Product[];
@@ -38,7 +39,7 @@ export interface SceneRowProps {
 }
 
 export const SceneRow: React.FC<SceneRowProps> = ({
-    scene, index, characters, products, sceneGroups, updateScene, assignSceneToGroup, removeScene,
+    scene, scenes, index, characters, products, sceneGroups, updateScene, assignSceneToGroup, removeScene,
     generateImage, generateEndFrame, openImageViewer,
     onDragStart, onDragOver, onDrop,
     generateVeoPrompt,
@@ -47,6 +48,7 @@ export const SceneRow: React.FC<SceneRowProps> = ({
 }) => {
     const endFrameInputRef = useRef<HTMLInputElement>(null);
     const [showAnglesDropdown, setShowAnglesDropdown] = useState(false);
+    const [showScenePicker, setShowScenePicker] = useState(false);
     const [selectedAngles, setSelectedAngles] = useState<string[]>([]);
     const [customAnglePrompt, setCustomAnglePrompt] = useState('');
 
@@ -316,7 +318,7 @@ export const SceneRow: React.FC<SceneRowProps> = ({
             </div>
 
             {/* Image & Actions */}
-            <div className="md:col-span-3 flex flex-col space-y-2">
+            <div className="md:col-span-3 flex flex-col space-y-2 relative">
                 <div className="flex items-center gap-2 bg-gray-900/60 p-1.5 rounded border border-gray-700/50">
                     <span className="text-[9px] text-gray-500 font-semibold">🎥 Veo:</span>
                     {VEO_MODES.map(mode => (
@@ -432,6 +434,95 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                     )}
                 </div>
 
+                {/* NEW: Prop Reference Slot */}
+                <div className="flex gap-2 mt-1 px-1">
+                    <div className={`flex-1 h-20 relative rounded border border-dashed flex items-center transition-all ${scene.referenceImage ? 'border-blue-500 bg-blue-900/10' : 'border-gray-700 bg-gray-900/30'}`}>
+                        <div className="absolute -top-2 left-2 px-1 bg-gray-950 z-10 flex items-center gap-1 border border-gray-800 rounded">
+                            <span className="text-[8px] text-blue-400 font-bold uppercase tracking-wider">🔗 Mỏ neo tham chiếu (Prop Anchor)</span>
+                            {scene.referenceImage && (
+                                <button
+                                    onClick={() => updateScene(scene.id, { referenceImage: null, referenceImageDescription: '' })}
+                                    className="text-[9px] text-red-500 hover:text-red-400 font-bold px-1"
+                                >✕</button>
+                            )}
+                        </div>
+
+                        {scene.referenceImage ? (
+                            <div className="flex w-full h-full p-1.5 gap-2 items-center">
+                                <div className="w-16 h-full rounded border border-blue-500/50 overflow-hidden shrink-0 group/ref relative shadow-lg">
+                                    <img src={scene.referenceImage} alt="Ref" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/ref:opacity-100 flex items-center justify-center transition-opacity cursor-pointer" onClick={() => window.open(scene.referenceImage!, '_blank')}>
+                                        <span className="text-white text-[8px] font-bold">🔍 Xem</span>
+                                    </div>
+                                </div>
+                                <div className="flex-1 flex flex-col gap-1">
+                                    <input
+                                        type="text"
+                                        value={scene.referenceImageDescription || ''}
+                                        placeholder="Ghim vật thể: chảo, cá, ghế..."
+                                        className="w-full bg-blue-950/40 border-none text-[10px] text-blue-100 px-2 py-1 rounded outline-none font-medium placeholder:text-blue-900/30"
+                                        onChange={(e) => updateScene(scene.id, { referenceImageDescription: e.target.value })}
+                                    />
+                                    <p className="text-[8px] text-blue-500/70 leading-tight italic">
+                                        AI sẽ lấy mẫu đúng hình dáng vật thể này.
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center gap-4 py-2">
+                                <button
+                                    onClick={() => setShowScenePicker(!showScenePicker)}
+                                    className="px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/20 text-[10px] font-black flex items-center gap-2 transition-all shadow-lg active:scale-95"
+                                >
+                                    <ImageIcon size={12} />
+                                    Chọn mỏ neo sẵn có
+                                </button>
+                                <span className="text-[8px] text-gray-600 italic max-w-[130px] leading-tight text-center">Tái sử dụng ảnh đã tạo để giữ đạo cụ đồng nhất.</span>
+                            </div>
+                        )}
+
+                        {/* Scene Picker Popover */}
+                        {showScenePicker && (
+                            <div className="absolute bottom-full left-0 mb-4 w-72 bg-gray-950 border border-blue-500/50 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] z-[200] p-3 animate-in fade-in zoom-in-95 slide-in-from-bottom-4 duration-200 backdrop-blur-xl">
+                                <div className="flex justify-between items-center mb-3 border-b border-gray-800 pb-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                                        <span className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Kho ảnh (Scene Picker)</span>
+                                    </div>
+                                    <button onClick={() => setShowScenePicker(false)} className="text-gray-500 hover:text-white transition-colors">✕</button>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto p-1 custom-scrollbar">
+                                    {scenes.filter(s => s.generatedImage && s.id !== scene.id).length > 0 ? (
+                                        scenes.filter(s => s.generatedImage && s.id !== scene.id).map((s) => (
+                                            <div
+                                                key={s.id}
+                                                className="aspect-video relative rounded-lg cursor-pointer group/picker border-2 border-transparent hover:border-blue-500 transition-all duration-200 shadow-lg hover:z-[210]"
+                                                onClick={() => {
+                                                    updateScene(scene.id, { referenceImage: s.generatedImage });
+                                                    setShowScenePicker(false);
+                                                }}
+                                            >
+                                                <div className="w-full h-full rounded-md overflow-hidden transition-transform duration-300 group-hover/picker:scale-[2.2] group-hover/picker:shadow-2xl group-hover/picker:ring-2 group-hover/picker:ring-blue-500">
+                                                    <img src={s.generatedImage!} alt="Pick" className="w-full h-full object-cover" />
+                                                </div>
+                                                <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white text-[8px] font-black px-1.5 rounded shadow-lg z-10">
+                                                    SC {scenes.findIndex(os => os.id === s.id) + 1}
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="col-span-3 py-8 text-center bg-black/20 rounded-lg">
+                                            <p className="text-[10px] text-gray-600 font-bold italic mb-1">Kho ảnh trống</p>
+                                            <p className="text-[8px] text-gray-700">Hãy tạo ảnh cho các cảnh khác trước.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Video Generation Display */}
                 {(scene.generatedVideo || (scene.isGenerating && (scene.videoStatus === 'starting' || scene.videoStatus === 'active'))) && (
                     <div className="relative w-full aspect-video bg-black rounded border border-gray-600 overflow-hidden mt-1">
                         {scene.isGenerating && (scene.videoStatus === 'starting' || scene.videoStatus === 'active') ? (
@@ -450,13 +541,13 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                 )}
 
                 {scene.error && (
-                    <div className="bg-red-900/90 p-2 text-center rounded">
+                    <div className="bg-red-900/90 p-2 text-center rounded mt-1">
                         <span className="text-white text-xs">{scene.error}</span>
                     </div>
                 )}
 
                 {/* Button Row: Generate Image + Insert Angles */}
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 mt-auto">
                     <button
                         onClick={generateImage}
                         disabled={scene.isGenerating}
@@ -554,8 +645,7 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                         </div>
                     )}
                 </div>
-
             </div>
-        </div >
+        </div>
     );
 };

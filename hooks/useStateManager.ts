@@ -70,6 +70,7 @@ export function useStateManager() {
             ...INITIAL_STATE,
             apiKey: state.apiKey,
             imageModel: state.imageModel,
+            assetGallery: []
         }));
     }, [state.scenes.length, state.characters.length, state.projectName, state.apiKey, state.genyuToken, state.imageModel, updateStateAndRecord]);
 

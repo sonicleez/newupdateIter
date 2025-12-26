@@ -4,12 +4,14 @@ import { Character, Product, ScriptPreset } from '../../types';
 import { PresetSelector } from '../PresetSelector';
 import { createCustomPreset } from '../../utils/scriptPresets';
 import { PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER, CREATIVE_PRESETS, GLOBAL_STYLES, SCRIPT_MODELS } from '../../constants/presets';
-import { detectCharactersInText } from '../../utils/helpers';
+import { DIRECTOR_CATEGORIES, DIRECTOR_PRESETS, DirectorCategory, DirectorPreset } from '../../constants/directors';
+import { detectCharactersInText, generateId } from '../../utils/helpers';
+import { GoogleGenAI } from "@google/genai";
 
 export interface ScriptGeneratorModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onGenerate: (idea: string, count: number, selectedCharacterIds: string[], selectedProductIds: string[]) => Promise<any>;
+    onGenerate: (idea: string, count: number, selectedCharacterIds: string[], selectedProductIds: string[], director?: DirectorPreset) => Promise<any>;
     isGenerating: boolean;
     activePresetId: string;
     customPresets: ScriptPreset[];
@@ -19,12 +21,13 @@ export interface ScriptGeneratorModalProps {
     customInstruction?: string;
     onCustomInstructionChange?: (val: string) => void;
     onAddPreset: (preset: ScriptPreset) => void;
-    onApplyGenerated: (detailedStory: string, groups: any[], scenes: any[]) => void;
+    onApplyGenerated: (detailedStory: string, groups: any[], scenes: any[], director?: DirectorPreset) => void;
     onRegenerateGroup: (detailedStory: string, groupToRegen: any, allGroups: any[], sceneCount?: number) => Promise<any[] | null>;
     onGenerateMoodboard: (groupName: string, groupDesc: string, style?: string, customStyle?: string) => Promise<string | null>;
     scriptModel: string;
     onScriptModelChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
     onSmartMapAssets: (scenes: any[], characters: Character[], products: Product[]) => Promise<any>;
+    apiKey?: string | null;
 }
 
 export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
@@ -45,7 +48,8 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
     onGenerateMoodboard,
     scriptModel,
     onScriptModelChange,
-    onSmartMapAssets
+    onSmartMapAssets,
+    apiKey
 }) => {
     const [step, setStep] = useState<'input' | 'review'>('input');
     const [previewData, setPreviewData] = useState<{ detailedStory: string; groups: any[]; scenes: any[] } | null>(null);
@@ -60,6 +64,12 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
     const [newPresetTone, setNewPresetTone] = useState('');
     const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
     const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+
+    // Director Selection States
+    const [directorCategory, setDirectorCategory] = useState<DirectorCategory>('cinema');
+    const [selectedDirector, setSelectedDirector] = useState<DirectorPreset | null>(null);
+    const [customDirectorName, setCustomDirectorName] = useState('');
+    const [isSearchingDirector, setIsSearchingDirector] = useState(false);
 
     useEffect(() => {
         if (isOpen && characters.length > 0) {
@@ -112,16 +122,63 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
 
     const handleSubmit = async () => {
         if (!idea.trim()) return alert("Vui lòng nhập ý tưởng.");
-        const result = await onGenerate(idea, sceneCount, selectedCharacterIds, selectedProductIds);
-        if (result) {
-            setPreviewData(result);
-            setStep('review');
+        if (onGenerate) {
+            const result = await onGenerate(idea, sceneCount, selectedCharacterIds, selectedProductIds, selectedDirector || undefined);
+            if (result) {
+                setPreviewData(result);
+                setStep('review');
+            }
+        }
+    };
+
+    const handleSearchCustomDirector = async () => {
+        if (!customDirectorName.trim()) return;
+        const currentApiKey = apiKey || (process.env as any).API_KEY;
+        if (!currentApiKey) return alert("Vui lòng nhập API Key để sử dụng tính năng tìm kiếm.");
+
+        setIsSearchingDirector(true);
+        try {
+            const ai = new GoogleGenAI({ apiKey: currentApiKey });
+            const prompt = `Analyze the cinematic and storytelling style of the director "${customDirectorName}". 
+            Return a JSON object with:
+            {
+                "description": "Short 1-sentence bio/style summary in Vietnamese",
+                "dna": "Comma-separated visual/technical keywords in English",
+                "quote": "A famous quote about their art in original language/English"
+            }`;
+
+            const response = await ai.models.generateContent({
+                model: "gemini-2.0-flash",
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                config: { responseMimeType: "application/json" }
+            });
+
+            const responseText = response.text || '{}';
+            const data = JSON.parse(responseText);
+
+            const customDirector: DirectorPreset = {
+                id: `custom-${generateId()}`,
+                name: customDirectorName,
+                origin: 'Âu', // Default
+                description: data.description || `Phong cách của ${customDirectorName}`,
+                dna: data.dna || 'Cinematic',
+                quote: data.quote || '',
+                isCustom: true
+            };
+
+            setSelectedDirector(customDirector);
+            setCustomDirectorName('');
+        } catch (error) {
+            console.error("Director search failed:", error);
+            alert("Không tìm thấy thông tin đạo diễn. Vui lòng tự mô tả phong cách.");
+        } finally {
+            setIsSearchingDirector(false);
         }
     };
 
     const handleApply = () => {
         if (!previewData) return;
-        onApplyGenerated(previewData.detailedStory, previewData.groups, previewData.scenes);
+        onApplyGenerated(previewData.detailedStory, previewData.groups, previewData.scenes, selectedDirector || undefined);
         onClose();
         setIdea('');
     };
@@ -309,15 +366,93 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
                         </div>
 
                         <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700">
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-3">Sản phẩm ({selectedProductIds.length})</label>
-                            <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto">
-                                {products.map(prod => (
-                                    <label key={prod.id} className={`flex items-center space-x-2 p-1.5 rounded-lg border cursor-pointer ${selectedProductIds.includes(prod.id) ? 'bg-brand-orange/10 border-brand-orange/50' : 'bg-gray-900/50 border-gray-800'}`}>
-                                        <input type="checkbox" checked={selectedProductIds.includes(prod.id)} onChange={() => toggleProduct(prod.id)} className="w-3 h-3 text-brand-orange bg-gray-700" />
-                                        <span className="text-[10px] text-gray-300 truncate">{prod.name}</span>
-                                    </label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-3 text-purple-400">Tư duy đạo diễn (Directorial Vision)</label>
+
+                            {/* Category Filter */}
+                            <div className="flex bg-gray-950/50 p-1 rounded-lg gap-1 mb-3 border border-gray-800">
+                                {DIRECTOR_CATEGORIES.map(cat => (
+                                    <button
+                                        key={cat.id}
+                                        onClick={() => setDirectorCategory(cat.id)}
+                                        className={`flex-1 py-1.5 px-2 rounded-md text-[9px] font-bold transition-all flex items-center justify-center gap-1 ${directorCategory === cat.id ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+                                    >
+                                        <span>{cat.icon}</span>
+                                        <span className="hidden sm:inline">{cat.name.split(' ')[0]}</span>
+                                    </button>
                                 ))}
                             </div>
+
+                            {/* Director List */}
+                            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto mb-3 pr-1 custom-scrollbar">
+                                {DIRECTOR_PRESETS[directorCategory].map(dir => (
+                                    <div
+                                        key={dir.id}
+                                        onClick={() => setSelectedDirector(dir)}
+                                        className={`p-2 rounded-lg border cursor-pointer transition-all hover:border-purple-500/50 group relative ${selectedDirector?.id === dir.id ? 'bg-purple-600/10 border-purple-500' : 'bg-gray-900 border-gray-800'}`}
+                                    >
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="text-[10px] font-bold text-gray-200 group-hover:text-purple-300">{dir.name}</span>
+                                            <span className={`text-[8px] px-1 rounded ${dir.origin === 'Âu' ? 'bg-blue-500/20 text-blue-300' : 'bg-red-500/20 text-red-300'}`}>{dir.origin}</span>
+                                        </div>
+                                        <p className="text-[8px] text-gray-500 line-clamp-2 leading-relaxed">{dir.description}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Custom Director Search */}
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={customDirectorName}
+                                    onChange={(e) => setCustomDirectorName(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSearchCustomDirector()}
+                                    placeholder="Tìm tên đạo diễn khác..."
+                                    className="w-full bg-gray-950/50 border border-gray-800 rounded-lg py-2 pl-3 pr-10 text-[10px] text-gray-300 focus:outline-none focus:border-purple-500/50 placeholder:text-gray-600"
+                                />
+                                <button
+                                    onClick={handleSearchCustomDirector}
+                                    disabled={isSearchingDirector}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-purple-400 transition-colors"
+                                >
+                                    {isSearchingDirector ? (
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                                    ) : (
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                    )}
+                                </button>
+                            </div>
+
+                            {/* Style Profile Display */}
+                            {selectedDirector && (
+                                <div className="mt-4 p-3 bg-purple-900/10 border border-purple-500/20 rounded-xl animate-fade-in relative overflow-hidden group">
+                                    <div className="absolute top-0 right-0 p-2 opacity-10 pointer-events-none group-hover:opacity-20 transition-opacity">
+                                        <span className="text-4xl">🎬</span>
+                                    </div>
+                                    <div className="relative z-10">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-xs font-black text-purple-300 uppercase tracking-widest">{selectedDirector.name}</span>
+                                            {selectedDirector.isCustom && <span className="text-[8px] px-1 bg-yellow-500/20 text-yellow-500 rounded font-bold uppercase">AI Analyzed</span>}
+                                        </div>
+                                        <p className="text-[10px] text-brand-cream/80 italic mb-2 leading-relaxed">"{selectedDirector.description}"</p>
+                                        <div className="flex flex-wrap gap-1 mb-2">
+                                            {selectedDirector.dna.split(',').map((tag, i) => (
+                                                <span key={i} className="text-[8px] px-1.5 py-0.5 bg-gray-950 text-purple-400 rounded-md border border-purple-500/20 font-mono italic">#{tag.trim()}</span>
+                                            ))}
+                                        </div>
+                                        {selectedDirector.quote && (
+                                            <div className="pt-2 border-t border-purple-500/10">
+                                                <p className="text-[9px] text-gray-500 italic opacity-70">"{selectedDirector.quote}"</p>
+                                            </div>
+                                        )}
+                                        <button
+                                            onClick={() => setSelectedDirector(null)}
+                                            className="absolute top-1 right-1 p-1 text-gray-600 hover:text-red-400 transition-colors"
+                                        >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

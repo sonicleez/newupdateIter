@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { ProjectState, Scene, Character, Product } from '../types';
+import { ProjectState, Scene, Character, Product, DirectorPreset } from '../types';
 import { getPresetById } from '../utils/scriptPresets';
 import { buildScriptPrompt, buildGroupRegenerationPrompt } from '../utils/promptBuilder';
 import { generateId } from '../utils/helpers';
@@ -13,7 +13,7 @@ export function useScriptGeneration(
 ) {
     const [isScriptGenerating, setIsScriptGenerating] = useState(false);
 
-    const handleGenerateScript = useCallback(async (idea: string, count: number, selectedCharacterIds: string[], selectedProductIds: string[]) => {
+    const handleGenerateScript = useCallback(async (idea: string, count: number, selectedCharacterIds: string[], selectedProductIds: string[], director?: DirectorPreset) => {
         const rawApiKey = userApiKey || (process.env as any).API_KEY;
         const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
         if (!apiKey) {
@@ -37,7 +37,7 @@ export function useScriptGeneration(
                 ? (state.customScriptLanguage || 'English')
                 : (state.scriptLanguage === 'vietnamese' ? 'Vietnamese' : 'English');
 
-            const prompt = buildScriptPrompt(idea, activePreset, activeCharacters, activeProducts, count, effectiveLanguage, state.customScriptInstruction);
+            const prompt = buildScriptPrompt(idea, activePreset, activeCharacters, activeProducts, count, effectiveLanguage, state.customScriptInstruction, director);
 
             const [modelId, thinkingLevel] = (state.scriptModel || 'gemini-3-flash-preview|high').split('|');
 

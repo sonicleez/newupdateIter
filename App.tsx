@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useHotkeys } from './hooks/useHotkeys';
+import { Image as ImageIcon } from 'lucide-react';
 import { Header } from './components/common/Header';
 import { ProjectNameInput } from './components/common/ProjectNameInput';
 import { ApiKeyModal } from './components/modals/ApiKeyModal';
@@ -18,6 +19,7 @@ import { AuthModal } from './components/modals/AuthModal';
 import { ProjectBrowserModal } from './components/modals/ProjectBrowserModal';
 import { UserProfileModal } from './components/modals/UserProfileModal';
 import { ActivationScreen } from './components/ActivationScreen';
+import { AssetLibrary } from './components/sections/AssetLibrary';
 import { APP_NAME, PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from './constants/presets';
 import { handleDownloadAll } from './utils/zipUtils';
 import { Scene } from './types';
@@ -31,6 +33,7 @@ import { useScriptGeneration } from './hooks/useScriptGeneration';
 import { useCharacterLogic } from './hooks/useCharacterLogic';
 import { useProductLogic } from './hooks/useProductLogic';
 import { useSceneLogic } from './hooks/useSceneLogic';
+import { useDOPLogic } from './hooks/useDOPLogic';
 import { useVideoGeneration } from './hooks/useVideoGeneration';
 import { useAuth } from './hooks/useAuth';
 import { useProjectSync } from './hooks/useProjectSync';
@@ -39,6 +42,7 @@ import { supabase } from './utils/supabaseClient';
 const App: React.FC = () => {
     const { session, profile, isPro, subscriptionExpired, loading, signOut } = useAuth();
     // Core State & History
+    // --- Core State & History ---
     const {
         state,
         updateStateAndRecord,
@@ -50,6 +54,24 @@ const App: React.FC = () => {
         stateRef,
         history
     } = useStateManager();
+
+    // --- Helper Logic ---
+    const addToGallery = useCallback((image: string, type: string, prompt?: string, sourceId?: string) => {
+        updateStateAndRecord(s => ({
+            ...s,
+            assetGallery: [
+                {
+                    id: `asset_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                    image,
+                    type,
+                    prompt,
+                    sourceId,
+                    timestamp: Date.now()
+                },
+                ...(s.assetGallery || [])
+            ].slice(0, 500) // Keep last 500 assets
+        }));
+    }, [updateStateAndRecord]);
 
     // UI State
     const [zoom, setZoom] = useState(1);
@@ -77,20 +99,12 @@ const App: React.FC = () => {
     // Cloud Sync State
     const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
     const [isProjectBrowserOpen, setProjectBrowserOpen] = useState(false);
+    const [isLibraryOpen, setLibraryOpen] = useState(false);
     const [cloudProjects, setCloudProjects] = useState<any[]>([]);
 
     const mainContentRef = useRef<HTMLDivElement>(null);
 
     // Functional Hooks
-    const {
-        isBatchGenerating,
-        isStopping,
-        performImageGeneration,
-        generateGroupConcept,
-        handleGenerateAllImages,
-        stopBatchGeneration
-    } = useImageGeneration(state, stateRef, updateStateAndRecord, userApiKey, setProfileModalOpen, isContinuityMode, session?.user.id, isOutfitLockMode);
-
     const {
         isScriptGenerating,
         handleGenerateScript,
@@ -99,23 +113,22 @@ const App: React.FC = () => {
     } = useScriptGeneration(state, updateStateAndRecord, userApiKey, setProfileModalOpen);
 
     const {
-        updateCharacter,
         addCharacter,
+        updateCharacter,
         deleteCharacter,
         setDefaultCharacter,
-        analyzeCharacterImage,
         analyzeAndGenerateSheets,
         generateCharacterSheets,
         generateCharacterImage
-    } = useCharacterLogic(state, updateStateAndRecord, userApiKey, setProfileModalOpen, session?.user.id);
+    } = useCharacterLogic(state, updateStateAndRecord, userApiKey, setProfileModalOpen, session?.user.id, addToGallery);
 
     const {
         addProduct,
-        deleteProduct,
         updateProduct,
+        deleteProduct,
         handleProductMasterImageUpload,
         handleGenerateProductFromPrompt
-    } = useProductLogic(state, updateStateAndRecord, userApiKey, setProfileModalOpen, session?.user.id);
+    } = useProductLogic(state, updateStateAndRecord, userApiKey, setProfileModalOpen, session?.user.id, addToGallery);
 
     const {
         addScene,
@@ -123,14 +136,28 @@ const App: React.FC = () => {
         removeScene,
         insertScene,
         moveScene,
-        handleScriptUpload,
-        triggerFileUpload,
+        assignSceneToGroup,
         createGroup: addSceneGroup,
         updateGroup: updateSceneGroup,
         deleteGroup: deleteSceneGroup,
-        assignSceneToGroup,
+        handleScriptUpload,
+        triggerFileUpload,
         applyGeneratedScript
     } = useSceneLogic(state, updateStateAndRecord);
+
+    const {
+        performImageGeneration,
+        isBatchGenerating,
+        isStopping,
+        stopBatchGeneration,
+        handleGenerateAllImages,
+        generateGroupConcept
+    } = useImageGeneration(state, stateRef, updateStateAndRecord, userApiKey, setProfileModalOpen, isContinuityMode, session?.user.id, isOutfitLockMode, addToGallery);
+
+    const {
+        analyzeRaccord,
+        suggestNextShot
+    } = useDOPLogic(state);
 
     const {
         isVeoGenerating,
@@ -149,7 +176,7 @@ const App: React.FC = () => {
         fetchProjects,
         loadProjectFromCloud,
         deleteProjectFromCloud
-    } = useProjectSync(session?.user?.id);
+    } = useProjectSync(session?.user?.id || null);
 
     const handleSignOut = async () => {
         await signOut();
@@ -261,27 +288,6 @@ const App: React.FC = () => {
         }
     }, [state.scenes, updateStateAndRecord, performImageGeneration]);
 
-    const handleGenerateGroupImages = useCallback(async (groupId: string) => {
-        const scenesInGroup = state.scenes.filter(s => s.groupId === groupId && !s.generatedImage && s.contextDescription);
-        if (scenesInGroup.length === 0) return;
-
-        for (const scene of scenesInGroup) {
-            await performImageGeneration(scene.id);
-            await new Promise(r => setTimeout(r, 500));
-        }
-    }, [state.scenes, performImageGeneration]);
-
-    const handleClearGroupImages = useCallback((groupId: string) => {
-        updateStateAndRecord(s => ({
-            ...s,
-            scenes: s.scenes.map(sc => sc.groupId === groupId ? {
-                ...sc,
-                generatedImage: null,
-                endFrameImage: null,
-                mediaId: null
-            } : sc)
-        }));
-    }, [updateStateAndRecord]);
 
 
     // Sticky Header Scroll Listener
@@ -455,22 +461,40 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
     }, []);
 
     const openEditor = (id: string, image: string, type: any, propIndex?: number, viewKey?: string) => {
-        // ... (existing logic to find history if it exists)
         let editorHistory = undefined;
         if (type === 'scene') {
             editorHistory = state.scenes.find(s => s.id === id)?.editHistory;
         } else if (['master', 'face', 'body', 'side', 'back'].includes(type) || viewKey) {
-            editorHistory = state.characters.find(c => c.id === id)?.editHistory;
+            const char = state.characters.find(c => c.id === id);
+            if (char) {
+                const key = viewKey || type;
+                if (key === 'master') editorHistory = char.masterEditHistory;
+                else if (key === 'face') editorHistory = char.faceEditHistory;
+                else if (key === 'body') editorHistory = char.bodyEditHistory;
+                else if (key === 'side') editorHistory = char.sideEditHistory;
+                else if (key === 'back') editorHistory = char.backEditHistory;
+            }
+        } else if (type === 'product') {
+            const prod = state.products.find(p => p.id === id);
+            if (prod) {
+                if (viewKey && viewKey !== 'master') editorHistory = prod.viewEditHistories?.[viewKey];
+                else editorHistory = prod.editHistory;
+            }
         }
 
         setEditingImage({ id, image, type, propIndex, viewKey, history: editorHistory });
         setIsEditorOpen(true);
     };
 
-    const handleEditorSave = (newImage: string, history: any[], savedViewKey?: string) => {
+    const handleEditorSave = useCallback((newImage: string, history: any[], savedViewKey?: string) => {
         if (!editingImage) return;
         const { id, type, propIndex, viewKey: initialViewKey } = editingImage;
         const viewKey = savedViewKey || initialViewKey;
+
+        console.log('[Editor] Saving:', { type, id, viewKey, historyLength: history?.length });
+
+        // Add edited image to gallery automatically
+        addToGallery(newImage, 'edit', 'Edited version', id);
 
         if (type === 'prop' && typeof propIndex === 'number') {
             const char = state.characters.find(c => c.id === id);
@@ -479,18 +503,35 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                 newProps[propIndex] = { ...newProps[propIndex], image: newImage };
                 updateCharacter(id, { props: newProps });
             }
-        } else if (type === 'master' || viewKey === 'master') updateCharacter(id, { masterImage: newImage, editHistory: history });
-        else if (type === 'face' || viewKey === 'face') updateCharacter(id, { faceImage: newImage, editHistory: history });
-        else if (type === 'body' || viewKey === 'body') updateCharacter(id, { bodyImage: newImage, editHistory: history });
-        else if (type === 'side' || viewKey === 'side') updateCharacter(id, { sideImage: newImage, editHistory: history });
-        else if (type === 'back' || viewKey === 'back') updateCharacter(id, { backImage: newImage, editHistory: history });
+        }
+        else if (type === 'master' || viewKey === 'master') updateCharacter(id, { masterImage: newImage, masterEditHistory: history });
+        else if (type === 'face' || viewKey === 'face') updateCharacter(id, { faceImage: newImage, faceEditHistory: history });
+        else if (type === 'body' || viewKey === 'body') updateCharacter(id, { bodyImage: newImage, bodyEditHistory: history });
+        else if (type === 'side' || viewKey === 'side') updateCharacter(id, { sideImage: newImage, sideEditHistory: history });
+        else if (type === 'back' || viewKey === 'back') updateCharacter(id, { backImage: newImage, backEditHistory: history });
         else if (type === 'scene') updateScene(id, { generatedImage: newImage, editHistory: history });
         else if (type === 'product') {
-            if (viewKey) {
-                const product = state.products.find(p => p.id === id);
-                if (product) updateProduct(id, { views: { ...product.views, [viewKey]: newImage } });
-            } else updateProduct(id, { masterImage: newImage, editHistory: history });
+            const product = state.products.find(p => p.id === id);
+            if (product) {
+                if (viewKey && viewKey !== 'master') {
+                    const newViews = { ...product.views, [viewKey]: newImage };
+                    const newViewHistories = { ...(product.viewEditHistories || {}), [viewKey]: history };
+                    updateProduct(id, { views: newViews, viewEditHistories: newViewHistories });
+                } else {
+                    updateProduct(id, { masterImage: newImage, editHistory: history });
+                }
+            }
         }
+
+        setEditingImage(null);
+        setIsEditorOpen(false);
+    }, [editingImage, state.characters, state.products, updateCharacter, updateScene, updateProduct, addToGallery, setIsEditorOpen]);
+
+    const handleDeleteAsset = (id: string) => {
+        updateStateAndRecord(s => ({
+            ...s,
+            assetGallery: (s.assetGallery || []).filter(a => a.id !== id)
+        }));
     };
 
     const handleCharGenSave = (image: string) => {
@@ -665,7 +706,8 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                                     viewMode={viewMode}
                                     setViewMode={setViewMode}
                                     characters={state.characters}
-                                    products={state.products || []}
+                                    products={state.products}
+                                    sceneGroups={state.sceneGroups || []}
                                     updateScene={updateScene}
                                     removeScene={removeScene}
                                     insertScene={insertScene}
@@ -680,22 +722,19 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                                     generateVeoPrompt={generateVeoPrompt}
                                     suggestVeoPresets={suggestVeoPresets}
                                     applyPresetToAll={applyPresetToAll}
+                                    analyzeRaccord={analyzeRaccord}
+                                    suggestNextShot={suggestNextShot}
                                     isVeoGenerating={isVeoGenerating}
                                     handleGenerateAllVideos={handleGenerateAllVideos}
                                     isVideoGenerating={isVideoGenerating}
                                     addScene={addScene}
                                     detailedScript={state.detailedScript || ''}
                                     onDetailedScriptChange={(val) => updateStateAndRecord(s => ({ ...s, detailedScript: val }))}
-                                    onCleanAll={() => {
-                                        if (confirm('⚠️ Bạn có chắc muốn xóa toàn bộ kịch bản?')) {
-                                            updateStateAndRecord(s => ({ ...s, scenes: [], sceneGroups: [], detailedScript: '' }));
-                                        }
-                                    }}
-                                    createGroup={addSceneGroup} // Assuming these might be renamed or available via hook
+                                    onCleanAll={() => updateStateAndRecord(s => ({ ...s, scenes: [] }))}
+                                    createGroup={addSceneGroup}
                                     updateGroup={updateSceneGroup}
                                     deleteGroup={deleteSceneGroup}
                                     assignSceneToGroup={assignSceneToGroup}
-                                    sceneGroups={state.sceneGroups || []}
                                     draggedSceneIndex={draggedSceneIndex}
                                     setDraggedSceneIndex={setDraggedSceneIndex}
                                     dragOverIndex={dragOverIndex}
@@ -712,8 +751,6 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                                         }));
                                     }}
                                     onInsertAngles={handleInsertAngles}
-                                    onGenerateGroupImages={handleGenerateGroupImages}
-                                    onClearGroupImages={handleClearGroupImages}
                                 />
                                 <div className="flex justify-end mt-8 gap-4">
                                     <button
@@ -726,6 +763,45 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                             </div>
                         </div>
                     </main>
+
+                    {/* Right Sidebar: Asset Library */}
+                    <div className={`fixed right-0 top-16 bottom-0 z-40 transition-all duration-300 ease-in-out ${isLibraryOpen ? 'w-96' : 'w-0'}`}>
+                        {isLibraryOpen && (
+                            <AssetLibrary
+                                assets={state.assetGallery || []}
+                                scenes={state.scenes}
+                                characters={state.characters}
+                                products={state.products}
+                                onDeleteAsset={handleDeleteAsset}
+                                onClose={() => setLibraryOpen(false)}
+                                onReplaceScene={(id, img) => updateScene(id, { generatedImage: img })}
+                                onReplaceCharacterView={(id, img, view) => updateCharacter(id, { [`${view}Image`]: img })}
+                                onReplaceProductView={(id, img, view) => {
+                                    const prod = state.products.find(p => p.id === id);
+                                    if (prod) {
+                                        if (view === 'master') updateProduct(id, { masterImage: img });
+                                        else updateProduct(id, { views: { ...prod.views, [view]: img } });
+                                    }
+                                }}
+                            />
+                        )}
+                    </div>
+
+                    {/* Floating Gallery Button */}
+                    <button
+                        onClick={() => setLibraryOpen(!isLibraryOpen)}
+                        className={`fixed right-6 bottom-24 z-50 p-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-95 ${isLibraryOpen
+                            ? 'bg-purple-600 text-white rotate-90'
+                            : 'bg-brand-dark text-white border border-gray-700 hover:border-purple-500'
+                            }`}
+                    >
+                        <ImageIcon size={24} />
+                        {state.assetGallery && state.assetGallery.length > 0 && !isLibraryOpen && (
+                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ring-2 ring-brand-dark">
+                                {state.assetGallery.length}
+                            </span>
+                        )}
+                    </button>
 
                     {zoom !== 1 && (
                         <button
@@ -769,6 +845,7 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                         scriptModel={state.scriptModel || 'gemini-2.5-flash'}
                         onScriptModelChange={(e) => updateStateAndRecord(s => ({ ...s, scriptModel: e.target.value }))}
                         onSmartMapAssets={handleSmartMapAssets}
+                        apiKey={userApiKey}
                     />
 
                     <ScreenplayModal
