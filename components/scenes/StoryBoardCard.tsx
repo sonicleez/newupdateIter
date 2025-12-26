@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, Brush, GripVertical, Download, Pencil, Layers, X } from 'lucide-react';
+import { Trash2, Brush, GripVertical, Download, Pencil, Layers, X, Eye } from 'lucide-react';
 import { SceneRowProps } from './SceneRow';
 import { ExpandableTextarea } from '../common/ExpandableTextarea';
 
@@ -140,22 +140,13 @@ export const StoryBoardCard: React.FC<StoryBoardCardProps> = ({
                         </div>
                     )}
 
-                    {/* Generate Button */}
+                    {/* View/Zoom Button (was Generate) */}
                     <button
-                        onClick={(e) => { e.stopPropagation(); generateImage(); }}
+                        onClick={(e) => { e.stopPropagation(); openImageViewer(); }}
                         className="p-2 bg-brand-orange text-white rounded-full hover:scale-110 transition-transform shadow-lg"
-                        title="Tạo lại ảnh"
+                        title="Xem ảnh lớn"
                     >
-                        <Brush size={14} />
-                    </button>
-
-                    {/* Delete Button */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); removeScene(scene.id); }}
-                        className="p-2 bg-red-600 text-white rounded-full hover:scale-110 transition-transform shadow-lg"
-                        title="Xóa cảnh"
-                    >
-                        <Trash2 size={14} />
+                        <Eye size={14} />
                     </button>
                 </div>
 
@@ -187,8 +178,18 @@ export const StoryBoardCard: React.FC<StoryBoardCardProps> = ({
                         )}
                         <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Scene</span>
                     </div>
-                    <div className="text-[9px] text-gray-600 italic truncate max-w-[100px]">
-                        {scene.promptName || 'Untitled'}
+                    <div className="flex items-center gap-2">
+                        <span className="text-[9px] text-gray-600 italic truncate max-w-[80px]">
+                            {scene.promptName || 'Untitled'}
+                        </span>
+                        {/* Delete Button - moved to bottom */}
+                        <button
+                            onClick={() => removeScene(scene.id)}
+                            className="p-1 text-red-400/50 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                            title="Xóa cảnh"
+                        >
+                            <Trash2 size={12} />
+                        </button>
                     </div>
                 </div>
             </div>
