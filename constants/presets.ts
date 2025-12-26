@@ -111,39 +111,108 @@ export const VEO_MODES = [
 export const VEO_PRESETS = [
     {
         value: 'cinematic-master',
-        label: '🎬 Cinematic Master (Single Shot)',
-        prompt: 'Generate a high-end SINGLE-SHOT sequence. Follow the formula: [00:00-00:06] [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]. Professional Arri Alexa look, steady motion.',
-        keywords: 'steady cam, Arri Alexa, balanced composition, 6-second single shot'
+        label: '🎬 Cinematic Single Shot',
+        // Official Veo 3.1 formula: [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]
+        prompt: `Generate a SINGLE SHOT video (6 seconds) following the official Veo 3.1 formula:
+[Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]
+
+OUTPUT FORMAT EXAMPLE:
+"Medium shot with steady cam, [Subject description], [specific action happening], [environment details], [lighting and mood]. Professional Arri Alexa look, cinematic color grading."
+
+MANDATORY ELEMENTS:
+- One continuous shot, no cuts
+- Camera: Dolly, tracking, or slow pan only
+- Add SFX tag for ambient sound
+- Add Emotion tag for mood`,
+        keywords: 'steady cam, professional look, single take, cinematic, Arri Alexa'
     },
     {
         value: 'storytelling-multi',
-        label: '🗣️ Storytelling (Multi-Shot Timestamp)',
-        prompt: 'Generate a MULTI-SHOT sequence with 2-second segments. Use timestamps [00:00-00:02], [00:02-00:04], [00:04-00:06]. Focus on character interaction and dialogue sync. Each segment should have its own Camera/Shot type.',
-        keywords: 'cross-cutting, dialogue exchange, multiple angles, synchronized sound'
+        label: '🗣️ Dialogue Scene (Multi-Shot)',
+        // Multi-shot with dialogue using quotation marks
+        prompt: `Generate a MULTI-SHOT dialogue scene using timestamps. Focus on character interaction with synchronized speech.
+
+STRICT FORMAT - Use exactly this structure:
+[00:00-00:02] Medium shot of [character], [action]. [Character] says, "[dialogue line]".
+[00:02-00:04] Reverse shot of [other character], [reaction]. [Character] replies, "[response]".
+[00:04-00:06] Two-shot showing both characters, [interaction]. SFX: [ambient sound].
+
+MANDATORY ELEMENTS:
+- Use quotation marks for ALL dialogue
+- Alternate between characters (shot/reverse shot)
+- Include facial expressions and reactions
+- End with SFX or Ambient noise tag`,
+        keywords: 'dialogue, character interaction, shot/reverse shot, conversation, synchronized speech'
     },
     {
         value: 'action-sequence',
-        label: '⚡ Action Sequence (Multi-Shot)',
-        prompt: 'STRICT REQUIREMENT: Generate 4 distinct shots using timestamps [00:00-00:02], [00:02-00:04], [00:04-00:06], [00:06-00:08]. Use high-energy camera movements (Arc, Dolly, Crane) in EACH segment to create kinetic motion blur.',
-        keywords: 'rapid cuts, kinetic energy, motion blur, 4-shot sequence, professional editing'
+        label: '⚡ Action Sequence (4-Shot)',
+        // High-energy multi-shot with dynamic camera
+        prompt: `Generate a HIGH-ENERGY 4-SHOT action sequence (8 seconds total). Each shot must have DIFFERENT camera movement.
+
+STRICT FORMAT:
+[00:00-00:02] [Wide/Tracking shot], [subject] [dynamic action 1]. Motion blur effect.
+[00:02-00:04] [Close-up/POV shot], [intense detail moment]. SFX: [impact sound].
+[00:04-00:06] [Dolly/Arc shot], [subject] [dynamic action 2], [environment reaction].
+[00:06-00:08] [Crane/High-angle], [establishing the aftermath or climax]. Emotion: [intensity].
+
+MANDATORY CAMERA FOR EACH SHOT:
+- Shot 1: Wide tracking or dolly
+- Shot 2: Close-up or POV
+- Shot 3: Arc or circling movement
+- Shot 4: Crane or aerial reveal`,
+        keywords: 'rapid cuts, kinetic energy, motion blur, dynamic camera, action climax'
     },
     {
         value: 'mood-atmosphere',
         label: '☁️ Mood & Atmosphere',
-        prompt: 'Single shot focusing on lighting and emotion. Formula: [00:00-00:06] [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]. Use Emotion and SFX tags heavily.',
-        keywords: 'Emotion: Melancholy, volumetric lighting, atmospheric fog, slow movement'
+        // Slow, emotional single shot with heavy SFX and Emotion tags
+        prompt: `Generate a SLOW, ATMOSPHERIC single shot (6 seconds) emphasizing mood and emotion.
+
+OUTPUT FORMAT:
+[Slow dolly/pan], [subject with emotional state], [subtle contemplative action], [richly detailed environment with atmospheric elements], [specific lighting: volumetric, golden hour, or neon]. Emotion: [specific emotion]. Ambient noise: [soundscape]. SFX: [subtle environmental sounds].
+
+MANDATORY ELEMENTS:
+- Slow, deliberate camera movement only
+- Heavy emphasis on lighting description (volumetric, rays, fog, reflections)
+- MUST include Emotion: tag
+- MUST include Ambient noise: tag
+- Color palette specification (cool blues, warm oranges, etc.)`,
+        keywords: 'atmospheric, volumetric lighting, emotional, slow movement, mood piece'
     },
     {
         value: 'macro-detail',
-        label: '🔭 Macro / Detail',
-        prompt: 'Extreme close-up single shot. Focus on textures and micro-movements using macro lens and shallow depth of field.',
-        keywords: 'Macro lens, extreme close-up, shallow depth of field, sharp textures'
+        label: '🔭 Macro / Detail Shot',
+        // Extreme close-up with shallow DOF
+        prompt: `Generate an EXTREME CLOSE-UP macro shot (6 seconds) showcasing textures and micro-movements.
+
+OUTPUT FORMAT:
+"Close-up with very shallow depth of field, macro lens, [specific object/texture in extreme detail], [subtle micro-movement or interaction], [blurred background context], [specific lighting on textures]. Sharp focus on [key detail]. SFX: [subtle close-range sound]."
+
+MANDATORY ELEMENTS:
+- Specify "macro lens" or "extreme close-up"
+- Describe textures in detail (glistening, rough, metallic, organic)
+- Shallow depth of field with bokeh background
+- Focus on one key element
+- Minimal or no camera movement`,
+        keywords: 'macro lens, extreme close-up, shallow DOF, texture details, bokeh'
     },
     {
         value: 'epic-establishment',
-        label: '🚁 Epic Establishment',
-        prompt: 'Wide aerial or high-angle crane shot. Single long take (6-8 seconds) revealing the vast scale of the environment.',
-        keywords: 'Aerial view, crane shot, wide-angle lens, epic scale, reveal'
+        label: '🚁 Epic Establishment Shot',
+        // Wide aerial/crane reveal shot
+        prompt: `Generate an EPIC WIDE establishing shot (6-8 seconds) revealing vast scale.
+
+OUTPUT FORMAT:
+"[Crane shot/Aerial view] starting [low/close position] on [small subject], [camera movement: ascending/pulling back/circling], revealing [vast environment scale], [atmospheric elements: mist, clouds, light rays]. Epic cinematic style, awe-inspiring. SFX: [orchestral swell or environmental ambiance]."
+
+MANDATORY ELEMENTS:
+- Camera MUST move to reveal scale (ascend, pull back, or circle)
+- Wide-angle lens specification
+- Include atmospheric elements (fog, mist, clouds, light rays)
+- End with vast environment visible
+- Epic/cinematic style keywords`,
+        keywords: 'aerial view, crane shot, wide-angle, epic reveal, vast scale, establishing'
     }
 ];
 
