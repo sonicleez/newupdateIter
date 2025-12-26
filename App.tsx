@@ -84,6 +84,7 @@ const App: React.FC = () => {
     const [showSuccessToast, setShowSuccessToast] = useState<string | null>(null);
     const [isContinuityMode, setIsContinuityMode] = useState(true);
     const [isOutfitLockMode, setIsOutfitLockMode] = useState(true);
+    const [isDOPEnabled, setIsDOPEnabled] = useState(true); // DOP ON by default
     const [isImageViewerOpen, setImageViewerOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [viewMode, setViewMode] = useState<'table' | 'storyboard'>('table');
@@ -146,18 +147,31 @@ const App: React.FC = () => {
     } = useSceneLogic(state, updateStateAndRecord);
 
     const {
+        analyzeRaccord,
+        suggestNextShot,
+        validateRaccordWithVision
+    } = useDOPLogic(state);
+
+    const {
         performImageGeneration,
         isBatchGenerating,
         isStopping,
         stopBatchGeneration,
         handleGenerateAllImages,
         generateGroupConcept
-    } = useImageGeneration(state, stateRef, updateStateAndRecord, userApiKey, setProfileModalOpen, isContinuityMode, session?.user.id, isOutfitLockMode, addToGallery);
-
-    const {
-        analyzeRaccord,
-        suggestNextShot
-    } = useDOPLogic(state);
+    } = useImageGeneration(
+        state,
+        stateRef,
+        updateStateAndRecord,
+        userApiKey,
+        setProfileModalOpen,
+        isContinuityMode,
+        session?.user.id,
+        isOutfitLockMode,
+        addToGallery,
+        isDOPEnabled,
+        validateRaccordWithVision
+    );
 
     const {
         isVeoGenerating,
@@ -203,38 +217,53 @@ const App: React.FC = () => {
 
         // Detailed prompt instructions for each camera angle type
         // These describe how to compose the shot based on the source scene
-        const anglePromptMap: Record<string, { name: string; instruction: string }> = {
-            'wide_shot': {
+        // Values must match CAMERA_ANGLES constants (with hyphens, not underscores)
+        // Enhanced with SCALE LOCK and COMPOSITION ANCHOR for consistency
+        const baseAnchors = `
+[SCALE LOCK]: Maintain the relative size of the main subject within the frame. If the source shows character at approximately X% of frame height, the new angle should maintain similar relative prominence unless this specific angle type requires a change.
+[COMPOSITION ANCHOR]: Keep the center of interest (main character/object focus) in approximately the same screen region unless the new camera angle requires repositioning.
+[ENVIRONMENT LOCK]: Background elements, lighting direction, and color temperature MUST remain consistent with the source image.`;
+
+        const anglePromptMap: Record<string, { name: string; instruction: string; angleValue: string }> = {
+            'wide-shot': {
                 name: 'Wide Shot (WS)',
-                instruction: 'WIDE SHOT: Pull camera back significantly. Expand the visible environment - show more of the surroundings (walls, sky, ground, architecture). Character appears smaller in frame. PRESERVE the same location/setting from source. If background was cropped, EXTEND it logically with consistent style.'
+                angleValue: 'wide-shot',
+                instruction: `!!! MANDATORY CAMERA CHANGE: WIDE SHOT !!! Pull camera back significantly to show MUCH MORE environment. Character appears SMALLER in frame (max 30% of frame height). EXTEND walls, sky, ground, architecture logically. ${baseAnchors}`
             },
-            'medium_shot': {
+            'medium-shot': {
                 name: 'Medium Shot (MS)',
-                instruction: 'MEDIUM SHOT: Frame character from waist up. Show balanced mix of character and environment. Background visible but character is main focus. Maintain same lighting and color palette.'
+                angleValue: 'medium-shot',
+                instruction: `!!! MANDATORY CAMERA CHANGE: MEDIUM SHOT !!! Frame character from WAIST UP only. Character fills approximately 50-60% of frame height. Balance of character and environment. ${baseAnchors}`
             },
-            'close_up': {
+            'close-up': {
                 name: 'Close Up (CU)',
-                instruction: 'CLOSE UP: Frame character from shoulders up, focusing on face and expression. Background becomes blurred/bokeh but should hint at the same environment. Capture emotional detail.'
+                angleValue: 'close-up',
+                instruction: `!!! MANDATORY CAMERA CHANGE: CLOSE UP !!! Frame from SHOULDERS UP. Face fills majority of frame (70%+ of frame height). Shallow depth of field, background becomes bokeh. Capture emotional detail. ${baseAnchors}`
             },
-            'extreme_close_up': {
+            'extreme-cu': {
                 name: 'Extreme Close Up (ECU)',
-                instruction: 'EXTREME CLOSE UP: Fill frame with specific detail - eyes, hands, or object of focus. Background fully blurred. Use dramatic shallow depth of field. Capture texture and fine details.'
+                angleValue: 'extreme-cu',
+                instruction: `!!! MANDATORY CAMERA CHANGE: EXTREME CLOSE UP !!! Fill entire frame with specific detail - EYES ONLY, or HANDS ONLY, or single object. No visible background. Dramatic macro-style shallow depth of field. ${baseAnchors}`
             },
-            'low_angle': {
+            'low-angle': {
                 name: 'Low Angle (Worm Eye View)',
-                instruction: 'LOW ANGLE: Camera positioned below subject looking up. Character appears powerful/dominant. Show ceiling, sky, or overhead elements that would be visible from this angle. CREATE new overhead background elements consistent with the setting (sky, ceiling, branches, etc.).'
+                angleValue: 'low-angle',
+                instruction: `!!! MANDATORY CAMERA CHANGE: LOW ANGLE !!! Camera positioned BELOW subject looking UP. Show ceiling/sky/overhead elements. Character appears powerful/dominant. CREATE logical overhead elements consistent with setting. ${baseAnchors}`
             },
-            'high_angle': {
+            'high-angle': {
                 name: 'High Angle (Bird Eye View)',
-                instruction: 'HIGH ANGLE: Camera positioned above subject looking down. Show ground/floor details. EXTEND the floor/ground area visible in source. Add logical ground details consistent with setting (patterns, shadows, objects on ground).'
+                angleValue: 'high-angle',
+                instruction: `!!! MANDATORY CAMERA CHANGE: HIGH ANGLE !!! Camera positioned ABOVE subject looking DOWN. Show ground/floor details clearly. Subject appears smaller/vulnerable. EXTEND floor pattern and ground details. ${baseAnchors}`
             },
-            'over_shoulder': {
+            'ots': {
                 name: 'Over The Shoulder (OTS)',
-                instruction: 'OVER THE SHOULDER: Frame scene looking past character shoulder/head (visible in foreground, slightly blurred). Main subject/environment visible in background. CREATE character shoulder/back/hair in foreground that matches their appearance. Background should show the SAME environment from source but from this new perspective.'
+                angleValue: 'ots',
+                instruction: `!!! MANDATORY CAMERA CHANGE: OVER THE SHOULDER !!! Show character shoulder/back/hair in foreground (blurred, frame edge). Main subject in background. [180° RULE]: If source shows character facing RIGHT, camera must be from LEFT side to maintain screen direction. ${baseAnchors}`
             },
-            'dutch_angle': {
+            'dutch-angle': {
                 name: 'Dutch Angle (Tilted)',
-                instruction: 'DUTCH ANGLE: Tilt camera 15-30 degrees for dramatic/disorienting effect. Keep same framing distance but rotate the view. Maintain all environment elements but at an angle. Creates tension and unease.'
+                angleValue: 'dutch-angle',
+                instruction: `!!! MANDATORY CAMERA CHANGE: DUTCH ANGLE !!! Tilt camera 15-30 degrees. Same framing distance but ROTATE the entire composition. Creates tension/unease. All environment elements visible but at an angle. ${baseAnchors}`
             },
         };
 
@@ -245,9 +274,10 @@ const App: React.FC = () => {
 
             const angleConfig = anglePromptMap[angle] || {
                 name: angle === 'custom' ? 'Custom Angle' : angle,
+                angleValue: angle === 'custom' ? 'custom' : angle,
                 instruction: angle === 'custom' && customPrompt
-                    ? `CUSTOM CAMERA ANGLE: ${customPrompt}`
-                    : `Camera angle: ${angle}`
+                    ? `!!! MANDATORY CAMERA CHANGE: CUSTOM ANGLE !!! ${customPrompt}`
+                    : `!!! MANDATORY CAMERA CHANGE: ${angle.toUpperCase()} !!!`
             };
 
             return {
@@ -257,16 +287,19 @@ const App: React.FC = () => {
                 language1: sourceScene.language1,
                 vietnamese: sourceScene.vietnamese,
                 promptName: `${sourceScene.promptName || 'Scene'} - ${angleConfig.name}`,
-                contextDescription: `[ANGLE VARIATION FROM SOURCE SCENE]\n\n${angleConfig.instruction}\n\nORIGINAL SCENE CONTEXT:\n${sourceScene.contextDescription}\n\n[IMPORTANT: Use the source image as reference for environment, character appearance, and styling. This is the SAME moment from a DIFFERENT camera position.]`,
+                contextDescription: `${angleConfig.instruction}\n\nORIGINAL SCENE CONTEXT:\n${sourceScene.contextDescription}\n\n[CRITICAL: Use the attached REFERENCE IMAGE as the AUTHORITATIVE source for environment, character appearance, and styling. This is the SAME moment captured from a DIFFERENT camera position. The camera angle MUST change to ${angleConfig.name}.]`,
                 visualDescription: sourceScene.visualDescription,
                 characterIds: [...sourceScene.characterIds],
                 productIds: [...(sourceScene.productIds || [])],
-                cameraAngleOverride: angle === 'custom' ? customPrompt || '' : angle,
+                cameraAngleOverride: angleConfig.angleValue || angle,
+                referenceImage: sourceImage, // Use source image as reference for the new angle
+                referenceImageDescription: `Source scene for angle variation. This image shows the exact environment, characters, and props. Recreate this scene from a ${angleConfig.name} camera position.`,
                 generatedImage: null,
                 veoPrompt: '',
                 isGenerating: true, // Start as generating
                 error: null,
             };
+
         });
 
         // Insert new scenes after source scene and renumber

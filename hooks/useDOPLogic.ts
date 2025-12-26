@@ -152,8 +152,132 @@ export function useDOPLogic(state: ProjectState) {
         };
     }, [state.scenes]);
 
+    /**
+     * AI Vision-powered raccord validation
+     * Compares two consecutive images to detect continuity errors
+     */
+    const validateRaccordWithVision = useCallback(async (
+        currentImage: string,
+        prevImage: string,
+        currentScene: Scene,
+        prevScene: Scene,
+        apiKey: string
+    ): Promise<{
+        isValid: boolean;
+        errors: { type: string; description: string }[];
+        correctionPrompt?: string;
+    }> => {
+        if (!apiKey || !currentImage || !prevImage) {
+            return { isValid: true, errors: [] };
+        }
+
+        try {
+            const { GoogleGenAI } = await import('@google/genai');
+            const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+
+            // Build context about what SHOULD be consistent
+            const prevChars = (prevScene.characterIds || []).map(id =>
+                state.characters.find(c => c.id === id)?.name
+            ).filter(Boolean);
+            const prevProps = (prevScene.productIds || []).map(id =>
+                state.products.find(p => p.id === id)?.name
+            ).filter(Boolean);
+            const currentChars = (currentScene.characterIds || []).map(id =>
+                state.characters.find(c => c.id === id)?.name
+            ).filter(Boolean);
+            const currentProps = (currentScene.productIds || []).map(id =>
+                state.products.find(p => p.id === id)?.name
+            ).filter(Boolean);
+
+            const sameLocation = prevScene.groupId === currentScene.groupId;
+
+            const dopPrompt = `You are a professional Director of Photography (DOP) checking for RACCORD (continuity) errors between two consecutive shots.
+
+SCENE CONTEXT:
+- Previous Scene: "${prevScene.contextDescription || 'N/A'}"
+- Characters in previous: ${prevChars.join(', ') || 'None'}
+- Props in previous: ${prevProps.join(', ') || 'None'}
+
+- Current Scene: "${currentScene.contextDescription || 'N/A'}"
+- Characters expected: ${currentChars.join(', ') || 'None'}
+- Props expected: ${currentProps.join(', ') || 'None'}
+
+${sameLocation ? 'SAME LOCATION: Background must be strictly consistent.' : 'DIFFERENT LOCATION: Transition allowed.'}
+
+CHECK FOR:
+1. PROP CONTINUITY: Are props that should appear actually visible? Check position consistency (same hand, same table position).
+2. CHARACTER IDENTITY: Do faces match between shots? Same costume?
+3. LIGHTING: Is the lighting direction and color temperature consistent?
+4. SPATIAL: Are background elements consistent (furniture, walls, etc.)?
+
+RESPOND IN JSON ONLY:
+{
+  "isValid": true/false,
+  "errors": [{"type": "prop|character|lighting|spatial", "description": "specific issue"}],
+  "correctionPrompt": "If errors found, provide the EXACT instruction to add to the prompt to fix it"
+}`;
+
+            // Prepare image parts
+            const getImageData = async (img: string) => {
+                if (img.startsWith('data:')) {
+                    const [header, data] = img.split(',');
+                    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                    return { data, mimeType };
+                } else if (img.startsWith('http')) {
+                    const response = await fetch(img);
+                    const blob = await response.blob();
+                    const data = await new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                    return { data, mimeType: blob.type || 'image/jpeg' };
+                }
+                return null;
+            };
+
+            const prevImgData = await getImageData(prevImage);
+            const currImgData = await getImageData(currentImage);
+
+            if (!prevImgData || !currImgData) {
+                return { isValid: true, errors: [] };
+            }
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [
+                    { text: 'PREVIOUS SHOT:' },
+                    { inlineData: { data: prevImgData.data, mimeType: prevImgData.mimeType } },
+                    { text: 'CURRENT SHOT:' },
+                    { inlineData: { data: currImgData.data, mimeType: currImgData.mimeType } },
+                    { text: dopPrompt }
+                ]
+            });
+
+            const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+            if (jsonMatch) {
+                const result = JSON.parse(jsonMatch[0]);
+                console.log('[DOP Vision] Validation result:', result);
+                return {
+                    isValid: result.isValid ?? true,
+                    errors: result.errors || [],
+                    correctionPrompt: result.correctionPrompt
+                };
+            }
+
+            return { isValid: true, errors: [] };
+        } catch (error) {
+            console.error('[DOP Vision] Error:', error);
+            return { isValid: true, errors: [] }; // Fail-open: don't block on errors
+        }
+    }, [state.characters, state.products]);
+
     return {
         analyzeRaccord,
-        suggestNextShot
+        suggestNextShot,
+        validateRaccordWithVision
     };
 }

@@ -58,7 +58,9 @@ export function useImageGeneration(
     isContinuityMode: boolean,
     userId?: string,
     isOutfitLockMode?: boolean,
-    addToGallery?: (image: string, type: string, prompt?: string, sourceId?: string) => void
+    addToGallery?: (image: string, type: string, prompt?: string, sourceId?: string) => void,
+    isDOPEnabled?: boolean,
+    validateRaccordWithVision?: (currentImage: string, prevImage: string, currentScene: Scene, prevScene: Scene, apiKey: string) => Promise<{ isValid: boolean; errors: { type: string; description: string }[]; correctionPrompt?: string }>
 ) {
     const [isBatchGenerating, setIsBatchGenerating] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
@@ -372,6 +374,10 @@ export function useImageGeneration(
             // 5c. CHARACTER BODY/VIEWS & PRODUCT REFERENCES (Advanced Mapping for Gemini 3 Pro)
             let referencePreamble = '';
 
+            // Track characters from the previous scene for re-entry logic
+            const prevScene = currentSceneIndex > 0 ? currentState.scenes[currentSceneIndex - 1] : null;
+            const prevSceneCharIds = prevScene?.characterIds || [];
+
             for (const char of selectedChars) {
                 const charRefs: { type: string, img: string }[] = [];
                 if (char.faceImage) charRefs.push({ type: 'FACE ID', img: char.faceImage });
@@ -392,7 +398,12 @@ export function useImageGeneration(
                     const imgData = await safeGetImageData(ref.img);
                     if (imgData) {
                         const refLabel = `MASTER VISUAL: ${char.name.toUpperCase()} ${ref.type}`;
-                        parts.push({ text: `[${refLabel}]: AUTHORITATIVE identity anchor for ${char.name}. Match these exact face features. For clothing and pose, defer to SCENE_LOCK_REFERENCE if present. Description: ${char.description}` });
+
+                        // IDENTITY RE-ENTRY LOGIC: If character wasn't in previous shot, force a reset
+                        const isReentry = !prevSceneCharIds.includes(char.id);
+                        const reentryInstruction = isReentry ? `!!! IDENTITY RESET !!! Character ${char.name} is re-entering the sequence. Strictly reset facial features to this Face ID. Do NOT be influenced by surroundings.` : "";
+
+                        parts.push({ text: `[${refLabel}]: AUTHORITATIVE identity anchor for ${char.name}. ${reentryInstruction} Match these exact face features. For clothing and pose, defer to SCENE_LOCK_REFERENCE if present. Description: ${char.description}` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                         referencePreamble += `(IDENTITY CONTINUITY: Match ${refLabel}) `;
                     }
@@ -433,13 +444,17 @@ export function useImageGeneration(
             }
 
             // 5e. SCALE ANCHOR FROM PREVIOUS SHOT (New)
-            // Only use if no explicit user reference image is provided (to avoid conflicting references)
-            if (currentSceneIndex > 0 && !sceneToUpdate.referenceImage) {
+            // Only use if isContinuityMode is ON and no explicit user reference image is provided (to avoid conflicting references)
+            if (isContinuityMode && currentSceneIndex > 0 && !sceneToUpdate.referenceImage) {
                 const prevSceneWithImage = currentState.scenes.slice(0, currentSceneIndex).reverse().find(s => s.generatedImage);
                 if (prevSceneWithImage?.generatedImage) {
                     const imgData = await safeGetImageData(prevSceneWithImage.generatedImage);
                     if (imgData) {
-                        parts.push({ text: `[SCALE_ANCHOR_PREVIOUS]: Use as reference for object proportions and relative scale. Ensure item in this scene matches the size/color of the same item in this previous shot.` });
+                        // RE-ENTRY SAFE INSTRUCTION: If previous shot was empty, warn AI not to suppress characters
+                        const wasPrevShotEmpty = (prevSceneWithImage.characterIds?.length || 0) === 0;
+                        const charReturnWarning = wasPrevShotEmpty ? "!!! NOTICE !!! The previous shot was a background-only view. The current shot contains characters; do NOT let this reference suppress their appearance or identity." : "";
+
+                        parts.push({ text: `[SCALE_ANCHOR_PREVIOUS]: Use as reference for object proportions and relative scale. ${charReturnWarning} Ensure item in this scene matches the size/color of the same item in this previous shot.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                     }
                 }
@@ -576,9 +591,92 @@ export function useImageGeneration(
         stopRef.current = false;
 
         try {
-            for (const scene of scenesToGenerate) {
+            for (let i = 0; i < scenesToGenerate.length; i++) {
+                const scene = scenesToGenerate[i];
                 if (stopRef.current) break;
+
                 await performImageGeneration(scene.id);
+
+                // Get the newly generated image
+                const updatedState = stateRef.current;
+                const updatedScene = updatedState.scenes.find(s => s.id === scene.id);
+                const currentImage = updatedScene?.generatedImage;
+
+                // DOP Vision Validation (if enabled and not first scene)
+                if (isDOPEnabled && validateRaccordWithVision && currentImage && userApiKey) {
+                    const currentSceneIndex = updatedState.scenes.findIndex(s => s.id === scene.id);
+                    const prevScene = currentSceneIndex > 0 ? updatedState.scenes[currentSceneIndex - 1] : null;
+
+                    if (prevScene?.generatedImage) {
+                        console.log('[DOP] Validating raccord between scenes...');
+
+                        const MAX_DOP_RETRIES = 2;
+                        let retryCount = 0;
+                        let lastValidation = await validateRaccordWithVision(
+                            currentImage,
+                            prevScene.generatedImage,
+                            updatedScene!,
+                            prevScene,
+                            userApiKey
+                        );
+
+                        // Filter for critical errors only (character/prop issues warrant regen)
+                        const criticalErrors = lastValidation.errors.filter(e =>
+                            e.type === 'character' || e.type === 'prop'
+                        );
+
+                        while (!lastValidation.isValid && criticalErrors.length > 0 && retryCount < MAX_DOP_RETRIES) {
+                            console.log(`[DOP] RACCORD ERROR DETECTED (attempt ${retryCount + 1}/${MAX_DOP_RETRIES}):`, criticalErrors);
+
+                            // Clear the bad image and regenerate with correction
+                            updateStateAndRecord(s => ({
+                                ...s,
+                                scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                    ...sc,
+                                    generatedImage: null,
+                                    error: `DOP Retry ${retryCount + 1}: ${criticalErrors.map(e => e.description).join('; ')}`
+                                } : sc)
+                            }));
+
+                            // Wait a bit then regenerate with correction prompt
+                            await new Promise(r => setTimeout(r, 500));
+
+                            console.log('[DOP] Auto-regenerating with correction:', lastValidation.correctionPrompt);
+                            await performImageGeneration(scene.id, lastValidation.correctionPrompt);
+
+                            // Re-validate
+                            const reUpdatedState = stateRef.current;
+                            const reUpdatedScene = reUpdatedState.scenes.find(s => s.id === scene.id);
+                            const newImage = reUpdatedScene?.generatedImage;
+
+                            if (newImage) {
+                                lastValidation = await validateRaccordWithVision(
+                                    newImage,
+                                    prevScene.generatedImage,
+                                    reUpdatedScene!,
+                                    prevScene,
+                                    userApiKey
+                                );
+                            }
+
+                            retryCount++;
+                        }
+
+                        if (retryCount >= MAX_DOP_RETRIES && !lastValidation.isValid) {
+                            console.warn('[DOP] Max retries reached. Marking scene for manual review.');
+                            updateStateAndRecord(s => ({
+                                ...s,
+                                scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                    ...sc,
+                                    error: `⚠️ DOP: Requires manual review (${lastValidation.errors.map(e => e.description).join('; ')})`
+                                } : sc)
+                            }));
+                        } else if (lastValidation.isValid) {
+                            console.log('[DOP] Raccord validation PASSED');
+                        }
+                    }
+                }
+
                 await new Promise(r => setTimeout(r, 500));
             }
         } catch (e) {
@@ -587,7 +685,7 @@ export function useImageGeneration(
             setIsBatchGenerating(false);
             setIsStopping(false);
         }
-    }, [state.scenes, performImageGeneration]);
+    }, [state.scenes, performImageGeneration, isDOPEnabled, validateRaccordWithVision, userApiKey, stateRef, updateStateAndRecord]);
 
     return {
         isBatchGenerating,
