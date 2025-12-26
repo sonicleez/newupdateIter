@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { ProjectState } from '../types';
 import { CAMERA_ANGLES, LENS_OPTIONS, VEO_PRESETS } from '../constants/presets';
@@ -11,7 +11,16 @@ export function useVideoGeneration(
     setApiKeyModalOpen: (open: boolean) => void
 ) {
     const [isVeoGenerating, setIsVeoGenerating] = useState(false);
+    const [isVeoStopping, setIsVeoStopping] = useState(false);
     const [isVideoGenerating, setIsVideoGenerating] = useState(false);
+    const stopVeoRef = useRef(false);
+
+    const stopVeoGeneration = useCallback(() => {
+        if (isVeoGenerating) {
+            stopVeoRef.current = true;
+            setIsVeoStopping(true);
+        }
+    }, [isVeoGenerating]);
 
     const generateVeoPrompt = useCallback(async (sceneId: string) => {
         const scene = state.scenes.find(s => s.id === sceneId);
@@ -192,11 +201,17 @@ export function useVideoGeneration(
             // STEP 2: Generate Veo prompts for all scenes
             console.log('[Veo] Generating prompts for', scenesToProcess.length, 'scenes...');
             for (const scene of scenesToProcess) {
+                if (stopVeoRef.current) {
+                    console.log('[Veo] Stopped by user');
+                    break;
+                }
                 await generateVeoPrompt(scene.id);
                 await new Promise(r => setTimeout(r, 200));
             }
         } finally {
             setIsVeoGenerating(false);
+            setIsVeoStopping(false);
+            stopVeoRef.current = false;
         }
     }, [state.scenes, userApiKey, generateVeoPrompt, setApiKeyModalOpen, updateStateAndRecord]);
 
@@ -268,11 +283,13 @@ export function useVideoGeneration(
 
     return {
         isVeoGenerating,
+        isVeoStopping,
         isVideoGenerating,
         generateVeoPrompt,
         handleGenerateAllVeoPrompts,
         handleGenerateAllVideos,
         suggestVeoPresets,
-        applyPresetToAll
+        applyPresetToAll,
+        stopVeoGeneration
     };
 }

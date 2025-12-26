@@ -1,5 +1,5 @@
 import React from 'react';
-import { Table, LayoutGrid, Trash2, Plus, ImageMinus, ChevronDown, ChevronRight, Zap, Image as ImageIcon, Wind, Clock, Sun } from 'lucide-react';
+import { Table, LayoutGrid, Trash2, Plus, ImageMinus, ChevronDown, ChevronRight, Zap, Image as ImageIcon, Wind, Clock, Sun, StopCircle } from 'lucide-react';
 import { SceneRow } from '../scenes/SceneRow';
 import { StoryBoardCard } from '../scenes/StoryBoardCard';
 import { Tooltip } from '../common/Tooltip';
@@ -30,6 +30,8 @@ interface ScenesMapSectionProps {
     analyzeRaccord: (sceneId: string) => any[];
     suggestNextShot: (lastSceneId: string) => any;
     isVeoGenerating: boolean;
+    isVeoStopping?: boolean;
+    stopVeoGeneration?: () => void;
     handleGenerateAllVideos: () => void;
     isVideoGenerating: boolean;
     addScene: () => void;
@@ -69,6 +71,8 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
     suggestVeoPresets,
     applyPresetToAll,
     isVeoGenerating,
+    isVeoStopping,
+    stopVeoGeneration,
     handleGenerateAllVideos,
     isVideoGenerating,
     addScene,
@@ -149,6 +153,15 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                             <Zap size={14} />
                             {isVeoGenerating ? '2. Prompts...' : '2. Veo Prompts'}
                         </button>
+                        {isVeoGenerating && stopVeoGeneration && (
+                            <button
+                                onClick={stopVeoGeneration}
+                                className="h-9 px-3 bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded-lg transition-all flex items-center gap-1 text-[9px] font-bold uppercase"
+                            >
+                                <StopCircle size={14} />
+                                {isVeoStopping ? 'Đang dừng...' : 'Dừng'}
+                            </button>
+                        )}
 
                         <div className="w-px h-4 bg-gray-800 mx-1"></div>
 

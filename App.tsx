@@ -175,12 +175,14 @@ const App: React.FC = () => {
 
     const {
         isVeoGenerating,
+        isVeoStopping,
         isVideoGenerating,
         generateVeoPrompt,
         handleGenerateAllVeoPrompts,
         handleGenerateAllVideos,
         suggestVeoPresets,
         applyPresetToAll,
+        stopVeoGeneration,
     } = useVideoGeneration(state, updateStateAndRecord, userApiKey, setProfileModalOpen);
 
     const {
@@ -758,6 +760,8 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                                     analyzeRaccord={analyzeRaccord}
                                     suggestNextShot={suggestNextShot}
                                     isVeoGenerating={isVeoGenerating}
+                                    isVeoStopping={isVeoStopping}
+                                    stopVeoGeneration={stopVeoGeneration}
                                     handleGenerateAllVideos={handleGenerateAllVideos}
                                     isVideoGenerating={isVideoGenerating}
                                     addScene={addScene}
