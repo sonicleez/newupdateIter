@@ -78,7 +78,8 @@ export function useImageGeneration(
         apiKey: string | null,
         model: string,
         aspectRatio: string,
-        parts: any[] = []
+        parts: any[] = [],
+        imageSize: string = '1K' // Added resolution parameter: '1K', '2K', or '4K'
     ): Promise<{ imageUrl: string; mediaId?: string }> => {
         const isHighRes = model === 'gemini-3-pro-image-preview';
 
@@ -88,11 +89,16 @@ export function useImageGeneration(
             const fullParts = [...parts];
             if (prompt) fullParts.push({ text: prompt });
 
+            console.log(`[ImageGen] Generating with resolution: ${imageSize}, aspectRatio: ${aspectRatio}`);
+
             const response = await ai.models.generateContent({
                 model: model,
                 contents: fullParts,
                 config: {
-                    imageConfig: { aspectRatio: aspectRatio || "16:9" }
+                    imageConfig: {
+                        aspectRatio: aspectRatio || "16:9",
+                        imageSize: imageSize || '1K' // Pass resolution to API
+                    }
                 },
             });
 
@@ -504,7 +510,8 @@ export function useImageGeneration(
                 userApiKey,
                 currentState.imageModel || 'gemini-3-pro-image-preview',
                 currentState.aspectRatio,
-                isHighRes ? parts : []
+                isHighRes ? parts : [],
+                currentState.resolution || '1K' // Pass resolution setting
             );
 
             updateStateAndRecord(s => ({
@@ -568,7 +575,9 @@ export function useImageGeneration(
                 conceptPrompt,
                 userApiKey,
                 currentState.imageModel || 'gemini-3-pro-image-preview',
-                currentState.aspectRatio
+                currentState.aspectRatio,
+                [], // No parts for concept art
+                currentState.resolution || '1K' // Pass resolution setting
             );
 
             if (imageUrl && addToGallery) {
