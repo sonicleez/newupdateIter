@@ -158,6 +158,15 @@ export const StoryBoardCard: React.FC<StoryBoardCardProps> = ({
 
             {/* Content Section */}
             <div className="p-3 flex-1 flex flex-col space-y-2">
+                {(scene.voiceOverText || scene.isVOScene) && (
+                    <ExpandableTextarea
+                        value={scene.voiceOverText || ''}
+                        onChange={(val) => updateScene(scene.id, { voiceOverText: val })}
+                        placeholder="Voice Over..."
+                        rows={3}
+                        className="w-full bg-violet-900/10 border-b border-violet-500/20 p-1 mb-1 text-xs text-violet-200 focus:ring-0 resize-none overflow-hidden scrollbar-none italic leading-relaxed font-medium"
+                    />
+                )}
                 <ExpandableTextarea
                     value={scene.language1 || scene.vietnamese || ''}
                     onChange={(val) => updateScene(scene.id, { language1: val })}

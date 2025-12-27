@@ -122,11 +122,21 @@ export const SceneRow: React.FC<SceneRowProps> = ({
 
             {/* Script */}
             <div className="md:col-span-2 space-y-2">
+                {(scene.voiceOverText || scene.isVOScene) && (
+                    <ExpandableTextarea
+                        value={scene.voiceOverText || ''}
+                        onChange={(val) => updateScene(scene.id, { voiceOverText: val })}
+                        placeholder="Voice Over (Lời bình)..."
+                        rows={2}
+                        className="w-full bg-violet-900/20 border border-violet-500/30 rounded p-2 text-xs text-violet-100 placeholder-violet-500/50 focus:border-violet-500 resize-none font-medium"
+                        title="Voice Over Script (AI/Manual)"
+                    />
+                )}
                 <ExpandableTextarea
                     value={scene.language1}
                     onChange={(val) => updateScene(scene.id, { language1: val })}
                     placeholder="Script (Lang 1)..."
-                    rows={3}
+                    rows={scene.voiceOverText ? 2 : 3}
                     className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-xs text-gray-300 focus:border-green-500 resize-none"
                     title="Script (Language 1)"
                 />
@@ -134,7 +144,7 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                     value={scene.vietnamese}
                     onChange={(val) => updateScene(scene.id, { vietnamese: val })}
                     placeholder="Lời thoại (Việt)..."
-                    rows={3}
+                    rows={scene.voiceOverText ? 2 : 3}
                     className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-xs text-white focus:border-green-500 resize-none"
                     title="Lời thoại Tiếng Việt"
                 />
