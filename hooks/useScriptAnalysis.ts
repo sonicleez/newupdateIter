@@ -123,7 +123,7 @@ ${scriptText}
 
 TASK:
 1. Identify CHAPTER HEADERS
-2. Extract CHARACTER NAMES
+2. Extract CHARACTER NAMES (Merge aliases: e.g. "The Man" = "Étienne"). List UNIQUE physical characters only.
 3. Break into SCENES (3-5s each)
 4. Create VISUAL PROMPTS
 
@@ -132,6 +132,7 @@ RULES:
 - If a VO segment needs multiple visuals, mark needsExpansion: true
 - Expansion scenes are B-roll
 - Identify Key Characters and supporting roles.
+- CONSTISTENCY CHECK: Ensure the same character is not listed twice under different names. Only list characters that appear visually.
 
 RESPOND WITH JSON ONLY:
 {
@@ -145,12 +146,12 @@ RESPOND WITH JSON ONLY:
   ],
   "characters": [
     {
-      "name": "Character Name",
+      "name": "Étienne Marchand",
       "mentions": 5,
-      "suggestedDescription": "Caucasian male, 40s, rugged face with stubble, piercing blue eyes, messy brown hair, athletic build. Wearing a worn leather jacket, grey t-shirt, and dark jeans.",
+      "suggestedDescription": "Faceless white mannequin head. WEARING: A tailored charcoal grey 1940s wool suit with wide lapels, crisp white shirt, silk tie, and a gold pocket watch chain. (Micro-texture: Fabric has visible weave texture).",
       "outfitByChapter": {
-        "chapter_1": "worn leather jacket, grey t-shirt",
-        "chapter_2": "formal black tuxedo, bow tie"
+        "chapter_1": "charcoal grey 1940s wool suit",
+        "chapter_2": "casual linen shirt and trousers"
       },
       "isMain": true
     }
