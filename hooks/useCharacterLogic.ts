@@ -414,12 +414,12 @@ ${prompt}
 MANDATORY REQUIREMENTS:
 - Background: Pure Solid White Studio Background (RGB 255, 255, 255). No shadows on background, no textures.
 - Framing: FULL BODY HEAD-TO-TOE, clear silhouette, MUST INCLUDE FEET.
-- Pose: Standard A-Pose or T-Pose.
+- Pose: Standard A-Pose or T-Pose (Fixed Reference Pose).
 - Lighting: Professional studio softbox lighting, high contrast, rim light for separation.
 - Quality: 8K, Ultra-Sharp focus, Hyper-detailed texture, Ray-tracing style.
-- Consistency: Unified style, no artifacts, clean lines.
+- Face: EXTREMELY SHARP and DETAILED facial features (Eyes, Nose, Mouth must be perfect). NO BLURRED FACES.
 
-CRITICAL: The style MUST strictly follow the "STYLE PRESET" and Capturing the specific vibe described. Solid white background is non-negotiable.
+CRITICAL: The style MUST strictly follow the "STYLE PRESET" and Capturing the specific vibe described. Solid white background is non-negotiable. Face must be recognizable and sharp.
             `.trim();
 
             const apiKey = (userApiKey || (process.env as any).API_KEY)?.trim();
