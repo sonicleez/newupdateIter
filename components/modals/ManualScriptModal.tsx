@@ -84,6 +84,21 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <style>{`
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 4px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #52525b;
+                    border-radius: 4px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #71717a;
+                }
+            `}</style>
             <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-violet-500/10 border border-zinc-700/50">
                 {/* Header - Glassmorphism */}
                 <div className="flex items-center justify-between px-8 py-5 border-b border-zinc-700/50 bg-zinc-800/30 backdrop-blur-sm">
@@ -147,7 +162,7 @@ John enters the room, wearing a tailored Armani suit..."
                             </div>
 
                             {/* Right Column - Settings (2/5) - Scrollable */}
-                            <div className="lg:col-span-2 overflow-y-auto max-h-[70vh] space-y-4 pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#52525b #27272a' }}>
+                            <div className="lg:col-span-2 overflow-y-auto max-h-[70vh] space-y-4 pr-1 custom-scrollbar" style={{ scrollbarWidth: 'thin', scrollbarColor: '#52525b #27272a' }}>
                                 {/* AI Settings Card - Compact */}
                                 <div className="bg-zinc-800/30 rounded-2xl p-4 border border-zinc-700/30 backdrop-blur-sm">
                                     <div className="flex items-center gap-2 mb-4">
@@ -211,7 +226,7 @@ John enters the room, wearing a tailored Armani suit..."
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#52525b #27272a' }}>
+                                    <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar" style={{ scrollbarWidth: 'thin', scrollbarColor: '#52525b #27272a' }}>
                                         {(showStylePicker ? BUILT_IN_CHARACTER_STYLES : BUILT_IN_CHARACTER_STYLES.slice(0, 4)).map(style => (
                                             <button
                                                 key={style.id}
@@ -275,7 +290,7 @@ John enters the room, wearing a tailored Armani suit..."
                                                     <X className="w-4 h-4" />
                                                 </button>
                                             </div>
-                                            <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ scrollbarWidth: 'thin', scrollbarColor: '#52525b #27272a' }}>
+                                            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar" style={{ scrollbarWidth: 'thin', scrollbarColor: '#52525b #27272a' }}>
                                                 {(['documentary', 'cinema', 'tvc', 'music_video'] as DirectorCategory[]).map(category => (
                                                     <div key={category}>
                                                         <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2 sticky top-0 bg-zinc-900 py-1">
