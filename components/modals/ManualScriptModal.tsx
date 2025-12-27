@@ -40,6 +40,14 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
     // Style & Director selection
     const [selectedStyleId, setSelectedStyleId] = useState<string>('faceless-mannequin');
     const [selectedDirectorId, setSelectedDirectorId] = useState<string>('werner_herzog');
+    const [selectedModel, setSelectedModel] = useState<string>('gemini-2.0-flash');
+
+    // Available Gemini models
+    const GEMINI_MODELS = [
+        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Fast & Accurate' },
+        { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Stable' },
+        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', desc: 'Best Quality' },
+    ];
 
     // UI state
     const [showStylePicker, setShowStylePicker] = useState(false);
@@ -58,8 +66,8 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
     // Handle analyze
     const handleAnalyze = useCallback(async () => {
         if (!scriptText.trim()) return;
-        await analyzeScript(scriptText, readingSpeed);
-    }, [scriptText, readingSpeed, analyzeScript]);
+        await analyzeScript(scriptText, readingSpeed, selectedModel);
+    }, [scriptText, readingSpeed, selectedModel, analyzeScript]);
 
     // Handle import
     const handleImport = useCallback(() => {
@@ -120,11 +128,27 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
                             </div>
 
                             {/* Settings Row - NO OVERFLOW to prevent dropdown clipping */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-20">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 relative z-20">
+                                {/* AI Model */}
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                        🤖 AI Model
+                                    </label>
+                                    <select
+                                        value={selectedModel}
+                                        onChange={(e) => setSelectedModel(e.target.value)}
+                                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white"
+                                    >
+                                        {GEMINI_MODELS.map(m => (
+                                            <option key={m.id} value={m.id}>{m.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
                                 {/* Reading Speed */}
                                 <div>
                                     <label className="block text-sm font-medium text-zinc-300 mb-2">
-                                        <Clock className="w-4 h-4 inline mr-1" /> Reading Speed
+                                        <Clock className="w-4 h-4 inline mr-1" /> Speed
                                     </label>
                                     <select
                                         value={readingSpeed}
@@ -194,20 +218,24 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
                                         {showDirectorPicker ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
                                     </button>
                                     {showDirectorPicker && (
-                                        <div className="absolute bottom-full left-0 mb-1 w-80 max-h-64 overflow-y-scroll bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl z-50 p-3" style={{ scrollbarWidth: 'thin', scrollbarColor: '#52525b #27272a' }}>
-                                            {(['documentary', 'cinema'] as DirectorCategory[]).map(category => (
-                                                <div key={category} className="mb-3">
-                                                    <div className="text-xs text-zinc-500 uppercase mb-2">{category}</div>
-                                                    <div className="space-y-1">
-                                                        {DIRECTOR_PRESETS[category].slice(0, 4).map(dir => (
+                                        <div className="absolute bottom-full left-0 mb-1 w-96 max-h-80 overflow-y-scroll bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl z-50 p-3" style={{ scrollbarWidth: 'thin', scrollbarColor: '#52525b #27272a' }}>
+                                            {(['documentary', 'cinema', 'tvc', 'music_video'] as DirectorCategory[]).map(category => (
+                                                <div key={category} className="mb-4">
+                                                    <div className="text-xs text-zinc-500 uppercase mb-2 sticky top-0 bg-zinc-800 py-1">{category.replace('_', ' ')}</div>
+                                                    <div className="space-y-2">
+                                                        {DIRECTOR_PRESETS[category].map(dir => (
                                                             <button
                                                                 key={dir.id}
                                                                 onClick={() => { setSelectedDirectorId(dir.id); setShowDirectorPicker(false); }}
-                                                                className={`w-full p-2 rounded-lg text-left ${selectedDirectorId === dir.id ? 'bg-violet-500/20 border border-violet-500/50' : 'hover:bg-zinc-700'
+                                                                className={`w-full p-3 rounded-lg text-left ${selectedDirectorId === dir.id ? 'bg-violet-500/20 border border-violet-500/50' : 'hover:bg-zinc-700 border border-transparent'
                                                                     }`}
                                                             >
-                                                                <div className="text-sm text-white">{dir.name}</div>
-                                                                <div className="text-xs text-zinc-400 truncate">{dir.description}</div>
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="text-sm font-medium text-white">{dir.name}</div>
+                                                                    <div className="text-[10px] text-zinc-500 bg-zinc-700 px-1.5 py-0.5 rounded">{category}</div>
+                                                                </div>
+                                                                <div className="text-xs text-zinc-400 mt-1">{dir.description}</div>
+                                                                <div className="text-[10px] text-violet-400 mt-1">🎬 {dir.signatureCameraStyle}</div>
                                                             </button>
                                                         ))}
                                                     </div>
