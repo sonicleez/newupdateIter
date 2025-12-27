@@ -969,34 +969,60 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                     <ManualScriptModal
                         isOpen={isManualScriptModalOpen}
                         onClose={() => setManualScriptModalOpen(false)}
-                        onImport={(scenes, groups, newChars, styleId, directorId) => {
-                            // Add scene groups
+                        onImport={(scenes, groups, newChars, styleId, directorId, sceneCharacterMap) => {
+                            // 1. Initialize mapping for name check (lowercase) -> Character ID
+                            const charNameMap = new Map<string, string>();
+
+                            // Add existing characters to map
+                            state.characters.forEach(c => {
+                                charNameMap.set(c.name.toLowerCase(), c.id);
+                            });
+
+                            // 2. Create new Character objects
+                            const createdCharacters: any[] = newChars.map(nc => {
+                                const id = generateId();
+                                // Add to map for resolution
+                                charNameMap.set(nc.name.toLowerCase(), id);
+
+                                return {
+                                    id,
+                                    name: nc.name,
+                                    description: nc.description,
+                                    masterImage: null,
+                                    faceImage: null,
+                                    bodyImage: null,
+                                    sideImage: null,
+                                    backImage: null,
+                                    props: [],
+                                    isDefault: false
+                                };
+                            });
+
+                            // 3. Update scenes with correct character IDs
+                            const updatedScenes = scenes.map((scene, index) => {
+                                // Get names associated with this scene's original index
+                                const names = sceneCharacterMap[index] || [];
+
+                                // Resolve names to IDs
+                                const charIds = names
+                                    .map(name => charNameMap.get(name.toLowerCase()))
+                                    .filter(id => id !== undefined) as string[];
+
+                                return {
+                                    ...scene,
+                                    characterIds: [...new Set(charIds)] // De-duplicate
+                                };
+                            });
+
+                            // 4. Update State in one go
                             updateStateAndRecord(s => ({
                                 ...s,
                                 sceneGroups: [...(s.sceneGroups || []), ...groups],
-                                scenes: [...s.scenes, ...scenes],
+                                scenes: [...s.scenes, ...updatedScenes],
                                 globalCharacterStyleId: styleId || s.globalCharacterStyleId,
-                                activeDirectorId: directorId || s.activeDirectorId
+                                activeDirectorId: directorId || s.activeDirectorId,
+                                characters: [...s.characters, ...createdCharacters]
                             }));
-                            // Add new characters
-                            newChars.forEach(c => {
-                                addCharacter();
-                                // Update the last added character with the name/description
-                                setTimeout(() => {
-                                    updateStateAndRecord(s => {
-                                        const lastChar = s.characters[s.characters.length - 1];
-                                        if (lastChar) {
-                                            return {
-                                                ...s,
-                                                characters: s.characters.map(ch =>
-                                                    ch.id === lastChar.id ? { ...ch, name: c.name, description: c.description } : ch
-                                                )
-                                            };
-                                        }
-                                        return s;
-                                    });
-                                }, 100);
-                            });
                         }}
                         existingCharacters={state.characters}
                         userApiKey={userApiKey}

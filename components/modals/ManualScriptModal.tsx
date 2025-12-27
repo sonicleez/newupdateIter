@@ -21,7 +21,8 @@ interface ManualScriptModalProps {
         groups: SceneGroup[],
         newCharacters: { name: string; description: string }[],
         styleId: string | undefined,
-        directorId: string | undefined
+        directorId: string | undefined,
+        sceneCharacterMap: Record<number, string[]>
     ) => void;
     existingCharacters: Character[];
     userApiKey: string | null;
@@ -67,14 +68,14 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
     const handleImport = useCallback(() => {
         if (!analysisResult) return;
 
-        const { scenes, groups, newCharacters } = generateSceneMap(
+        const { scenes, groups, newCharacters, sceneCharacterMap } = generateSceneMap(
             analysisResult,
             selectedDirector || null,
             selectedStyle || null,
             existingCharacters
         );
 
-        onImport(scenes, groups, newCharacters, selectedStyleId, selectedDirectorId);
+        onImport(scenes, groups, newCharacters, selectedStyleId, selectedDirectorId, sceneCharacterMap);
         onClose();
     }, [analysisResult, selectedDirector, selectedStyle, existingCharacters, onImport, onClose, generateSceneMap, selectedStyleId, selectedDirectorId]);
 
