@@ -10,6 +10,7 @@ import { X, FileText, Upload, Users, Layers, Clock, Play, Film, Palette, AlertTr
 import { Character, SceneGroup, Scene, ProjectState, CharacterStyleDefinition } from '../../types';
 import { DirectorPreset, DIRECTOR_PRESETS, DirectorCategory } from '../../constants/directors';
 import { BUILT_IN_CHARACTER_STYLES, getStylesByCategory } from '../../constants/characterStyles';
+import { SCRIPT_MODELS } from '../../constants/presets';
 import { useScriptAnalysis, ScriptAnalysisResult } from '../../hooks/useScriptAnalysis';
 
 interface ManualScriptModalProps {
@@ -40,14 +41,7 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
     // Style & Director selection
     const [selectedStyleId, setSelectedStyleId] = useState<string>('faceless-mannequin');
     const [selectedDirectorId, setSelectedDirectorId] = useState<string>('werner_herzog');
-    const [selectedModel, setSelectedModel] = useState<string>('gemini-2.0-flash');
-
-    // Available Gemini models
-    const GEMINI_MODELS = [
-        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Fast & Accurate' },
-        { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Stable' },
-        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', desc: 'Best Quality' },
-    ];
+    const [selectedModel, setSelectedModel] = useState<string>(SCRIPT_MODELS[0].value); // Use first model as default
 
     // UI state
     const [showStylePicker, setShowStylePicker] = useState(false);
@@ -139,8 +133,8 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
                                         onChange={(e) => setSelectedModel(e.target.value)}
                                         className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white"
                                     >
-                                        {GEMINI_MODELS.map(m => (
-                                            <option key={m.id} value={m.id}>{m.name}</option>
+                                        {SCRIPT_MODELS.map(m => (
+                                            <option key={m.value} value={m.value}>{m.label}</option>
                                         ))}
                                     </select>
                                 </div>

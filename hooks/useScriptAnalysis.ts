@@ -71,7 +71,7 @@ export function useScriptAnalysis(userApiKey: string | null) {
     const analyzeScript = useCallback(async (
         scriptText: string,
         readingSpeed: 'slow' | 'medium' | 'fast' = 'medium',
-        model: string = 'gemini-2.0-flash'
+        modelSelector: string = 'gemini-2.0-flash|none' // format: model|thinkingLevel
     ): Promise<ScriptAnalysisResult | null> => {
         if (!userApiKey) {
             setAnalysisError('API key required');
@@ -86,6 +86,19 @@ export function useScriptAnalysis(userApiKey: string | null) {
             const wpm = readingSpeed === 'slow' ? WPM_SLOW : readingSpeed === 'fast' ? WPM_FAST : WPM_MEDIUM;
             const wordCount = scriptText.split(/\s+/).length;
             const estimatedTotalDuration = Math.ceil((wordCount / wpm) * 60);
+
+            // Parse model selector format: "model-name|thinking-level"
+            const [modelName, thinkingLevel] = modelSelector.split('|');
+
+            // Map thinking level to budget tokens
+            const thinkingBudgets: Record<string, number | undefined> = {
+                'high': 24576,
+                'medium': 8192,
+                'low': 2048,
+                'minimal': 512,
+                'none': undefined
+            };
+            const thinkingBudget = thinkingBudgets[thinkingLevel] ?? undefined;
 
             const prompt = `Analyze this voice-over script for a documentary video. Return JSON only.
 
@@ -151,11 +164,14 @@ RESPOND WITH JSON ONLY:
 }`;
 
             const response = await ai.models.generateContent({
-                model: model,
+                model: modelName,
                 contents: prompt,
                 config: {
                     temperature: 0.3,
-                    responseMimeType: 'application/json'
+                    responseMimeType: 'application/json',
+                    ...(thinkingBudget && {
+                        thinkingConfig: { thinkingBudget }
+                    })
                 }
             });
 
