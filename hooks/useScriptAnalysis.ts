@@ -105,7 +105,7 @@ export function useScriptAnalysis(userApiKey: string | null) {
             // Context Injection
             let contextInstructions = "";
             if (characterStyle) {
-                contextInstructions += `\nVISUAL STYLE CONSTRAINT: The user selected the character style "${characterStyle.name}" (${characterStyle.promptInjection.global}).\n- You MUST generate "suggestedDescription" that aligns with this style.\n- CRITICAL: You MUST extract the SPECIFIC OUTFIT (uniforms, period clothing, colors) from the script and apply it to the character.\n- Example: "Faceless white mannequin wearing a 1940s French Resistance leather jacket and wool cap".\n- DO NOT generate generic mannequins. They MUST wear the character's signature clothes.\n`;
+                contextInstructions += `\nVISUAL STYLE CONSTRAINT: The user selected the character style "${characterStyle.name}" (${characterStyle.promptInjection.global}).\n- You MUST generate "suggestedDescription" that aligns with this style.\n- CRITICAL: You MUST extract the SPECIFIC OUTFIT (uniforms, period clothing, colors) from the script.\n- IF SCRIPT IS VAGUE: You MUST INFER appropriate period-accurate clothing in EXTREME DETAIL.\n- FORMAT: "[Style Description]. WEARING: [Detailed Outfit Description with colors, materials, condition] + [Accessories/Props]."\n- Example: "Faceless white mannequin. WEARING: A weathered 1940s brown leather bomber jacket with sheepskin collar, oil-stained khaki cargo pants, and worn combat boots. Holding a brass compass."\n`;
             } else {
                 contextInstructions += `\n- For characters, provide a HIGHLY DETAILED VISUAL DESCRIPTION (Age, Ethnicity, Hair, Face, Body, Initial Outfit).`;
             }
