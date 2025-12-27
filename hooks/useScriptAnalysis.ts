@@ -70,7 +70,8 @@ export function useScriptAnalysis(userApiKey: string | null) {
      */
     const analyzeScript = useCallback(async (
         scriptText: string,
-        readingSpeed: 'slow' | 'medium' | 'fast' = 'medium'
+        readingSpeed: 'slow' | 'medium' | 'fast' = 'medium',
+        model: string = 'gemini-2.0-flash'
     ): Promise<ScriptAnalysisResult | null> => {
         if (!userApiKey) {
             setAnalysisError('API key required');
@@ -150,7 +151,7 @@ RESPOND WITH JSON ONLY:
 }`;
 
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-preview-05-20',
+                model: model,
                 contents: prompt,
                 config: {
                     temperature: 0.3,
