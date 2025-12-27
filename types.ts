@@ -79,6 +79,7 @@ export interface SceneGroup {
   customTimeOfDay?: string; // Custom time description
   weather?: 'clear' | 'cloudy' | 'overcast' | 'rainy' | 'snowy' | 'foggy' | 'stormy' | 'custom';
   customWeather?: string; // Custom weather description
+  outfitOverrides?: Record<string, string>; // Character ID -> Outfit Description
   lightingMood?: string; // e.g., "warm golden hour", "harsh midday sun", "cold blue moonlight"
 }
 

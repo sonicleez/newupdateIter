@@ -190,9 +190,28 @@ export function useImageGeneration(
             const isDocumentary = activePreset?.category === 'documentary';
 
             if (selectedChars.length > 0) {
-                const charDesc = selectedChars.map(c => `[${c.name}: ${c.description}]`).join(' ');
-                const outfitConstraint = ' (MANDATORY COSTUME LOCK: Character MUST be wearing the exact clothing/uniform shown in their FULL BODY reference image. ABSOLUTELY NO NAKEDNESS.)';
-                charPrompt = `Appearing Characters: ${charDesc}${outfitConstraint}`;
+                // Find group to check for overrides
+                const group = sceneToUpdate.groupId
+                    ? currentState.sceneGroups?.find(g => g.id === sceneToUpdate.groupId)
+                    : null;
+
+                const charDesc = selectedChars.map(c => {
+                    const override = group?.outfitOverrides?.[c.id];
+                    if (override) {
+                        return `[${c.name}: ${c.description}. MANDATORY OUTFIT OVERRIDE: ${override}. IGNORE ALL PRIOR CLOTHING DETAILS.]`;
+                    }
+                    return `[${c.name}: ${c.description}]`;
+                }).join(' ');
+
+                const outfitConstraint = ' (MANDATORY COSTUME LOCK: Character MUST be wearing the exact clothing/uniform shown in their FULL BODY reference image OR the specified OUTFIT OVERRIDE. ABSOLUTELY NO NAKEDNESS.)';
+
+                // FACELESS ENFORCEMENT
+                const isFacelessMode = currentState.globalCharacterStyleId?.includes('faceless');
+                const facelessConstraint = isFacelessMode
+                    ? ' !!! STRICT FACELESS MODE: NO FACES, NO EYES, NO MOUTH. Heads must be turned away, in shadow, or obscured. !!! '
+                    : '';
+
+                charPrompt = `Appearing Characters: ${charDesc}${outfitConstraint}${facelessConstraint}`;
             } else if (isDocumentary) {
                 // DOCUMENTARY MODE: Allow anonymous people (crowds, subjects, etc.)
                 charPrompt = `DOCUMENTARY STYLE: Use realistic anonymous people fitting the scene context. No specific character identity required - focus on authentic human moments and environmental storytelling. Generate contextually appropriate people (workers, crowds, passersby, subjects) without fixed character references.`;

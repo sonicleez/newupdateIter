@@ -223,13 +223,26 @@ RESPOND WITH JSON ONLY:
         existingCharacters: Character[] = []
     ): { scenes: Scene[]; groups: SceneGroup[]; newCharacters: { name: string; description: string }[]; sceneCharacterMap: Record<number, string[]> } => {
 
-        const groups: SceneGroup[] = analysis.chapters.map(ch => ({
-            id: ch.id,
-            name: ch.title,
-            description: ch.title,
-            timeOfDay: (ch.suggestedTimeOfDay as any) || 'day',
-            weather: (ch.suggestedWeather as any) || 'clear'
-        }));
+        const groups: SceneGroup[] = analysis.chapters.map(ch => {
+            const outfitOverrides: Record<string, string> = {};
+            // Map character name -> outfit for this chapter
+            analysis.characters.forEach(c => {
+                // Ensure case-insensitive or exact name match? 
+                // We will use the exact name here and rely on App.tsx to resolve IDs
+                if (c.outfitByChapter?.[ch.id]) {
+                    outfitOverrides[c.name] = c.outfitByChapter[ch.id];
+                }
+            });
+
+            return {
+                id: ch.id,
+                name: ch.title,
+                description: ch.title,
+                timeOfDay: (ch.suggestedTimeOfDay as any) || 'day',
+                weather: (ch.suggestedWeather as any) || 'clear',
+                outfitOverrides
+            };
+        });
 
         const scenes: Scene[] = [];
         let sceneNumber = 1;

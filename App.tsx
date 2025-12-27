@@ -1014,10 +1014,24 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                                 };
                             });
 
-                            // 4. Update State in one go
+                            // 4. Update Groups with Outfit Overrides (Name -> ID)
+                            const updatedGroups = groups.map(g => {
+                                if (!g.outfitOverrides) return g;
+
+                                const newOverrides: Record<string, string> = {};
+                                Object.entries(g.outfitOverrides).forEach(([name, outfit]) => {
+                                    const id = charNameMap.get(name.toLowerCase());
+                                    if (id) {
+                                        newOverrides[id] = outfit as string;
+                                    }
+                                });
+                                return { ...g, outfitOverrides: newOverrides };
+                            });
+
+                            // 5. Update State in one go
                             updateStateAndRecord(s => ({
                                 ...s,
-                                sceneGroups: [...(s.sceneGroups || []), ...groups],
+                                sceneGroups: [...(s.sceneGroups || []), ...updatedGroups],
                                 scenes: [...s.scenes, ...updatedScenes],
                                 globalCharacterStyleId: styleId || s.globalCharacterStyleId,
                                 activeDirectorId: directorId || s.activeDirectorId,
