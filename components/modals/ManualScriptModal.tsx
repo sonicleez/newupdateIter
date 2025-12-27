@@ -144,16 +144,16 @@ John enters the room, wearing a tailored Armani suit..."
                                 )}
                             </div>
 
-                            {/* Right Column - Settings (2/5) */}
-                            <div className="lg:col-span-2 space-y-4">
-                                {/* AI Settings Card */}
-                                <div className="bg-zinc-800/30 rounded-2xl p-5 border border-zinc-700/30 backdrop-blur-sm">
+                            {/* Right Column - Settings (2/5) - Scrollable */}
+                            <div className="lg:col-span-2 overflow-y-auto max-h-[70vh] space-y-4 pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#52525b #27272a' }}>
+                                {/* AI Settings Card - Compact */}
+                                <div className="bg-zinc-800/30 rounded-2xl p-4 border border-zinc-700/30 backdrop-blur-sm">
                                     <div className="flex items-center gap-2 mb-4">
                                         <span className="text-lg">🤖</span>
-                                        <span className="text-sm font-bold text-white uppercase tracking-wider">AI Settings</span>
+                                        <span className="text-sm font-bold text-white uppercase tracking-wider">AI</span>
                                     </div>
 
-                                    <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-3">
                                         {/* Model Selector */}
                                         <div>
                                             <label className="block text-xs font-medium text-zinc-400 mb-1.5">Model</label>
@@ -194,46 +194,47 @@ John enters the room, wearing a tailored Armani suit..."
                                     </div>
                                 </div>
 
-                                {/* Character Style Card */}
-                                <div className="bg-zinc-800/30 rounded-2xl p-5 border border-zinc-700/30 backdrop-blur-sm">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <Palette className="w-4 h-4 text-fuchsia-400" />
-                                        <span className="text-sm font-bold text-white uppercase tracking-wider">Character Style</span>
+                                {/* Character Style Card - Compact */}
+                                <div className="bg-zinc-800/30 rounded-2xl p-4 border border-zinc-700/30 backdrop-blur-sm">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <Palette className="w-4 h-4 text-fuchsia-400" />
+                                            <span className="text-sm font-bold text-white uppercase tracking-wider">Style</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setShowStylePicker(!showStylePicker)}
+                                            className="text-[10px] text-violet-400 hover:text-violet-300 transition-colors"
+                                        >
+                                            {showStylePicker ? 'Less' : 'More →'}
+                                        </button>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2">
-                                        {Object.entries(stylesByCategory).flatMap(([_, styles]) =>
-                                            styles.slice(0, 4).map(style => (
-                                                <button
-                                                    key={style.id}
-                                                    onClick={() => setSelectedStyleId(style.id)}
-                                                    className={`p-3 rounded-xl text-left transition-all ${selectedStyleId === style.id
-                                                        ? 'bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border-2 border-violet-500/50 shadow-lg shadow-violet-500/10'
-                                                        : 'bg-zinc-900/50 border border-zinc-700 hover:border-zinc-600'
-                                                        }`}
-                                                >
-                                                    <div className="text-xl mb-1">{style.icon}</div>
-                                                    <div className="text-xs font-semibold text-white">{style.name}</div>
-                                                    <div className="text-[9px] text-zinc-500 mt-0.5 line-clamp-1">{style.description}</div>
-                                                </button>
-                                            ))
-                                        )}
+                                        {BUILT_IN_CHARACTER_STYLES.slice(0, 4).map(style => (
+                                            <button
+                                                key={style.id}
+                                                onClick={() => setSelectedStyleId(style.id)}
+                                                className={`p-2.5 rounded-xl text-left transition-all ${selectedStyleId === style.id
+                                                    ? 'bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border-2 border-violet-500/50'
+                                                    : 'bg-zinc-900/50 border border-zinc-700 hover:border-zinc-600'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-lg">{style.icon}</span>
+                                                    <span className="text-[10px] font-semibold text-white truncate">{style.name}</span>
+                                                </div>
+                                            </button>
+                                        ))}
                                     </div>
-
-                                    {/* Show More Button */}
-                                    <button
-                                        onClick={() => setShowStylePicker(!showStylePicker)}
-                                        className="w-full mt-3 py-2 text-xs text-violet-400 hover:text-violet-300 transition-colors"
-                                    >
-                                        {showStylePicker ? 'Show Less' : 'View All Styles →'}
-                                    </button>
                                 </div>
 
-                                {/* Director Card */}
-                                <div className="bg-zinc-800/30 rounded-2xl p-5 border border-zinc-700/30 backdrop-blur-sm">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <Film className="w-4 h-4 text-amber-400" />
-                                        <span className="text-sm font-bold text-white uppercase tracking-wider">Director Vision</span>
+                                {/* Director Card - Compact */}
+                                <div className="bg-zinc-800/30 rounded-2xl p-4 border border-zinc-700/30 backdrop-blur-sm relative">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <Film className="w-4 h-4 text-amber-400" />
+                                            <span className="text-sm font-bold text-white uppercase tracking-wider">Director</span>
+                                        </div>
                                     </div>
 
                                     {/* Selected Director Preview */}
@@ -284,8 +285,8 @@ John enters the room, wearing a tailored Armani suit..."
                                                                     key={dir.id}
                                                                     onClick={() => { setSelectedDirectorId(dir.id); setShowDirectorPicker(false); }}
                                                                     className={`w-full p-3 rounded-xl text-left transition-all ${selectedDirectorId === dir.id
-                                                                            ? 'bg-amber-500/20 border border-amber-500/50'
-                                                                            : 'hover:bg-zinc-800 border border-transparent'
+                                                                        ? 'bg-amber-500/20 border border-amber-500/50'
+                                                                        : 'hover:bg-zinc-800 border border-transparent'
                                                                         }`}
                                                                 >
                                                                     <div className="flex items-center justify-between">
