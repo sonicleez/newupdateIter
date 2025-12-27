@@ -221,7 +221,7 @@ RESPOND WITH JSON ONLY:
         director: DirectorPreset | null,
         characterStyle: CharacterStyleDefinition | null,
         existingCharacters: Character[] = []
-    ): { scenes: Scene[]; groups: SceneGroup[]; newCharacters: { name: string; description: string }[] } => {
+    ): { scenes: Scene[]; groups: SceneGroup[]; newCharacters: { name: string; description: string }[]; sceneCharacterMap: Record<number, string[]> } => {
 
         const groups: SceneGroup[] = analysis.chapters.map(ch => ({
             id: ch.id,
@@ -238,6 +238,8 @@ RESPOND WITH JSON ONLY:
         const stylePrompt = characterStyle?.promptInjection.global || '';
         const directorDna = director?.dna || '';
         const directorCamera = director?.signatureCameraStyle || '';
+
+        const sceneCharacterMap: Record<number, string[]> = {};
 
         for (const sceneAnalysis of analysis.scenes) {
             // Main scene with VO
@@ -270,6 +272,8 @@ RESPOND WITH JSON ONLY:
                 error: null
             };
 
+            // Map characters to scene index (0-based)
+            sceneCharacterMap[scenes.length] = sceneAnalysis.characterNames || [];
             scenes.push(mainScene);
             sceneNumber++;
 
@@ -303,6 +307,12 @@ RESPOND WITH JSON ONLY:
                         error: null
                     };
 
+                    // B-roll inherits characters from main scene? Or none?
+                    // Typically B-roll is about environment or specific details.
+                    // If it's a character B-roll, visualPrompt should describe it.
+                    // For now, we don't auto-assign characters to B-roll to avoid clutter
+                    sceneCharacterMap[scenes.length] = [];
+
                     scenes.push(bRollScene);
                     sceneNumber++;
                 }
@@ -318,7 +328,7 @@ RESPOND WITH JSON ONLY:
                 description: c.suggestedDescription
             }));
 
-        return { scenes, groups, newCharacters };
+        return { scenes, groups, newCharacters, sceneCharacterMap };
     }, []);
 
     return {
