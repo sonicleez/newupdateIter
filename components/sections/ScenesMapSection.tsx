@@ -251,17 +251,40 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                         </button>
                     )}
 
-                    <button
-                        onClick={() => {
-                            if (confirm('⚠️ Xóa TẤT CẢ ảnh?')) {
-                                onClearAllImages();
-                            }
-                        }}
-                        className="h-9 w-9 flex items-center justify-center text-red-500 hover:text-white hover:bg-red-600/20 bg-gray-900 border border-red-900/30 rounded-lg transition-all"
-                        title="Xóa tất cả ảnh"
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {/* Destructive Actions Dropdown */}
+                    <div className="relative group">
+                        <button
+                            className="h-9 w-9 flex items-center justify-center text-red-500 hover:text-white hover:bg-red-600/20 bg-gray-900 border border-red-900/30 rounded-lg transition-all"
+                            title="Thao tác xóa"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-50 overflow-hidden py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                            <button
+                                onClick={() => {
+                                    if (confirm('⚠️ Xóa TẤT CẢ ảnh đã tạo?')) {
+                                        onClearAllImages();
+                                    }
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-[10px] text-gray-300 hover:bg-red-500/10 hover:text-red-400 font-bold uppercase tracking-wider flex items-center gap-2"
+                            >
+                                <ImageIcon size={12} />
+                                Xóa tất cả ảnh
+                            </button>
+                            <div className="border-t border-gray-800"></div>
+                            <button
+                                onClick={() => {
+                                    if (confirm('🚨 XÓA TOÀN BỘ DỰ ÁN? Hành động này không thể hoàn tác!')) {
+                                        onCleanAll();
+                                    }
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-[10px] text-red-400 hover:bg-red-600/20 hover:text-red-300 font-bold uppercase tracking-wider flex items-center gap-2"
+                            >
+                                <Trash2 size={12} />
+                                Xóa sạch dự án (Clean All)
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -424,16 +447,6 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                             placeholder="Nội dung cốt truyện chi tiết sẽ được hiển thị ở đây giúp bạn nắm bắt mạch chuyện..."
                             className="w-full h-48 bg-black/40 text-gray-300 px-4 py-3 rounded-xl border border-gray-800/50 focus:outline-none focus:ring-1 focus:ring-brand-orange text-xs leading-relaxed scrollbar-thin scrollbar-thumb-gray-600 font-mono mb-3"
                         />
-                        <div className="flex justify-end">
-                            <button
-                                onClick={onCleanAll}
-                                className="flex items-center space-x-2 px-3 py-1.5 text-[9px] font-black text-red-500 hover:text-white hover:bg-red-600/20 rounded-lg border border-red-900/30 transition-all uppercase tracking-widest"
-                                title="Xóa toàn bộ kịch bản và scene để làm lại từ đầu"
-                            >
-                                <Trash2 size={12} />
-                                <span>Xóa sạch dự án (Clean All)</span>
-                            </button>
-                        </div>
                     </div>
                 )}
             </div>
