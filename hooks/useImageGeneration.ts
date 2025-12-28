@@ -699,18 +699,27 @@ export function useImageGeneration(
                 // DOP Vision Validation (if enabled and not first scene)
                 if (isDOPEnabled && validateRaccordWithVision && currentImage && userApiKey) {
                     const currentSceneIndex = updatedState.scenes.findIndex(s => s.id === scene.id);
-                    const prevScene = currentSceneIndex > 0 ? updatedState.scenes[currentSceneIndex - 1] : null;
+                    // CRITICAL CHANGE: For sub-scenes, validate against PARENT SCENE (Source of Truth)
+                    // For main scenes, validate against PREVIOUS SCENE (Linear flow)
+                    let referenceScene = null;
 
-                    if (prevScene?.generatedImage) {
-                        console.log('[DOP] Validating raccord between scenes...');
+                    if (updatedScene?.parentSceneId) {
+                        referenceScene = updatedState.scenes.find(s => s.id === updatedScene.parentSceneId) || null;
+                        console.log('[DOP] Sub-scene detected. Validating against PARENT SCENE:', referenceScene?.scene_number);
+                    } else if (currentSceneIndex > 0) {
+                        referenceScene = updatedState.scenes[currentSceneIndex - 1];
+                    }
+
+                    if (referenceScene?.generatedImage) {
+                        console.log('[DOP] Validating raccord against:', referenceScene.scene_number);
 
                         let MAX_DOP_RETRIES = 2;
                         let retryCount = 0;
                         let lastValidation = await validateRaccordWithVision(
                             currentImage,
-                            prevScene.generatedImage,
+                            referenceScene.generatedImage,
                             updatedScene!,
-                            prevScene,
+                            referenceScene,
                             userApiKey
                         );
 
@@ -734,7 +743,7 @@ export function useImageGeneration(
                                 console.log('[DOP Agent] Analyzing if retry will succeed...');
                                 const decision = await makeRetryDecision(
                                     currentImage,
-                                    prevScene.generatedImage,
+                                    referenceScene.generatedImage,
                                     originalPrompt,
                                     criticalErrors,
                                     userApiKey
