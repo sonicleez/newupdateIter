@@ -410,10 +410,12 @@ export function useImageGeneration(
                                 text: `[${refLabel}]: !!! MANDATORY SEQUENCE CONTINUITY !!! This sub-scene is a CONTINUATION of this exact moment. 
                             1. LINK VISUALS: Match environment, lighting, and color grading 100%.
                             2. LINK CHARACTERS: The character in the sub-scene IS THE EXACT SAME ENTITY as in this anchor image.
-                            3. MATERIAL LOCK: ABSOLUTELY MATCH the skin texture (e.g. mannequin/plastic vs human), hair material, and clothing fabric of the subject in this anchor. If the anchor shows a white mannequin head, the sub-scene MUST show a white mannequin head. If hands are mannequin-like in anchor, they MUST be mannequin-like here. 
-                            4. REJECT HALLUCINATIONS: Do not invent new materials or revert to "default human" features if they contradict this anchor.` });
+                            3. VISUAL PROPERTIES LOCK: Analyze the subject in the anchor image (skin texture, hair material, clothing fabric). REPLICATE these physical properties EXACTLY. 
+                               - If the subject has non-human skin (e.g., plastic, clay, metal), the sub-scene MUST match that material.
+                               - If the subject is human, match the skin tone and texture details.
+                            4. REJECT BIAS: Do not revert to "default" or "generic" representations. The Anchor Image is the ONLY source of truth for the character's physical reality.` });
                             parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                            continuityInstruction += `(PARENT SCENE LOCK - STRICT MATERIAL/TEXTURE MATCH) `;
+                            continuityInstruction += `(PARENT SCENE LOCK - DYNAMIC MATERIAL MATCH) `;
                             console.log('[ImageGen] 🔗 Parent Scene Anchor injected for sub-scene', sceneToUpdate.sceneNumber);
                         }
                     }
