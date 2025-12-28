@@ -620,6 +620,9 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                         // Skip rendering scenes if group is collapsed
                         if (isGroupCollapsed(currentGroupId)) return null;
 
+                        // In Board (storyboard) view, skip sub-scenes - they're shown as indicator on main scene
+                        if (viewMode === 'storyboard' && scene.parentSceneId) return null;
+
                         // Render the Scene (Row or Card)
                         renderedScenes.push(
                             <React.Fragment key={scene.id}>

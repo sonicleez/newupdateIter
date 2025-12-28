@@ -180,6 +180,12 @@ export const StoryBoardCard: React.FC<StoryBoardCardProps> = ({
                         <span className="text-[10px] font-black text-brand-orange bg-brand-orange/10 px-2 py-0.5 rounded-md border border-brand-orange/20">
                             {scene.sceneNumber || (index + 1)}
                         </span>
+                        {/* Sub-scenes indicator for expanded main scenes */}
+                        {scene.isExpandedSequence && scene.subSceneIds && scene.subSceneIds.length > 0 && (
+                            <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase">
+                                📺 {scene.subSceneIds.length} sub
+                            </span>
+                        )}
                         {scene.groupId && (
                             <span className="text-[8px] font-black text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 uppercase">
                                 {sceneGroups?.find(g => g.id === scene.groupId)?.name}
