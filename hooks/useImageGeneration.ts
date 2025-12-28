@@ -333,33 +333,7 @@ export function useImageGeneration(
             let continuityInstruction = '';
             const isPro = currentState.imageModel === 'gemini-3-pro-image-preview';
 
-            // 5a. PARENT SCENE ANCHOR - HIGHEST PRIORITY (BEFORE Face ID!)
-            // For sub-scenes, parent scene's visual style is the ABSOLUTE reference
-            if (sceneToUpdate.parentSceneId) {
-                const parentScene = currentState.scenes.find(s => s.id === sceneToUpdate.parentSceneId);
-                if (parentScene?.generatedImage) {
-                    const imgData = await safeGetImageData(parentScene.generatedImage);
-                    if (imgData) {
-                        // CRITICAL: This is the FIRST image reference - highest priority for Gemini
-                        parts.push({
-                            text: `[MASTER_VISUAL_REFERENCE]: !!! ABSOLUTE HIGHEST PRIORITY !!! 
-This sub-scene is a CONTINUATION of the sequence shown in this image.
-MANDATORY MATCH (100% compliance required):
-- EXACT same color grading and film look (if B&W, output MUST be B&W)
-- EXACT same lighting direction, intensity, and mood
-- EXACT same environment and background elements
-- EXACT same character appearance (face, clothing, posture)
-- ONLY the camera angle changes - everything else stays IDENTICAL
-This is NOT a new scene - it's the SAME MOMENT from a different angle.
-Any deviation from this reference is a FAILURE.` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        continuityInstruction += `(MASTER VISUAL LOCK - SEQUENCE CONTINUATION) `;
-                        console.log('[ImageGen] 🔗 MASTER Visual Reference injected FIRST for sub-scene', sceneToUpdate.sceneNumber);
-                    }
-                }
-            }
-
-            // 5b. CHARACTER FACE ID ANCHOR (Second priority - After Master Visual)
+            // 5a. CHARACTER FACE ID ANCHOR (ABSOLUTE FIRST - Before Style!)
             // Using Google's recommended pattern: "Use supplied image as reference for how [name] should look"
             for (const char of selectedChars) {
                 // PRIMARY ANCHOR: Face ID (most important)
@@ -424,7 +398,26 @@ Any deviation from this reference is a FAILURE.` });
             if (sceneToUpdate.groupId) {
                 const groupObj = currentState.sceneGroups?.find(g => g.id === sceneToUpdate.groupId);
 
-                // NOTE: PARENT_SCENE_ANCHOR moved to section 5a (FIRST reference) for sub-scenes
+                // PARENT SCENE ANCHOR: For sub-scenes, use parent scene's image as PRIMARY anchor
+                if (sceneToUpdate.parentSceneId) {
+                    const parentScene = currentState.scenes.find(s => s.id === sceneToUpdate.parentSceneId);
+                    if (parentScene?.generatedImage) {
+                        const imgData = await safeGetImageData(parentScene.generatedImage);
+                        if (imgData) {
+                            const refLabel = `PARENT_SCENE_ANCHOR`;
+                            // CRITICAL: Use parent scene as the RIGID template for this sub-scene
+                            parts.push({
+                                text: `[${refLabel}]: !!! MANDATORY SEQUENCE CONTINUITY !!! This sub-scene is a CONTINUATION of this exact moment. 
+                            1. LINK VISUALS: Match environment, lighting, and color grading 100%.
+                            2. LINK CHARACTERS: The character in the sub-scene IS THE EXACT SAME ENTITY as in this anchor image.
+                            3. MATERIAL LOCK: ABSOLUTELY MATCH the skin texture (e.g. mannequin/plastic vs human), hair material, and clothing fabric of the subject in this anchor. If the anchor shows a white mannequin head, the sub-scene MUST show a white mannequin head. If hands are mannequin-like in anchor, they MUST be mannequin-like here. 
+                            4. REJECT HALLUCINATIONS: Do not invent new materials or revert to "default human" features if they contradict this anchor.` });
+                            parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                            continuityInstruction += `(PARENT SCENE LOCK - STRICT MATERIAL/TEXTURE MATCH) `;
+                            console.log('[ImageGen] 🔗 Parent Scene Anchor injected for sub-scene', sceneToUpdate.sceneNumber);
+                        }
+                    }
+                }
 
                 // BACKGROUND LOCK: Use first scene in group for environment only (for main scenes)
                 const firstSceneInGroup = currentState.scenes
