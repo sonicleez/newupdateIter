@@ -76,7 +76,7 @@ export function useSequenceExpansion(userApiKey: string | null): UseSequenceExpa
                 5: ['Wide establishing shot', 'Medium-wide context', 'Medium shot action', 'Medium close-up reaction', 'Extreme close-up emotional climax']
             };
 
-            const prompt = `You are a DUAL-AGENT SYSTEM: a Director and a DOP working together.
+            const prompt = `You are a DUAL-AGENT SYSTEM: a Director and a DOP working together to create a COHERENT VISUAL SEQUENCE.
 
 VOICE-OVER TEXT:
 "${voText}"
@@ -87,15 +87,23 @@ SUB-SCENES NEEDED: ${subSceneCount}
 ${directorNotes ? `[USER DIRECTOR NOTES - MANDATORY]:\n${directorNotes}\n` : ''}
 ${dopNotes ? `[USER DOP NOTES - MANDATORY]:\n${dopNotes}\n` : ''}
 
+CRITICAL RULES FOR SEQUENCE COHERENCE:
+1. ALL sub-scenes take place in the SAME LOCATION - this is ONE continuous moment
+2. The camera moves AROUND the subject(s), NOT to a different place
+3. Each sub-scene is a DIFFERENT ANGLE of the SAME ACTION unfolding
+4. Think of it as a single film shot that was edited into beats, not separate scenes
+
 TASK:
 1. DIRECTOR AGENT: Break this VO into ${subSceneCount} sequential emotional beats
    - Each beat should progress the narrative naturally
    - Consider pacing: start slower, build tension, climax
+   - Keep the SAME CHARACTERS and SETTING throughout
    
 2. DOP AGENT: Assign camera work for each sub-scene
    - Follow "escalation rule": Wide → Medium → Close-Up
    - Suggested progression: ${cameraProgressions[subSceneCount]?.join(' → ') || 'Wide → Medium → Close-Up'}
-   - Consider lighting and lens choices
+   - Each shot should feel like we're getting CLOSER to the action, not jumping away
+   - Consider lighting CONSISTENCY across all sub-scenes
 
 RESPOND WITH JSON ONLY:
 {
@@ -103,14 +111,14 @@ RESPOND WITH JSON ONLY:
   "dopRationale": "Brief explanation of camera progression choices",
   "subScenes": [
     {
-      "contextDescription": "Visual description of what's happening",
+      "contextDescription": "Visual description - MUST reference SAME SETTING as other sub-scenes",
       "emotionalBeat": "Emotional purpose (e.g., 'Curiosity', 'Rising tension')",
       "cameraProgression": "Camera instruction (e.g., 'Wide establishing shot')",
       "suggestedAngle": "WIDE|MEDIUM_WIDE|MEDIUM|MEDIUM_CLOSE|CLOSE_UP|EXTREME_CLOSE",
       "suggestedLens": "35mm|50mm|85mm|24mm",
       "duration": ${Math.floor(estimatedDuration / subSceneCount)}
     }
-    // ... ${subSceneCount} entries total
+    // ... ${subSceneCount} entries total, ALL IN SAME LOCATION
   ]
 }`;
 

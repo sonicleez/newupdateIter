@@ -169,6 +169,7 @@ Evaluate characters using 3 indices (internal analysis only, for filtering):
 - MERGE aliases: "The man" = "Étienne" → use "Étienne Marchand" only
 - Set isMain: true for Protagonist and Antagonist archetypes
 - STRICT: Never list functional characters (croupier, random guard, waiter) unless they cause plot pivot
+- MANDATORY STYLE: ALL characters' suggestedDescription MUST start with "Faceless white mannequin head. WEARING: ..." followed by detailed costume
 ${contextInstructions}
 
 SCENE RULES:
