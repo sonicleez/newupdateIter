@@ -125,7 +125,7 @@ export const SceneRow: React.FC<SceneRowProps> = ({
             {/* Script */}
             <div className="md:col-span-2 space-y-2">
                 {(scene.voiceOverText || scene.isVOScene) && (
-                    <div className="relative">
+                    <div className="space-y-1">
                         <ExpandableTextarea
                             value={scene.voiceOverText || ''}
                             onChange={(val) => updateScene(scene.id, { voiceOverText: val })}
@@ -134,23 +134,31 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                             className="w-full bg-violet-900/20 border border-violet-500/30 rounded p-2 text-xs text-violet-100 placeholder-violet-500/50 focus:border-violet-500 resize-none font-medium"
                             title="Voice Over Script (AI/Manual)"
                         />
-                        {/* Expand Sequence button - only show for VO scenes >4s that haven't been expanded */}
-                        {scene.voSecondsEstimate && scene.voSecondsEstimate > 4 && !scene.isExpandedSequence && !scene.parentSceneId && onExpandSequence && (
-                            <button
-                                onClick={() => onExpandSequence(scene)}
-                                className="absolute -right-1 top-1/2 -translate-y-1/2 px-2 py-1 bg-amber-500/20 border border-amber-500/40 rounded-lg text-amber-400 text-[10px] font-medium hover:bg-amber-500/30 transition-all flex items-center gap-1"
-                                title={`Expand into ${Math.ceil(scene.voSecondsEstimate / 4)} sub-scenes`}
-                            >
-                                <Clapperboard className="w-3 h-3" />
-                                {scene.voSecondsEstimate}s
-                            </button>
-                        )}
-                        {/* Badge for already expanded scenes */}
-                        {scene.isExpandedSequence && scene.subSceneIds && (
-                            <span className="absolute -right-1 top-1/2 -translate-y-1/2 px-2 py-1 bg-green-500/20 border border-green-500/40 rounded-lg text-green-400 text-[10px] font-medium">
-                                ✓ {scene.subSceneIds.length} sub
-                            </span>
-                        )}
+                        {/* Expand Sequence button - placed below VO textarea to avoid overlap */}
+                        <div className="flex items-center gap-2">
+                            {scene.voSecondsEstimate && scene.voSecondsEstimate > 4 && !scene.isExpandedSequence && !scene.parentSceneId && onExpandSequence && (
+                                <button
+                                    onClick={() => onExpandSequence(scene)}
+                                    className="px-2 py-1 bg-amber-500/20 border border-amber-500/40 rounded-lg text-amber-400 text-[10px] font-medium hover:bg-amber-500/30 transition-all flex items-center gap-1"
+                                    title={`Expand into ${Math.ceil(scene.voSecondsEstimate / 4)} sub-scenes`}
+                                >
+                                    <Clapperboard className="w-3 h-3" />
+                                    🎬 Expand {scene.voSecondsEstimate}s
+                                </button>
+                            )}
+                            {/* Badge for already expanded scenes */}
+                            {scene.isExpandedSequence && scene.subSceneIds && (
+                                <span className="px-2 py-1 bg-green-500/20 border border-green-500/40 rounded-lg text-green-400 text-[10px] font-medium">
+                                    ✓ Expanded: {scene.subSceneIds.length} sub-scenes
+                                </span>
+                            )}
+                            {/* Duration badge */}
+                            {scene.voSecondsEstimate && (
+                                <span className="px-2 py-0.5 bg-violet-500/20 text-violet-300 text-[10px] rounded">
+                                    ⏱️ {scene.voSecondsEstimate}s
+                                </span>
+                            )}
+                        </div>
                     </div>
                 )}
                 <ExpandableTextarea
