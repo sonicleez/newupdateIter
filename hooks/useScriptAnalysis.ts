@@ -145,7 +145,10 @@ ${scriptText}
 TASK:
 1. Identify CHAPTER HEADERS (time periods, locations)
 2. Extract KEY CHARACTERS
-3. Break into SCENES based on VISUAL BEATS (5-10s+). Do NOT fragment continuous actions.
+3. SCENE BREAKDOWN STRATEGY:
+   - ACTION SEQUENCE: If the text describes multiple distinct actions (e.g. "He stands. He places a chip. Sample spins."), you MUST split them into separate scenes.
+   - STATIC DESCRIPTION: If the text describes a single moment/environment (e.g. "The room was dark. Shadows were long."), keep it as ONE scene.
+   - PREFERENCE: Better to have more scenes for Action Sequences than to miss a beat.
 4. Create VISUAL PROMPTS
 
 ===== CHARACTER DETECTION RULES =====
