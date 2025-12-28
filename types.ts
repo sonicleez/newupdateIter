@@ -223,6 +223,8 @@ export type EditingMode = 'remove' | 'add' | 'style' | 'inpaint' | 'text-edit';
 
 export interface ProjectState {
   projectName: string;
+  apiKey?: string;      // User's Gemini API key (optional if using OAuth)
+  genyuToken?: string;  // Genyu OAuth token for direct API access
   detailedScript?: string;
   customScriptInstruction?: string; // Custom meta tokens for script generation
   stylePrompt: string;
