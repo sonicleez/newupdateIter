@@ -141,7 +141,7 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
                 </div>
 
                 {/* Content */}
-                <div className={`flex-1 px-8 py-6 ${analysisResult ? 'overflow-y-auto' : 'overflow-visible'}`}>
+                <div className="flex-1 px-8 py-6 overflow-y-auto custom-scrollbar">
                     {!analysisResult ? (
                         // Step 1: Input Script - Premium 2-Column Layout
                         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-full">
