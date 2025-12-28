@@ -3,7 +3,7 @@ import { Table, LayoutGrid, Trash2, Plus, ImageMinus, ChevronDown, ChevronRight,
 import { SceneRow } from '../scenes/SceneRow';
 import { StoryBoardCard } from '../scenes/StoryBoardCard';
 import { Tooltip } from '../common/Tooltip';
-import { Scene, Character, Product, SceneGroup } from '../../types';
+import { Scene, Character, Product, SceneGroup, Location } from '../../types';
 import { PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER, VEO_PRESETS } from '../../constants/presets';
 
 interface ScenesMapSectionProps {
@@ -12,6 +12,7 @@ interface ScenesMapSectionProps {
     setViewMode: (mode: 'table' | 'storyboard') => void;
     characters: Character[];
     products: Product[];
+    locations: Location[];
     sceneGroups: SceneGroup[];
     updateScene: (id: string, updates: Partial<Scene>) => void;
     removeScene: (id: string) => void;
@@ -56,6 +57,7 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
     setViewMode,
     characters,
     products,
+    locations,
     updateScene,
     removeScene,
     insertScene,
@@ -621,6 +623,7 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                             index={index}
                                             characters={characters}
                                             products={products}
+                                            locations={locations}
                                             sceneGroups={sceneGroups}
                                             assignSceneToGroup={assignSceneToGroup}
                                             updateScene={updateScene}
