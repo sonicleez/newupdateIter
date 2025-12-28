@@ -132,28 +132,26 @@ ${scriptText}
 
 TASK:
 1. Identify CHAPTER HEADERS
-2. Extract CHARACTER NAMES - EXTRACT **ALL** CHARACTERS, including:
-   - Main protagonists
-   - Supporting characters (police, dealers, guards, etc.)
-   - Historical figures mentioned by name
-   - Minor roles who contribute to scenes (even with 1 mention)
+2. Extract CHARACTER NAMES - Only characters that need VISUAL CONSISTENCY:
+   - Main protagonists (appear multiple times)
+   - Key supporting characters (appear 2+ times OR related to protagonist)
+   - Historical figures central to the story
 3. Break into SCENES (3-5s each)
 4. Create VISUAL PROMPTS
 
-CHARACTER RULES (CRITICAL - FOLLOW EXACTLY):
-- List EVERY named person or role that appears visually in any scene
-- MERGE ALIASES: If "The man" and "Étienne" refer to the same person, use "Étienne Marchand" only
-- MERGE TITLES: "Plainclothes officers" and "Monegasque police" = use "Monegasque Police Officers"
-- Include roles like: croupier, dealer, security guard, waitress, etc.
-- For groups (e.g., "two officers"), use plural: "Monegasque Police Officers"
-- Set isMain: true ONLY for protagonist(s), false for all others
-- DO NOT skip minor characters - they are needed for visual consistency
+CHARACTER RULES (CRITICAL - FOR VISUAL CONSISTENCY):
+- ONLY list characters that appear in 2 OR MORE scenes
+- INCLUDE characters related to main protagonist even if fewer appearances (e.g., family members, partners)
+- SKIP minor one-time roles: croupier, random dealer, guard, waiter, etc. (no consistency needed)
+- MERGE ALIASES: If "The man" and "Étienne" refer to same person, use full name "Étienne Marchand"
+- Set isMain: true for protagonist(s), false for supporting characters
+- Set "mentions" to actual appearance count in script
 
 SCENE RULES:
 - Each scene should have voice-over text (~3-4s)${contextInstructions}
 - If a VO segment needs multiple visuals, mark needsExpansion: true
 - Expansion scenes are B-roll
-- CONSISTENCY CHECK: Ensure the same character is not listed twice under different names.
+- CONSISTENCY CHECK: Same character must not be listed twice under different names.
 
 RESPOND WITH JSON ONLY:
 {
