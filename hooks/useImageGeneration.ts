@@ -333,7 +333,33 @@ export function useImageGeneration(
             let continuityInstruction = '';
             const isPro = currentState.imageModel === 'gemini-3-pro-image-preview';
 
-            // 5a. CHARACTER FACE ID ANCHOR (ABSOLUTE FIRST - Before Style!)
+            // 5a. PARENT SCENE ANCHOR - HIGHEST PRIORITY (BEFORE Face ID!)
+            // For sub-scenes, parent scene's visual style is the ABSOLUTE reference
+            if (sceneToUpdate.parentSceneId) {
+                const parentScene = currentState.scenes.find(s => s.id === sceneToUpdate.parentSceneId);
+                if (parentScene?.generatedImage) {
+                    const imgData = await safeGetImageData(parentScene.generatedImage);
+                    if (imgData) {
+                        // CRITICAL: This is the FIRST image reference - highest priority for Gemini
+                        parts.push({
+                            text: `[MASTER_VISUAL_REFERENCE]: !!! ABSOLUTE HIGHEST PRIORITY !!! 
+This sub-scene is a CONTINUATION of the sequence shown in this image.
+MANDATORY MATCH (100% compliance required):
+- EXACT same color grading and film look (if B&W, output MUST be B&W)
+- EXACT same lighting direction, intensity, and mood
+- EXACT same environment and background elements
+- EXACT same character appearance (face, clothing, posture)
+- ONLY the camera angle changes - everything else stays IDENTICAL
+This is NOT a new scene - it's the SAME MOMENT from a different angle.
+Any deviation from this reference is a FAILURE.` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        continuityInstruction += `(MASTER VISUAL LOCK - SEQUENCE CONTINUATION) `;
+                        console.log('[ImageGen] 🔗 MASTER Visual Reference injected FIRST for sub-scene', sceneToUpdate.sceneNumber);
+                    }
+                }
+            }
+
+            // 5b. CHARACTER FACE ID ANCHOR (Second priority - After Master Visual)
             // Using Google's recommended pattern: "Use supplied image as reference for how [name] should look"
             for (const char of selectedChars) {
                 // PRIMARY ANCHOR: Face ID (most important)
@@ -398,21 +424,7 @@ export function useImageGeneration(
             if (sceneToUpdate.groupId) {
                 const groupObj = currentState.sceneGroups?.find(g => g.id === sceneToUpdate.groupId);
 
-                // PARENT SCENE ANCHOR: For sub-scenes, use parent scene's image as PRIMARY anchor
-                if (sceneToUpdate.parentSceneId) {
-                    const parentScene = currentState.scenes.find(s => s.id === sceneToUpdate.parentSceneId);
-                    if (parentScene?.generatedImage) {
-                        const imgData = await safeGetImageData(parentScene.generatedImage);
-                        if (imgData) {
-                            const refLabel = `PARENT_SCENE_ANCHOR`;
-                            // CRITICAL: Use parent scene as the RIGID template for this sub-scene
-                            parts.push({ text: `[${refLabel}]: !!! MANDATORY SEQUENCE CONTINUITY !!! This sub-scene is part of a CONTINUOUS SEQUENCE. Use this image as the AUTHORITATIVE visual reference. Match: exact environment, lighting, character positions, camera setup, and all visual elements. The sub-scene is a DIFFERENT ANGLE of the SAME MOMENT - NOT a different scene. Characters must be the SAME PERSON in the SAME OUTFIT.` });
-                            parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                            continuityInstruction += `(PARENT SCENE LOCK - MANDATORY MATCH) `;
-                            console.log('[ImageGen] 🔗 Parent Scene Anchor injected for sub-scene', sceneToUpdate.sceneNumber);
-                        }
-                    }
-                }
+                // NOTE: PARENT_SCENE_ANCHOR moved to section 5a (FIRST reference) for sub-scenes
 
                 // BACKGROUND LOCK: Use first scene in group for environment only (for main scenes)
                 const firstSceneInGroup = currentState.scenes
