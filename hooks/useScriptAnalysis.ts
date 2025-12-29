@@ -154,44 +154,53 @@ export function useScriptAnalysis(userApiKey: string | null) {
 
             const prompt = `Analyze this voice-over script for a documentary video. Return JSON only.
 
-PRE-SPLIT SENTENCES (each sentence = 1 scene):
-"""
-${sentencesForAI}
-"""
-
-TOTAL: ${sentenceCount} sentences. You MUST generate ${sentenceCount} scenes (one per sentence).
-
-ORIGINAL SCRIPT (for context only):
+=== FULL SCRIPT (read this FIRST for character context) ===
 """
 ${scriptText}
 """
 
-TASK:
-1. Identify GLOBAL CONTEXT (World setting, Time period, Tone)
-2. Identify CHAPTERS with LOCATION ANCHORS (CRITICAL - see below)
-3. Extract CHARACTER NAMES (merge aliases). List UNIQUE physical characters only.
-4. For EACH sentence [index], create ONE scene with visual prompt
-5. Mark B-roll expansion only if sentence needs additional visuals
+=== PRE-SPLIT SENTENCES (use for scene generation) ===
+"""
+${sentencesForAI}
+"""
+TOTAL: ${sentenceCount} sentences. Generate EXACTLY ${sentenceCount} scenes.
+
+TASK ORDER (follow strictly):
+1. Read FULL SCRIPT above to understand story, characters, and flow
+2. Extract GLOBAL CONTEXT (World setting, Time period, Tone)
+3. Identify CHAPTERS with LOCATION ANCHORS
+4. Extract ALL CHARACTER NAMES from full script (merge aliases)
+5. CHARACTER SCANNING: For each sentence [index], identify which characters are:
+   - MENTIONED by name
+   - PERFORMING actions
+   - PRESENT in the scene context
+6. Create ONE scene per sentence with visual prompt + characterNames array
+
+CRITICAL - CHARACTER SCANNING RULES:
+- Read the FULL SCRIPT to understand when characters enter/exit narrative
+- If a character was mentioned in sentence [N], they may still be present in [N+1] even if not named
+- Use context: "He said..." refers to the last male character mentioned
+- "The man/woman" = previously introduced character, NOT a new one
+- ONLY list characters who should be VISIBLE in the image
+- If a sentence is pure narration with no visible characters, leave characterNames: []
 
 CRITICAL - LOCATION ANCHOR RULE:
 - Each chapter MUST define a "locationAnchor" - a DETAILED, FIXED environment description
 - ALL scenes in that chapter MUST visually exist in this EXACT location
 - Format: "Interior/Exterior, [specific place], [decade], [architectural style], [lighting], [key props]"
-- Example: "Interior, 1940s Monte Carlo casino, Art Deco style, crystal chandeliers, mahogany tables, warm amber lighting, velvet curtains"
-- This locationAnchor will be INJECTED into every scene's visual prompt to ensure consistency
+- Example: "Interior, 1940s Monte Carlo casino, Art Deco style, crystal chandeliers, mahogany tables, warm amber lighting"
 
-VISUAL PROMPT FORMAT (MANDATORY):
-Each visualPrompt MUST follow: "[SHOT TYPE]. [Location from chapter's locationAnchor]. [Subject]. [Action]. [Lighting/Mood]."
-- SHOT TYPES: WIDE SHOT, MEDIUM SHOT, CLOSE-UP, EXTREME CLOSE-UP, OVER-THE-SHOULDER, POV
-- Include the chapter's locationAnchor elements in every scene
-- DO NOT invent new locations that differ from the chapter's locationAnchor
+VISUAL PROMPT FORMAT:
+"[SHOT TYPE]. [Location from locationAnchor]. [Subject/Characters]. [Action]. [Mood]."
+- SHOT TYPES: WIDE SHOT, MEDIUM SHOT, CLOSE-UP, EXTREME CLOSE-UP, POV
+- Include locationAnchor elements in every scene
 
 RULES:
 - One sentence = one scene. DO NOT merge sentences.
 ${contextInstructions}
-- If a sentence needs additional B-roll visuals, mark needsExpansion: true
-- B-roll expansion scenes MUST use the SAME locationAnchor as parent scene
-- CONSISTENCY CHECK: Same character must not appear under different names
+- If sentence needs B-roll, mark needsExpansion: true
+- B-roll uses SAME locationAnchor as parent
+- CONSISTENCY CHECK: Same character must have same name throughout
 
 RESPOND WITH JSON ONLY:
 {
