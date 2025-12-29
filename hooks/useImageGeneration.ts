@@ -742,6 +742,15 @@ The NEW scene has its OWN camera style as specified in the current prompt. DO NO
                     if (prevScene?.generatedImage) {
                         console.log('[DOP] Validating raccord between scenes...');
 
+                        // [DOP UI FEEDBACK] Show validation in progress
+                        updateStateAndRecord(s => ({
+                            ...s,
+                            scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                ...sc,
+                                error: '🎬 DOP đang kiểm tra...'
+                            } : sc)
+                        }));
+
                         let MAX_DOP_RETRIES = 2;
                         let retryCount = 0;
                         let lastValidation = await validateRaccordWithVision(
@@ -770,6 +779,16 @@ The NEW scene has its OWN camera style as specified in the current prompt. DO NO
 
                             if (makeRetryDecision && currentImage) {
                                 console.log('[DOP Agent] Analyzing if retry will succeed...');
+
+                                // [DOP UI FEEDBACK] Show decision agent thinking
+                                updateStateAndRecord(s => ({
+                                    ...s,
+                                    scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                        ...sc,
+                                        error: '🧠 DOP Agent đang phân tích lỗi...'
+                                    } : sc)
+                                }));
+
                                 const decision = await makeRetryDecision(
                                     currentImage,
                                     prevScene.generatedImage,
@@ -871,6 +890,14 @@ The NEW scene has its OWN camera style as specified in the current prompt. DO NO
                             }));
                         } else if (lastValidation.isValid) {
                             console.log('[DOP] Raccord validation PASSED');
+                            // [DOP UI FEEDBACK] Clear status on success
+                            updateStateAndRecord(s => ({
+                                ...s,
+                                scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                    ...sc,
+                                    error: null // Clear the status indicator
+                                } : sc)
+                            }));
                         }
                     }
                 }
