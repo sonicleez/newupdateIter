@@ -48,6 +48,8 @@ interface ScenesMapSectionProps {
     setDragOverIndex: (idx: number | null) => void;
     onClearAllImages: () => void;
     onInsertAngles?: (sceneId: string, selections: { value: string; customPrompt?: string }[], sourceImage: string) => void;
+    onExpandScene?: (sceneId: string) => void;   // [New]
+    isExpandingSequence?: boolean;               // [New]
 }
 
 export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
@@ -91,7 +93,9 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
     onClearAllImages,
     onInsertAngles,
     analyzeRaccord,
-    suggestNextShot
+    suggestNextShot,
+    onExpandScene,      // [New]
+    isExpandingSequence // [New]
 }) => {
     const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
     const [activeGroupMenu, setActiveGroupMenu] = React.useState<string | null>(null);
@@ -656,6 +660,8 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                                 setDragOverIndex(null);
                                             }}
                                             onInsertAngles={onInsertAngles}
+                                            onExpandScene={onExpandScene}          // [New]
+                                            isExpandingSequence={isExpandingSequence} // [New]
                                         />
 
                                         {/* Last Insert Button */}

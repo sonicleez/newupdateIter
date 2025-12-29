@@ -84,6 +84,7 @@ export function useScriptGeneration(
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
+                        global_story_context: { type: Type.STRING }, // New Field
                         detailed_story: { type: Type.STRING },
                         scene_groups: {
                             type: Type.ARRAY,
@@ -107,7 +108,7 @@ export function useScriptGeneration(
                             }
                         }
                     },
-                    required: ["detailed_story", "scene_groups", "scenes"]
+                    required: ["global_story_context", "detailed_story", "scene_groups", "scenes"]
                 }
             };
 
@@ -125,6 +126,7 @@ export function useScriptGeneration(
             const jsonResponse = JSON.parse(rawText);
 
             return {
+                globalStoryContext: jsonResponse.global_story_context || '',
                 detailedStory: jsonResponse.detailed_story || '',
                 groups: jsonResponse.scene_groups || [],
                 scenes: jsonResponse.scenes || []

@@ -74,7 +74,7 @@ export function useScriptAnalysis(userApiKey: string | null) {
         modelSelector: string = 'gemini-2.0-flash|none', // format: model|thinkingLevel
         characterStyle?: CharacterStyleDefinition | null,
         director?: DirectorPreset | null,
-        researchNotes?: { director?: string; dop?: string } | null  // NEW: Research notes injection
+        researchNotes?: { director?: string; dop?: string; story?: string } | null  // [Updated]
     ): Promise<ScriptAnalysisResult | null> => {
         if (!userApiKey) {
             setAnalysisError('API key required');
@@ -105,6 +105,12 @@ export function useScriptAnalysis(userApiKey: string | null) {
 
             // Context Injection
             let contextInstructions = "";
+
+            // [New] Global Story Context - INJECT FIRST
+            if (researchNotes?.story) {
+                contextInstructions += `\n[GLOBAL STORY CONTEXT - MANDATORY WORLD SETTING]:\n${researchNotes.story}\n- ALL visual descriptions MUST align with this world setting. Do not hallucinate settings that contradict this context.\n`;
+            }
+
             if (characterStyle) {
                 contextInstructions += `\nVISUAL STYLE CONSTRAINT: The user selected the character style "${characterStyle.name}" (${characterStyle.promptInjection.global}).\n- You MUST generate "suggestedDescription" that aligns with this style.\n- CRITICAL: You MUST extract the SPECIFIC OUTFIT (uniforms, period clothing, colors) from the script.\n- IF SCRIPT IS VAGUE: You MUST INFER appropriate period-accurate clothing in EXTREME DETAIL.\n- TEXTURE & MATERIAL LOCK: You MUST describe textures with MICROSCOPIC DETAIL (e.g. "cracked leather with oil stains", "coarse wool with pilling", "rusted brass buttons", "frayed cotton edges").\n- FORMAT: "[Style Description]. WEARING: [Detailed Outfit Description with specific textures/materials] + [Accessories/Props]."\n- Example: "Faceless white mannequin. WEARING: A heavy, cracked vintage bomber jacket (worn leather texture), coarse grey wool trousers with mud splatters, and tarnished silver cufflinks."\n`;
             } else {
@@ -131,10 +137,11 @@ ${scriptText}
 """
 
 TASK:
-1. Identify CHAPTER HEADERS
-2. Extract CHARACTER NAMES (Merge aliases: e.g. "The Man" = "Étienne"). List UNIQUE physical characters only.
-3. Break into SCENES (3-5s each)
-4. Create VISUAL PROMPTS
+1. Identify GLOBAL CONTEXT (World setting, Time period, Tone, Location summary).
+2. Identify CHAPTER HEADERS
+3. Extract CHARACTER NAMES (Merge aliases: e.g. "The Man" = "Étienne"). List UNIQUE physical characters only.
+4. Break into SCENES (3-5s each)
+5. Create VISUAL PROMPTS
 
 RULES:
 - Each scene should have voice-over text (~3-4s)${contextInstructions}
@@ -145,6 +152,7 @@ RULES:
 
 RESPOND WITH JSON ONLY:
 {
+  "globalContext": "Detailed summary of the world, era, and setting derived from script...",
   "chapters": [
     {
       "id": "chapter_1",

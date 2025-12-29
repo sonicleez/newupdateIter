@@ -36,6 +36,8 @@ export interface SceneRowProps {
     generateVeoPrompt: (sceneId: string) => void;
     onCopyPreviousStyle?: () => void;
     onInsertAngles?: (sceneId: string, selections: { value: string; customPrompt?: string }[], sourceImage: string) => void;
+    onExpandScene?: (sceneId: string) => void;
+    isExpandingSequence?: boolean;
 }
 
 export const SceneRow: React.FC<SceneRowProps> = ({
@@ -44,7 +46,9 @@ export const SceneRow: React.FC<SceneRowProps> = ({
     onDragStart, onDragOver, onDrop,
     generateVeoPrompt,
     onCopyPreviousStyle,
-    onInsertAngles
+    onInsertAngles,
+    onExpandScene,
+    isExpandingSequence
 }) => {
     const endFrameInputRef = useRef<HTMLInputElement>(null);
     const [showAnglesDropdown, setShowAnglesDropdown] = useState(false);
@@ -123,14 +127,31 @@ export const SceneRow: React.FC<SceneRowProps> = ({
             {/* Script */}
             <div className="md:col-span-2 space-y-2">
                 {(scene.voiceOverText || scene.isVOScene) && (
-                    <ExpandableTextarea
-                        value={scene.voiceOverText || ''}
-                        onChange={(val) => updateScene(scene.id, { voiceOverText: val })}
-                        placeholder="Voice Over (Lời bình)..."
-                        rows={2}
-                        className="w-full bg-violet-900/20 border border-violet-500/30 rounded p-2 text-xs text-violet-100 placeholder-violet-500/50 focus:border-violet-500 resize-none font-medium"
-                        title="Voice Over Script (AI/Manual)"
-                    />
+                    <div className="relative group/vo">
+                        <ExpandableTextarea
+                            value={scene.voiceOverText || ''}
+                            onChange={(val) => updateScene(scene.id, { voiceOverText: val })}
+                            placeholder="Voice Over (Lời bình)..."
+                            rows={2}
+                            className="w-full bg-violet-900/20 border border-violet-500/30 rounded p-2 text-xs text-violet-100 placeholder-violet-500/50 focus:border-violet-500 resize-none font-medium pr-8"
+                            title="Voice Over Script (AI/Manual)"
+                        />
+                        {/* Expand Sequence Button */}
+                        {onExpandScene && (scene.voiceOverText && scene.voiceOverText.length > 50) && (
+                            <button
+                                onClick={() => onExpandScene(scene.id)}
+                                disabled={isExpandingSequence}
+                                className="absolute right-1 top-1 p-1 text-violet-400 hover:text-white hover:bg-violet-500 rounded transition-all opacity-0 group-hover/vo:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="✨ Expand Sequence: AI will split this long VO into multiple visual shots"
+                            >
+                                {isExpandingSequence ? (
+                                    <div className="w-3 h-3 border-2 border-violet-300 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                    <Sparkles size={12} />
+                                )}
+                            </button>
+                        )}
+                    </div>
                 )}
                 <ExpandableTextarea
                     value={scene.language1}

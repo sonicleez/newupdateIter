@@ -21,7 +21,7 @@ export interface ScriptGeneratorModalProps {
     customInstruction?: string;
     onCustomInstructionChange?: (val: string) => void;
     onAddPreset: (preset: ScriptPreset) => void;
-    onApplyGenerated: (detailedStory: string, groups: any[], scenes: any[], director?: DirectorPreset) => void;
+    onApplyGenerated: (detailedStory: string, groups: any[], scenes: any[], director?: DirectorPreset, globalStoryContext?: string) => void;
     onRegenerateGroup: (detailedStory: string, groupToRegen: any, allGroups: any[], sceneCount?: number) => Promise<any[] | null>;
     onGenerateMoodboard: (groupName: string, groupDesc: string, style?: string, customStyle?: string) => Promise<string | null>;
     scriptModel: string;
@@ -52,7 +52,7 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
     apiKey
 }) => {
     const [step, setStep] = useState<'input' | 'review'>('input');
-    const [previewData, setPreviewData] = useState<{ detailedStory: string; groups: any[]; scenes: any[] } | null>(null);
+    const [previewData, setPreviewData] = useState<{ detailedStory: string; groups: any[]; scenes: any[]; globalStoryContext?: string } | null>(null);
     const [isScanning, setIsScanning] = useState(false);
     const [showSuccessToast, setShowSuccessToast] = useState(false);
     const [idea, setIdea] = useState('');
@@ -178,7 +178,7 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
 
     const handleApply = () => {
         if (!previewData) return;
-        onApplyGenerated(previewData.detailedStory, previewData.groups, previewData.scenes, selectedDirector || undefined);
+        onApplyGenerated(previewData.detailedStory, previewData.groups, previewData.scenes, selectedDirector || undefined, previewData.globalStoryContext);
         onClose();
         setIdea('');
     };
@@ -459,6 +459,22 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
             ) : (
                 <div className="flex flex-col h-[75vh]">
                     <div className="flex-1 overflow-auto pr-2 custom-scrollbar space-y-6">
+                        {/* Global Story Context Section */}
+                        <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700">
+                            <label className="block text-sm font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                🌍 Bối cảnh chung (Global Story Context)
+                            </label>
+                            <textarea
+                                value={previewData?.globalStoryContext || ''}
+                                onChange={(e) => setPreviewData(prev => prev ? { ...prev, globalStoryContext: e.target.value } : null)}
+                                className="w-full h-24 bg-gray-950 border border-gray-800 rounded-lg p-3 text-brand-cream text-sm focus:border-brand-green outline-none resize-none mb-2"
+                                placeholder="Mô tả bối cảnh chung của thế giới..."
+                            />
+                            <p className="text-[10px] text-gray-500 italic">
+                                * Thông tin này sẽ được dùng làm "kim chỉ nam" cho tất cả các cảnh, đảm bảo AI không bị lạc đề (lệch tone, sai bối cảnh, sai thời đại).
+                            </p>
+                        </div>
+
                         {/* Detailed Story Section */}
                         <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700">
                             <label className="block text-sm font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">

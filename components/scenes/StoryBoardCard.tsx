@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, Brush, GripVertical, Download, Pencil, Layers, X, Eye } from 'lucide-react';
+import { Trash2, Brush, GripVertical, Download, Pencil, Layers, X, Eye, Sparkles } from 'lucide-react';
 import { SceneRowProps } from './SceneRow';
 import { ExpandableTextarea } from '../common/ExpandableTextarea';
 
@@ -24,7 +24,9 @@ export const StoryBoardCard: React.FC<StoryBoardCardProps> = ({
     generateImage, openImageViewer,
     onDragStart, onDragOver, onDrop,
     onInsertAngles,
-    onEditImage
+    onEditImage,
+    onExpandScene,
+    isExpandingSequence
 }) => {
     const [showAnglesMenu, setShowAnglesMenu] = useState(false);
 
@@ -159,13 +161,30 @@ export const StoryBoardCard: React.FC<StoryBoardCardProps> = ({
             {/* Content Section */}
             <div className="p-3 flex-1 flex flex-col space-y-2">
                 {(scene.voiceOverText || scene.isVOScene) && (
-                    <ExpandableTextarea
-                        value={scene.voiceOverText || ''}
-                        onChange={(val) => updateScene(scene.id, { voiceOverText: val })}
-                        placeholder="Voice Over..."
-                        rows={3}
-                        className="w-full bg-violet-900/10 border-b border-violet-500/20 p-1 mb-1 text-xs text-violet-200 focus:ring-0 resize-none overflow-hidden scrollbar-none italic leading-relaxed font-medium"
-                    />
+                    <div className="relative group/vo">
+                        <ExpandableTextarea
+                            value={scene.voiceOverText || ''}
+                            onChange={(val) => updateScene(scene.id, { voiceOverText: val })}
+                            placeholder="Voice Over..."
+                            rows={3}
+                            className="w-full bg-violet-900/10 border-b border-violet-500/20 p-1 mb-1 text-xs text-violet-200 focus:ring-0 resize-none overflow-hidden scrollbar-none italic leading-relaxed font-medium pr-6"
+                        />
+                        {/* Expand Sequence Button */}
+                        {onExpandScene && (scene.voiceOverText && scene.voiceOverText.length > 30) && (
+                            <button
+                                onClick={() => onExpandScene(scene.id)}
+                                disabled={isExpandingSequence}
+                                className="absolute right-0 top-0 p-1 text-violet-400 hover:text-white hover:bg-violet-500/50 rounded transition-all opacity-0 group-hover/vo:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="✨ Expand Sequence"
+                            >
+                                {isExpandingSequence ? (
+                                    <div className="w-2.5 h-2.5 border-2 border-violet-300 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                    <Sparkles size={10} />
+                                )}
+                            </button>
+                        )}
+                    </div>
                 )}
                 <ExpandableTextarea
                     value={scene.language1 || scene.vietnamese || ''}

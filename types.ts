@@ -256,6 +256,7 @@ export interface ProjectState {
   researchNotes?: {
     director?: string;  // Director's storytelling/emotional notes
     dop?: string;       // DOP's cinematography/lighting notes
+    story?: string;     // [New] Global Story Context / World Setting (e.g. "Casino in Monte Carlo, 2019")
   };
 }
 

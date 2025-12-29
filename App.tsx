@@ -38,6 +38,7 @@ import { useDOPLogic } from './hooks/useDOPLogic';
 import { useVideoGeneration } from './hooks/useVideoGeneration';
 import { useAuth } from './hooks/useAuth';
 import { useProjectSync } from './hooks/useProjectSync';
+import { useSequenceExpansion } from './hooks/useSequenceExpansion'; // [New Hook]
 import { supabase } from './utils/supabaseClient';
 
 const App: React.FC = () => {
@@ -199,6 +200,60 @@ const App: React.FC = () => {
         deleteProjectFromCloud
     } = useProjectSync(session?.user?.id || null);
 
+    const {
+        expandScene,
+        isExpanding: isSequenceExpanding
+    } = useSequenceExpansion();
+
+    // Handle Expand Scene (Agentic Sequence)
+    const handleExpandScene = useCallback(async (sceneId: string) => {
+        const sceneToExpand = state.scenes.find(s => s.id === sceneId);
+        if (!sceneToExpand) return;
+
+        // Use global research notes or fallback to scene internal logic if specific notes needed later
+        const notes = state.researchNotes;
+
+        const expandedScenes = await expandScene(sceneToExpand, notes, userApiKey);
+
+        if (expandedScenes && expandedScenes.length > 0) {
+            updateStateAndRecord(s => {
+                const oldIndex = s.scenes.findIndex(sc => sc.id === sceneId);
+                if (oldIndex === -1) return s;
+
+                // Create full Scene objects from partials
+                const newFullScenes: Scene[] = expandedScenes.map((partial, idx) => ({
+                    ...sceneToExpand, // Inherit base properties
+                    ...partial,
+                    id: generateId(), // New Unique ID
+                    sceneNumber: `${oldIndex + 1 + idx}`, // Temp numbering
+                    generatedImage: null, // Clear image
+                    veoPrompt: '', // Clear veo
+                    isGenerating: false,
+                    isVeoGenerating: false,
+                    isVideoGenerating: false,
+                    // Keep relationships
+                    characterIds: [...sceneToExpand.characterIds],
+                    productIds: [...(sceneToExpand.productIds || [])],
+                    groupId: sceneToExpand.groupId
+                } as Scene));
+
+                // Replace 1 scene with N scenes
+                const newScenesList = [...s.scenes];
+                newScenesList.splice(oldIndex, 1, ...newFullScenes);
+
+                // Renumber everything
+                const renumbered = newScenesList.map((sc, i) => ({
+                    ...sc,
+                    sceneNumber: `${i + 1}`
+                }));
+
+                return { ...s, scenes: renumbered };
+            });
+            setShowSuccessToast(`✨ Expanded into ${expandedScenes.length} scenes!`);
+            setTimeout(() => setShowSuccessToast(null), 3000);
+        }
+    }, [state.scenes, state.researchNotes, userApiKey, expandScene, updateStateAndRecord]);
+
     const handleSignOut = async () => {
         await signOut();
         setProfileModalOpen(false);
@@ -287,6 +342,8 @@ const App: React.FC = () => {
                     : `!!! MANDATORY CAMERA CHANGE: ${angle.toUpperCase()} !!!`
             };
 
+            console.log('[InsertAngles] Creating scene:', { angle, customPrompt, angleConfig });
+
             return {
                 id: generateId(),
                 sceneNumber: `${sourceIndex + 2 + i}`, // Will be renumbered
@@ -321,11 +378,15 @@ const App: React.FC = () => {
         });
 
         // Generate images for each new scene (with small delay between each)
-        for (let i = 0; i < newScenes.length; i++) {
-            setTimeout(() => {
-                performImageGeneration(newScenes[i].id);
-            }, i * 500); // 500ms delay between each
-        }
+        // [Fix] Ensure state update happens before generation trigger
+        setTimeout(() => {
+            for (let i = 0; i < newScenes.length; i++) {
+                setTimeout(() => {
+                    console.log(`[InsertAngles] Triggering generation for ${newScenes[i].id}`);
+                    performImageGeneration(newScenes[i].id);
+                }, i * 1000); // Increased delay to 1000ms to ensure state consistency
+            }
+        }, 100);
     }, [state.scenes, updateStateAndRecord, performImageGeneration]);
 
 
@@ -783,17 +844,21 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                                     dragOverIndex={dragOverIndex}
                                     setDragOverIndex={setDragOverIndex}
                                     onClearAllImages={() => {
-                                        updateStateAndRecord(s => ({
-                                            ...s,
-                                            scenes: s.scenes.map(scene => ({
-                                                ...scene,
-                                                generatedImage: null,
-                                                endFrameImage: null,
-                                                mediaId: null
-                                            }))
-                                        }));
+                                        if (confirm('⚠️ Delete ALL images? This action cannot be undone.')) {
+                                            updateStateAndRecord(s => ({
+                                                ...s,
+                                                scenes: s.scenes.map(sc => ({
+                                                    ...sc,
+                                                    generatedImage: null,
+                                                    endFrameImage: null,
+                                                    mediaId: null
+                                                }))
+                                            }));
+                                        }
                                     }}
                                     onInsertAngles={handleInsertAngles}
+                                    onExpandScene={handleExpandScene}
+                                    isExpandingSequence={isSequenceExpanding}
                                 />
                                 <div className="flex justify-end mt-8 gap-4">
                                     <button

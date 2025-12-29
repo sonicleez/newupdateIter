@@ -13,6 +13,8 @@ import { BUILT_IN_CHARACTER_STYLES, getStylesByCategory } from '../../constants/
 import { SCRIPT_MODELS } from '../../constants/presets';
 import { useScriptAnalysis, ScriptAnalysisResult } from '../../hooks/useScriptAnalysis';
 import { useResearchPresets, ResearchPreset } from '../../hooks/useResearchPresets';
+import { GoogleGenAI } from "@google/genai";
+import { generateId } from '../../utils/helpers';
 
 interface ManualScriptModalProps {
     isOpen: boolean;
@@ -24,7 +26,7 @@ interface ManualScriptModalProps {
         styleId: string | undefined,
         directorId: string | undefined,
         sceneCharacterMap: Record<number, string[]>,
-        researchNotes?: { director?: string; dop?: string }  // NEW: Pass research notes for storage
+        researchNotes?: { director?: string; dop?: string; story?: string }  // [Updated]
     ) => void;
     existingCharacters: Character[];
     userApiKey: string | null;
@@ -57,9 +59,15 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
     const [showResearchNotes, setShowResearchNotes] = useState(false);
     const [directorNotes, setDirectorNotes] = useState('');
     const [dopNotes, setDopNotes] = useState('');
+    const [storyContext, setStoryContext] = useState(''); // [New State]
     const [showPresetPicker, setShowPresetPicker] = useState(false);
     const [presetName, setPresetName] = useState('');
     const [isSavingPreset, setIsSavingPreset] = useState(false);
+
+    // Custom Director Search state (NEW)
+    const [customDirectorName, setCustomDirectorName] = useState('');
+    const [isSearchingDirector, setIsSearchingDirector] = useState(false);
+    const [customDirector, setCustomDirector] = useState<DirectorPreset | null>(null);
 
     // Research Presets hook (cloud sync)
     const { presets, isLoading: presetsLoading, savePreset, deletePreset } = useResearchPresets(userId);
@@ -67,10 +75,19 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
     // Analysis hook
     const { isAnalyzing, analysisResult, analysisError, analyzeScript, generateSceneMap, setAnalysisResult } = useScriptAnalysis(userApiKey);
 
+    // [New] Auto-fill Global Context from analysis
+    React.useEffect(() => {
+        if (analysisResult?.globalContext) {
+            setStoryContext(analysisResult.globalContext);
+            // Auto-expand research notes if context is found, to show user
+            setShowResearchNotes(true);
+        }
+    }, [analysisResult]);
+
     // Get selected items
     const selectedStyle = BUILT_IN_CHARACTER_STYLES.find(s => s.id === selectedStyleId);
     const allDirectors = Object.values(DIRECTOR_PRESETS).flat();
-    const selectedDirector = allDirectors.find(d => d.id === selectedDirectorId);
+    const selectedDirector = customDirector || allDirectors.find(d => d.id === selectedDirectorId);
     const stylesByCategory = getStylesByCategory([]);
 
     // Handle analyze
@@ -83,9 +100,13 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
             selectedStyle || null,
             selectedDirector || null,
             // Pass Research Notes for AI context injection
-            (directorNotes || dopNotes) ? { director: directorNotes || undefined, dop: dopNotes || undefined } : null
+            (directorNotes || dopNotes || storyContext) ? {
+                director: directorNotes || undefined,
+                dop: dopNotes || undefined,
+                story: storyContext || undefined // [New]
+            } : null
         );
-    }, [scriptText, readingSpeed, selectedModel, analyzeScript, selectedStyle, selectedDirector, directorNotes, dopNotes]);
+    }, [scriptText, readingSpeed, selectedModel, analyzeScript, selectedStyle, selectedDirector, directorNotes, dopNotes, storyContext]);
 
     // Handle import
     const handleImport = useCallback(() => {
@@ -99,12 +120,67 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
         );
 
         // Pass research notes for storage in ProjectState
-        const notes = (directorNotes || dopNotes) ? { director: directorNotes || undefined, dop: dopNotes || undefined } : undefined;
+        const notes = (directorNotes || dopNotes || storyContext) ? {
+            director: directorNotes || undefined,
+            dop: dopNotes || undefined,
+            story: storyContext || undefined // [New]
+        } : undefined;
+
         onImport(scenes, groups, newCharacters, selectedStyleId, selectedDirectorId, sceneCharacterMap, notes);
         onClose();
-    }, [analysisResult, selectedDirector, selectedStyle, existingCharacters, onImport, onClose, generateSceneMap, selectedStyleId, selectedDirectorId, directorNotes, dopNotes]);
+    }, [analysisResult, selectedDirector, selectedStyle, existingCharacters, onImport, onClose, generateSceneMap, selectedStyleId, selectedDirectorId, directorNotes, dopNotes, storyContext]);
 
     if (!isOpen) return null;
+
+    // Custom Director Search Handler (NEW)
+    const handleSearchCustomDirector = async () => {
+        if (!customDirectorName.trim()) return;
+        const currentApiKey = userApiKey || (process.env as any).API_KEY;
+        if (!currentApiKey) return alert("Vui lòng nhập API Key để sử dụng tính năng tìm kiếm.");
+
+        setIsSearchingDirector(true);
+        try {
+            const ai = new GoogleGenAI({ apiKey: currentApiKey });
+            const prompt = `Analyze the cinematic and storytelling style of the director "${customDirectorName}". 
+            Return a JSON object with:
+            {
+                "description": "Short 1-sentence bio/style summary in Vietnamese",
+                "dna": "Comma-separated visual/technical keywords in English",
+                "quote": "A famous quote about their art in original language/English",
+                "signatureCameraStyle": "Their signature camera technique in English"
+            }`;
+
+            const response = await ai.models.generateContent({
+                model: "gemini-2.0-flash",
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                config: { responseMimeType: "application/json" }
+            });
+
+            const responseText = response.text || '{}';
+            const data = JSON.parse(responseText);
+
+            const newCustomDirector: DirectorPreset = {
+                id: `custom-${generateId()}`,
+                name: customDirectorName,
+                origin: 'Âu',
+                description: data.description || `Phong cách của ${customDirectorName}`,
+                dna: data.dna || 'Cinematic',
+                quote: data.quote || '',
+                signatureCameraStyle: data.signatureCameraStyle || '',
+                isCustom: true
+            };
+
+            setCustomDirector(newCustomDirector);
+            setSelectedDirectorId(newCustomDirector.id);
+            setCustomDirectorName('');
+            setShowDirectorPicker(false);
+        } catch (error) {
+            console.error("Director search failed:", error);
+            alert("Không tìm thấy thông tin đạo diễn. Vui lòng tự mô tả phong cách.");
+        } finally {
+            setIsSearchingDirector(false);
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
@@ -184,8 +260,8 @@ John enters the room, wearing a tailored Armani suit..."
                                     >
                                         <div className="flex items-center gap-2">
                                             <span className="text-lg">📚</span>
-                                            <span className="text-sm font-semibold text-white">Research Notes</span>
-                                            <span className="text-xs text-zinc-500">(Director + DOP)</span>
+                                            <span className="text-sm font-semibold text-white">Research Notes & Global Context</span>
+                                            <span className="text-xs text-zinc-500">(World Setting, Themes, Camera)</span>
                                         </div>
                                         {showResearchNotes ? (
                                             <ChevronUp className="w-4 h-4 text-zinc-400" />
@@ -196,6 +272,21 @@ John enters the room, wearing a tailored Armani suit..."
 
                                     {showResearchNotes && (
                                         <div className="p-4 space-y-4 bg-zinc-900/30">
+
+                                            {/* [New] Global Story Context */}
+                                            <div>
+                                                <label className="flex items-center gap-2 text-xs font-medium text-emerald-400 mb-2">
+                                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                                    Global Story Context (Thiết lập bối cảnh chung - BẮT BUỘC)
+                                                </label>
+                                                <textarea
+                                                    value={storyContext}
+                                                    onChange={(e) => setStoryContext(e.target.value)}
+                                                    placeholder="VD: Thế giới Cyberpunk 2077. Nhân vật chính là thám tử tư. Bối cảnh diễn ra tại Night City, khu phố ổ chuột..."
+                                                    className="w-full h-20 bg-zinc-800/50 border border-emerald-500/30 rounded-xl p-3 text-sm text-white placeholder-zinc-600 resize-none focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10"
+                                                />
+                                            </div>
+
                                             {/* Director Notes */}
                                             <div>
                                                 <label className="flex items-center gap-2 text-xs font-medium text-amber-400 mb-2">
@@ -428,15 +519,31 @@ John enters the room, wearing a tailored Armani suit..."
 
                                     {/* Selected Director Preview */}
                                     {selectedDirector && (
-                                        <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-xl p-4 mb-3">
+                                        <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-xl p-4 mb-3 relative">
                                             <div className="flex items-center justify-between mb-2">
                                                 <span className="text-sm font-bold text-amber-200">{selectedDirector.name}</span>
-                                                <span className="text-[9px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-medium uppercase">
-                                                    {selectedDirector.origin}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    {customDirector && (
+                                                        <span className="text-[8px] px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded font-bold uppercase">AI Analyzed</span>
+                                                    )}
+                                                    <span className="text-[9px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-medium uppercase">
+                                                        {selectedDirector.origin}
+                                                    </span>
+                                                </div>
                                             </div>
                                             <p className="text-[11px] text-zinc-400 mb-2 line-clamp-2">{selectedDirector.description}</p>
-                                            <div className="text-[10px] text-amber-400/80">🎬 {selectedDirector.signatureCameraStyle}</div>
+                                            {selectedDirector.signatureCameraStyle && (
+                                                <div className="text-[10px] text-amber-400/80">🎬 {selectedDirector.signatureCameraStyle}</div>
+                                            )}
+                                            {customDirector && (
+                                                <button
+                                                    onClick={() => { setCustomDirector(null); setSelectedDirectorId('werner_herzog'); }}
+                                                    className="absolute top-2 right-2 p-1 text-zinc-500 hover:text-red-400 transition-colors"
+                                                    title="Xóa đạo diễn tùy chỉnh"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
                                         </div>
                                     )}
 
@@ -462,6 +569,54 @@ John enters the room, wearing a tailored Armani suit..."
                                                     <X className="w-4 h-4" />
                                                 </button>
                                             </div>
+
+                                            {/* Custom Director Search (NEW) */}
+                                            <div className="px-4 pt-4 pb-2 border-b border-zinc-700/30">
+                                                <label className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-2 block">
+                                                    🔍 Tìm đạo diễn bất kỳ (AI Search)
+                                                </label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={customDirectorName}
+                                                        onChange={(e) => setCustomDirectorName(e.target.value)}
+                                                        onKeyDown={(e) => e.key === 'Enter' && handleSearchCustomDirector()}
+                                                        placeholder="VD: Bong Joon-ho, Denis Villeneuve..."
+                                                        className="w-full bg-zinc-800/80 border border-zinc-600 rounded-xl py-2.5 pl-4 pr-12 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500/50 transition-colors"
+                                                    />
+                                                    <button
+                                                        onClick={handleSearchCustomDirector}
+                                                        disabled={isSearchingDirector || !customDirectorName.trim()}
+                                                        className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-colors disabled:opacity-50"
+                                                    >
+                                                        {isSearchingDirector ? (
+                                                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                                                        ) : (
+                                                            <span className="text-xs font-bold">Tìm</span>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                                <p className="text-[9px] text-zinc-500 mt-1.5">
+                                                    AI sẽ phân tích phong cách và kỹ thuật của đạo diễn bạn nhập.
+                                                </p>
+                                            </div>
+
+                                            {/* Custom Director Display (if selected) */}
+                                            {customDirector && (
+                                                <div className="mx-4 mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-sm font-bold text-amber-300">{customDirector.name}</span>
+                                                        <span className="text-[8px] px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded font-bold uppercase">AI Analyzed</span>
+                                                    </div>
+                                                    <p className="text-[10px] text-zinc-400 mb-1">{customDirector.description}</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {customDirector.dna.split(',').slice(0, 4).map((tag, i) => (
+                                                            <span key={i} className="text-[8px] px-1.5 py-0.5 bg-zinc-800 text-amber-400/70 rounded-md">{tag.trim()}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar" style={{ scrollbarWidth: 'thin', scrollbarColor: '#52525b #27272a' }}>
                                                 {(['documentary', 'cinema', 'tvc', 'music_video'] as DirectorCategory[]).map(category => (
                                                     <div key={category}>
@@ -472,8 +627,8 @@ John enters the room, wearing a tailored Armani suit..."
                                                             {DIRECTOR_PRESETS[category].map(dir => (
                                                                 <button
                                                                     key={dir.id}
-                                                                    onClick={() => { setSelectedDirectorId(dir.id); setShowDirectorPicker(false); }}
-                                                                    className={`w-full p-3 rounded-xl text-left transition-all ${selectedDirectorId === dir.id
+                                                                    onClick={() => { setSelectedDirectorId(dir.id); setCustomDirector(null); setShowDirectorPicker(false); }}
+                                                                    className={`w-full p-3 rounded-xl text-left transition-all ${selectedDirectorId === dir.id && !customDirector
                                                                         ? 'bg-amber-500/20 border border-amber-500/50'
                                                                         : 'hover:bg-zinc-800 border border-transparent'
                                                                         }`}

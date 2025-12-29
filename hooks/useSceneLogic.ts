@@ -193,7 +193,7 @@ export function useSceneLogic(
         document.getElementById('script-upload-input')?.click();
     }, []);
 
-    const applyGeneratedScript = useCallback((detailedStory: string, groups: any[], scenes: any[], director?: DirectorPreset) => {
+    const applyGeneratedScript = useCallback((detailedStory: string, groups: any[], scenes: any[], director?: DirectorPreset, globalStoryContext?: string) => {
         updateStateAndRecord(s => {
             const groupMap: Record<string, string> = {};
             const newGroups = groups.map(g => {
@@ -241,7 +241,11 @@ export function useSceneLogic(
                 sceneGroups: [...(s.sceneGroups || []), ...finalizedGroups],
                 scenes: [...s.scenes, ...newScenes],
                 activeDirectorId: director?.id,
-                customDirectors: director?.isCustom ? [...(s.customDirectors || []), director] : s.customDirectors
+                customDirectors: director?.isCustom ? [...(s.customDirectors || []), director] : s.customDirectors,
+                researchNotes: {
+                    ...s.researchNotes,
+                    story: globalStoryContext || s.researchNotes?.story || ''
+                }
             };
         });
     }, [updateStateAndRecord]);

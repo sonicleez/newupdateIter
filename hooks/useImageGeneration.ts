@@ -317,7 +317,14 @@ export function useImageGeneration(
                 console.log('[ImageGen] 📹 DOP Research Notes injected:', currentState.researchNotes.dop.substring(0, 50) + '...');
             }
 
-            let finalImagePrompt = `${directorDNAPrompt} ${dopResearchPrompt} ${authoritativeStyle} ${scaleCmd} ${scaleLockInstruction} ${noDriftGuard} ${coreActionPrompt} ${groupEnvAnchor} ${timeWeatherLock} ${charPrompt} FULL SCENE VISUALS: ${cleanedContext}. STYLE DETAILS: ${metaTokens}. TECHNICAL: (STRICT CAMERA: ${cinematographyPrompt ? cinematographyPrompt : 'High Quality'}).`.trim();
+            // --- GLOBAL STORY CONTEXT INJECTION (World Building) ---
+            let globalStoryPrompt = '';
+            if (currentState.researchNotes?.story) {
+                globalStoryPrompt = `[GLOBAL STORY CONTEXT - MANDATORY WORLD SETTING]: ${currentState.researchNotes.story}. The scene must strictly exist within this specific world/universe. Align all architecture, technology, and atmosphere with this context.`;
+                console.log('[ImageGen] 🌍 Global Story Context injected:', currentState.researchNotes.story.substring(0, 50) + '...');
+            }
+
+            let finalImagePrompt = `${globalStoryPrompt} ${directorDNAPrompt} ${dopResearchPrompt} ${authoritativeStyle} ${scaleCmd} ${scaleLockInstruction} ${noDriftGuard} ${coreActionPrompt} ${groupEnvAnchor} ${timeWeatherLock} ${charPrompt} FULL SCENE VISUALS: ${cleanedContext}. STYLE DETAILS: ${metaTokens}. TECHNICAL: (STRICT CAMERA: ${cinematographyPrompt ? cinematographyPrompt : 'High Quality'}).`.trim();
 
             // PROP ANCHOR TEXT INJECTION (High Priority)
             if (sceneToUpdate.referenceImage && sceneToUpdate.referenceImageDescription) {
@@ -507,18 +514,33 @@ export function useImageGeneration(
                 }
             }
 
-            // 5e. SCALE ANCHOR FROM PREVIOUS SHOT (New)
-            // Only use if isContinuityMode is ON and no explicit user reference image is provided (to avoid conflicting references)
+            // 5e. CONTINUITY ANCHOR FROM PREVIOUS SHOT (Stronger Logic)
+            // Use if isContinuityMode is ON and we are in the same group (or no group but sequential)
             if (isContinuityMode && currentSceneIndex > 0 && !sceneToUpdate.referenceImage) {
                 const prevSceneWithImage = currentState.scenes.slice(0, currentSceneIndex).reverse().find(s => s.generatedImage);
-                if (prevSceneWithImage?.generatedImage) {
+
+                // Only use as anchor if it belongs to the same Scene Group (strong continuity) or is the immediate predecessor
+                const isSameGroup = prevSceneWithImage && prevSceneWithImage.groupId === sceneToUpdate.groupId;
+                const isImmediate = prevSceneWithImage && (parseInt(sceneToUpdate.sceneNumber) - parseInt(prevSceneWithImage.sceneNumber) <= 1);
+
+                if (prevSceneWithImage?.generatedImage && (isSameGroup || isImmediate)) {
                     const imgData = await safeGetImageData(prevSceneWithImage.generatedImage);
                     if (imgData) {
                         // RE-ENTRY SAFE INSTRUCTION: If previous shot was empty, warn AI not to suppress characters
                         const wasPrevShotEmpty = (prevSceneWithImage.characterIds?.length || 0) === 0;
                         const charReturnWarning = wasPrevShotEmpty ? "!!! NOTICE !!! The previous shot was a background-only view. The current shot contains characters; do NOT let this reference suppress their appearance or identity." : "";
 
-                        parts.push({ text: `[SCALE_ANCHOR_PREVIOUS]: Use as reference for object proportions and relative scale. ${charReturnWarning} Ensure item in this scene matches the size/color of the same item in this previous shot.` });
+                        // Detect if we are zooming in (Wide -> Close Up)
+                        const isZoomingIn = (anglePrompt.includes('CLOSE') || anglePrompt.includes('CU')) && !prevSceneWithImage.cameraAngleOverride?.includes('CLOSE');
+
+                        const anchorLabel = isZoomingIn ? "ZOOM_IN_ANCHOR" : "CONTINUITY_ANCHOR";
+
+                        parts.push({
+                            text: `[${anchorLabel}]: AUTHORITATIVE VISUAL SOURCE. This is the previous frame in the sequence. ${charReturnWarning} 
+                        1. LIGHTING & COLOR: Match the exact color grading, light direction, and shadow density of this image.
+                        2. ENVIRONMENT: If this is a different angle of the same room, elements must remain in fixed relative positions.
+                        3. SUBJECTS: If characters/objects from this image appear in the new prompt, they MUST look identical (same clothes, same face, same texture).` });
+
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                     }
                 }
@@ -736,7 +758,13 @@ export function useImageGeneration(
                             }
 
                             // Only retry if Decision Agent approves
-                            while (shouldRetry && !lastValidation.isValid && criticalErrors.length > 0 && retryCount < MAX_DOP_RETRIES) {
+                            while (shouldRetry && !lastValidation.isValid && retryCount < MAX_DOP_RETRIES) {
+                                // [Fix] Check stop signal inside retry loop
+                                if (stopRef.current) {
+                                    console.log('[DOP] Batch stopped during retry.');
+                                    break;
+                                }
+
                                 console.log(`[DOP] Retrying with enhanced correction (attempt ${retryCount + 1}/${MAX_DOP_RETRIES})`);
 
                                 // Clear the bad image and regenerate with correction
@@ -745,7 +773,7 @@ export function useImageGeneration(
                                     scenes: s.scenes.map(sc => sc.id === scene.id ? {
                                         ...sc,
                                         generatedImage: null,
-                                        error: `DOP Retry ${retryCount + 1}: ${criticalErrors.map(e => e.description).join('; ')}`
+                                        error: `DOP Retry ${retryCount + 1}: ${lastValidation.errors.filter(e => e.type === 'character' || e.type === 'prop').map(e => e.description).join('; ')}`
                                     } : sc)
                                 }));
 
@@ -768,6 +796,21 @@ export function useImageGeneration(
                                         prevScene,
                                         userApiKey
                                     );
+
+                                    // [Fix] Re-evaluate critical errors to determine if we should continue retrying
+                                    const currentCriticalErrors = lastValidation.errors.filter(e =>
+                                        e.type === 'character' || e.type === 'prop'
+                                    );
+
+                                    // If no critical errors remain (only minor ones), stop retrying
+                                    if (currentCriticalErrors.length === 0) {
+                                        console.log('[DOP] Critical errors resolved. Stopping retries.');
+                                        break;
+                                    }
+                                } else {
+                                    // If generation failed (no image), stick with previous validation result or break
+                                    console.warn('[DOP] Retry generation failed to produce image.');
+                                    break;
                                 }
 
                                 retryCount++;
