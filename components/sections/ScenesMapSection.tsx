@@ -224,7 +224,7 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                             <span>Xóa</span>
                             <ChevronDown size={10} />
                         </button>
-                        <div className="absolute top-full right-0 mt-1 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                        <div className="absolute bottom-full right-0 mb-1 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-[100]">
                             <button
                                 onClick={() => {
                                     if (confirm('⚠️ Xóa TẤT CẢ ảnh? (Giữ lại kịch bản)')) {
