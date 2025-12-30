@@ -121,7 +121,7 @@ OUTPUT FORMAT: JSON only
 
 
         try {
-            const response = await callGeminiText(userApiKey || '', command, systemPrompt, 'gemini-2.0-flash-thinking-exp-1219', true);
+            const response = await callGeminiText(userApiKey || '', command, systemPrompt, 'gemini-2.0-flash-exp', true);
 
 
             return JSON.parse(response);
@@ -197,7 +197,7 @@ OUTPUT FORMAT: JSON only
                         ["New prompt 1", "New prompt 2", ...]`;
 
 
-                        const rawUpdates = await callGeminiText(userApiKey || '', rewritePrompt, 'You are an Expert Director.', 'gemini-2.0-flash-thinking-exp-1219', true);
+                        const rawUpdates = await callGeminiText(userApiKey || '', rewritePrompt, 'You are an Expert Director.', 'gemini-2.0-flash-exp', true);
 
 
                         const newPrompts = JSON.parse(rawUpdates);
@@ -242,7 +242,7 @@ OUTPUT FORMAT: JSON only
                     How do you technically implement this? 
                     OUTPUT: Brief technical response in Vietnamese (max 30 words).`;
 
-                    const dopResponse = await callGeminiText(userApiKey || '', dopResponsePrompt, 'You are an Expert DOP.', 'gemini-2.0-flash-thinking-exp-1219', false);
+                    const dopResponse = await callGeminiText(userApiKey || '', dopResponsePrompt, 'You are an Expert DOP.', 'gemini-2.0-flash-exp', false);
 
                     addProductionLog('dop', dopResponse, 'info');
                     setAgentState('dop', 'success', dopResponse);
@@ -294,7 +294,7 @@ OUTPUT FORMAT: JSON only
                         
                         OUTPUT: The new complete prompt for the target scene.`;
 
-                        const newPrompt = await callGeminiText(userApiKey || '', extractPrompt, 'You are an Expert Director.', 'gemini-2.0-flash-thinking-exp-1219', false);
+                        const newPrompt = await callGeminiText(userApiKey || '', extractPrompt, 'You are an Expert Director.', 'gemini-2.0-flash-exp', false);
 
 
 
@@ -356,7 +356,7 @@ OUTPUT FORMAT: JSON only
                         
                         OUTPUT: The corrected complete prompt for the target scene.`;
 
-                        const fixedPrompt = await callGeminiText(userApiKey || '', syncPrompt, 'You are an Expert Director.', 'gemini-2.0-flash-thinking-exp-1219', false);
+                        const fixedPrompt = await callGeminiText(userApiKey || '', syncPrompt, 'You are an Expert Director.', 'gemini-2.0-flash-exp', false);
 
 
                         // Update prompt and clear image
