@@ -103,6 +103,11 @@ const App: React.FC = () => {
     const lastLogRef = useRef<{ agent: string; message: string; time: number }>({ agent: '', message: '', time: 0 });
 
     const addProductionLog = useCallback((sender: 'director' | 'dop' | 'user' | 'system', message: string, type: 'info' | 'success' | 'warning' | 'error' | 'directive' = 'info', stage?: string) => {
+        // Update lastLogRef for director/dop to prevent duplicate from setAgentState
+        if (sender === 'director' || sender === 'dop') {
+            lastLogRef.current = { agent: sender, message, time: Date.now() };
+        }
+
         updateStateAndRecord(s => ({
             ...s,
             productionLogs: [

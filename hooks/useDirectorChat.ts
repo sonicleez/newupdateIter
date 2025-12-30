@@ -527,8 +527,10 @@ OUTPUT FORMAT: JSON only
 
 
             default:
+                // Only log via addProductionLog (setAgentState will NOT log if we pass the same message that's already in lastLogRef)
                 addProductionLog('director', response || 'Tôi đã ghi nhận ý kiến của bạn.', 'info');
-                setAgentState('director', 'success', response);
+                // Use empty message to prevent duplicate log from setAgentState
+                setAgentState('director', 'success', '');
                 break;
         }
     }, [recognizeIntent, addProductionLog, stopBatchGeneration, setAgentState, state.scenes, handleGenerateAllImages, updateStateAndRecord, addScene, removeScene, insertScene, onClearAllImages]);
