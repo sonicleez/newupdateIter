@@ -48,11 +48,12 @@ export function useSceneLogic(
         });
     }, [updateStateAndRecord]);
 
-    const insertScene = useCallback((index: number) => {
+    const insertScene = useCallback((index: number, initialData?: Partial<Scene>) => {
         const defaultCharacter = state.characters.find(c => c.isDefault);
         const prevScene = index > 0 ? state.scenes[index - 1] : null;
+        const id = generateId();
         const newScene: Scene = {
-            id: generateId(),
+            id,
             sceneNumber: `${index + 1}`,
             groupId: prevScene?.groupId, // Inherit group from previous scene
             language1: '',
@@ -65,6 +66,7 @@ export function useSceneLogic(
             veoPrompt: '',
             isGenerating: false,
             error: null,
+            ...initialData // Override with initial data
         };
 
         updateStateAndRecord(s => {
@@ -76,6 +78,8 @@ export function useSceneLogic(
             }));
             return { ...s, scenes: renumbered };
         });
+
+        return id;
     }, [state.characters, state.scenes, updateStateAndRecord]);
 
     // Group Management

@@ -781,8 +781,8 @@ The NEW scene has its OWN camera style as specified in the current prompt. DO NO
 
                 setAgentState('director', 'speaking', `Đang chỉ đạo Phân cảnh ${scene.sceneNumber}...`);
 
-                // Check if this scene has a specific DNA reference image
-                const dnaReference = referenceMap ? referenceMap[scene.id] : undefined;
+                // Check if this scene has a specific DNA reference image (from Reference Map OR Scene Attributes)
+                const dnaReference = (referenceMap && referenceMap[scene.id]) || scene.referenceImage || undefined;
 
                 // Check if scene ALREADY has an image -> Treat as Base Image for Editing
                 const existingBaseImage = scene.generatedImage || undefined;

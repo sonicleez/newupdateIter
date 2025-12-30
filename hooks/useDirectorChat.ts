@@ -22,7 +22,7 @@ interface UseDirectorChatProps {
     // Scene Management
     addScene: () => void;
     removeScene: (id: string) => void;
-    insertScene: (index: number) => void;
+    insertScene: (index: number, initialData?: any) => string;
     // Clear functions
     onClearAllImages?: () => void;
 }
@@ -113,7 +113,9 @@ OUTPUT FORMAT: JSON only
     "count": number, // for ADD_SCENE
     "insertAfter": number, // for INSERT_SCENE (scene number)
     "sceneNumber": number, // for UPDATE_SCENE_PROMPT, SYNERGY_DIRECTIVE, EXECUTE_PENDING
-    "newPrompt": "string" // for UPDATE_SCENE_PROMPT
+    "newPrompt": "string", // for UPDATE_SCENE_PROMPT
+    "visualDirective": "string", // Optional: If user provides visual description for new/inserted scene (e.g. "extreme closeup of hand").
+    "referencePrevious": boolean // Optional: true if user implies continuity with previous scene (e.g. "zoom in", "next shot").
   },
   "response": "Brief professional acknowledgment in Vietnamese"
 }`;
@@ -428,11 +430,39 @@ OUTPUT FORMAT: JSON only
 
                 if (insertIndex !== -1) {
                     addProductionLog('director', response || `Chèn cảnh mới sau cảnh ${insertAfterNum}...`, 'info');
-                    setAgentState('director', 'speaking', `Chèn cảnh sau cảnh ${insertAfterNum}...`, 'Inserting');
 
-                    insertScene(insertIndex + 1);
+                    const prevScene = state.scenes[insertIndex];
+                    let initialData: any = {};
 
-                    setAgentState('director', 'success', `Đã chèn cảnh mới sau cảnh ${insertAfterNum}.`);
+                    // NEW: Smart Context Injection
+                    if (entities.visualDirective) {
+                        const directive = entities.visualDirective;
+                        // Construct prompt borrowing context from previous scene
+                        initialData.contextDescription = `[DIRECTOR INSTRUCTION]: ${directive}\n\nCONTEXT FROM PREVIOUS SCENE:\n${prevScene.contextDescription}`;
+                        initialData.promptName = directive.length > 30 ? `${directive.substring(0, 30)}...` : directive;
+                    }
+
+                    // NEW: Image Reference Transfer (Consistency)
+                    // If user implies continuity OR explicitly asks for similar shot
+                    if (entities.referencePrevious && prevScene.generatedImage) {
+                        initialData.referenceImage = prevScene.generatedImage;
+                        initialData.referenceImageDescription = "Previous moment in sequence. Maintain visual continuity.";
+                        addProductionLog('director', 'Đang dùng ảnh cảnh trước làm tham chiếu (Reference)...', 'info');
+                    }
+
+                    // Execute Insertion
+                    const newId = insertScene(insertIndex + 1, initialData);
+
+                    if (entities.visualDirective) {
+                        setAgentState('director', 'speaking', `Đang tạo cảnh mới: ${entities.visualDirective}...`, 'Generating');
+                        // Trigger generation after small delay to allow React state update
+                        setTimeout(() => {
+                            handleGenerateAllImages([newId]);
+                        }, 200);
+                    } else {
+                        setAgentState('director', 'success', `Đã chèn cảnh mới sau cảnh ${insertAfterNum}.`);
+                    }
+
                 } else {
                     // If no specific position, add at end
                     addScene();
