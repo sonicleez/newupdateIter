@@ -457,7 +457,15 @@ OUTPUT FORMAT: JSON only
                         setAgentState('director', 'speaking', `Đang tạo cảnh mới: ${entities.visualDirective}...`, 'Generating');
                         // Trigger generation after small delay to allow React state update
                         setTimeout(() => {
-                            handleGenerateAllImages([newId]);
+                            // If we referenced previous image, pass it as Base Image (Edit Mode)
+                            // to ensure continuity of pose/details (e.g. Zoom In, Variation)
+                            let baseMap: { [key: string]: string } | undefined;
+                            if (entities.referencePrevious && initialData.referenceImage) {
+                                baseMap = { [newId]: initialData.referenceImage };
+                                console.log('[Director] Passing Previous Image as Base Image for Continuity Insert');
+                            }
+
+                            handleGenerateAllImages([newId], undefined, baseMap);
                         }, 200);
                     } else {
                         setAgentState('director', 'success', `Đã chèn cảnh mới sau cảnh ${insertAfterNum}.`);
