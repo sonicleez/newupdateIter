@@ -37,7 +37,10 @@ interface StyleSettingsSectionProps {
     isOutfitLockMode: boolean;
     toggleOutfitLockMode: () => void;
     onOpenManualScript?: () => void; // NEW: Open Manual Script Import modal
+    generationConfig?: import('../../types').GenerationConfig;
+    onGenerationConfigChange?: (config: import('../../types').GenerationConfig) => void;
 }
+
 
 
 export const StyleSettingsSection: React.FC<StyleSettingsSectionProps> = ({
@@ -74,10 +77,16 @@ export const StyleSettingsSection: React.FC<StyleSettingsSectionProps> = ({
     toggleContinuityMode,
     isOutfitLockMode,
     toggleOutfitLockMode,
-    onOpenManualScript
+    onOpenManualScript,
+    generationConfig,
+    onGenerationConfigChange
 }) => {
 
+
+    const [showAdvancedGen, setShowAdvancedGen] = React.useState(false);
+
     const handleStyleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+
         const file = e.target.files?.[0];
         if (!file || !onAnalyzeStyleFromImage) return;
 
@@ -342,6 +351,63 @@ export const StyleSettingsSection: React.FC<StyleSettingsSectionProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* Advanced Generation Settings Section */}
+            <div className="mt-8 pt-6 border-t border-gray-700/50">
+                <button
+                    onClick={() => setShowAdvancedGen(!showAdvancedGen)}
+                    className="flex items-center gap-2 text-xs font-black text-gray-400 hover:text-brand-orange transition-colors uppercase tracking-widest"
+                >
+                    <div className={`w-1.5 h-1.5 rounded-full ${showAdvancedGen ? 'bg-brand-orange' : 'bg-gray-700'}`}></div>
+                    Advanced Generation Settings
+                </button>
+
+                {showAdvancedGen && generationConfig && onGenerationConfigChange && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="p-3 bg-black/20 rounded-xl border border-gray-700/30">
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Image Delay (ms)</label>
+                            <input
+                                type="number"
+                                value={generationConfig.imageDelay}
+                                onChange={(e) => onGenerationConfigChange({ ...generationConfig, imageDelay: parseInt(e.target.value) || 0 })}
+                                className="w-full bg-gray-950 text-brand-cream px-2 py-1 rounded text-xs border border-gray-800 focus:border-brand-orange outline-none"
+                            />
+                        </div>
+                        <div className="p-3 bg-black/20 rounded-xl border border-gray-700/30">
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Veo Delay (ms)</label>
+                            <input
+                                type="number"
+                                value={generationConfig.veoDelay}
+                                onChange={(e) => onGenerationConfigChange({ ...generationConfig, veoDelay: parseInt(e.target.value) || 0 })}
+                                className="w-full bg-gray-950 text-brand-cream px-2 py-1 rounded text-xs border border-gray-800 focus:border-brand-orange outline-none"
+                            />
+                        </div>
+                        <div className="p-3 bg-black/20 rounded-xl border border-gray-700/30">
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Insert Delay (ms)</label>
+                            <input
+                                type="number"
+                                value={generationConfig.insertAngleDelay}
+                                onChange={(e) => onGenerationConfigChange({ ...generationConfig, insertAngleDelay: parseInt(e.target.value) || 0 })}
+                                className="w-full bg-gray-950 text-brand-cream px-2 py-1 rounded text-xs border border-gray-800 focus:border-brand-orange outline-none"
+                            />
+                        </div>
+                        <div className="p-3 bg-black/20 rounded-xl border border-gray-700/30">
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Batch Concurrency</label>
+                            <select
+                                value={generationConfig.concurrencyLimit}
+                                onChange={(e) => onGenerationConfigChange({ ...generationConfig, concurrencyLimit: parseInt(e.target.value) })}
+                                className="w-full bg-gray-950 text-brand-cream px-2 py-1 rounded text-xs border border-gray-800 focus:border-brand-orange outline-none appearance-none"
+                            >
+                                <option value={1}>1 (Sequential)</option>
+                                <option value={2}>2 (Parallel)</option>
+                                <option value={3}>3 (Parallel)</option>
+                                <option value={4}>4 (Parallel)</option>
+                            </select>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
+

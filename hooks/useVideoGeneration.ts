@@ -256,7 +256,8 @@ Return ONLY the video prompt string. NO explanations, NO markdown.
                 }
                 setAgentState('director', 'speaking', `Đang tối ưu Veo Prompt cho Phân cảnh ${scene.sceneNumber}...`);
                 await generateVeoPrompt(scene.id);
-                await new Promise(r => setTimeout(r, 200));
+                const veoDelay = state.generationConfig?.veoDelay || 200;
+                await new Promise(r => setTimeout(r, veoDelay));
             }
             setAgentState('director', 'success', 'Hoàn tất tối ưu toàn bộ Veo Prompts!');
 

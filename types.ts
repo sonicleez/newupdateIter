@@ -277,7 +277,18 @@ export interface ProjectState {
     director: AgentState;
     dop: AgentState;
   };
+
+  // Generation Configuration (NEW)
+  generationConfig?: GenerationConfig;
 }
+
+export interface GenerationConfig {
+  imageDelay: number;
+  veoDelay: number;
+  insertAngleDelay: number;
+  concurrencyLimit: number;
+}
+
 
 export type AgentStatus = 'idle' | 'thinking' | 'speaking' | 'success' | 'error';
 

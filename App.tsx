@@ -382,15 +382,16 @@ const App: React.FC = () => {
 
         // Generate images for each new scene (with small delay between each)
         // [Fix] Ensure state update happens before generation trigger
-        setTimeout(() => {
+        const insertDelay = state.generationConfig?.insertAngleDelay || 1000;
+        setTimeout(async () => {
             for (let i = 0; i < newScenes.length; i++) {
-                setTimeout(() => {
-                    console.log(`[InsertAngles] Triggering generation for ${newScenes[i].id}`);
-                    performImageGeneration(newScenes[i].id);
-                }, i * 1000); // Increased delay to 1000ms to ensure state consistency
+                if (i > 0) await new Promise(r => setTimeout(r, insertDelay));
+                console.log(`[InsertAngles] Triggering generation for ${newScenes[i].id}`);
+                performImageGeneration(newScenes[i].id);
             }
         }, 100);
-    }, [state.scenes, updateStateAndRecord, performImageGeneration]);
+    }, [state.scenes, updateStateAndRecord, performImageGeneration, state.generationConfig]);
+
 
 
 
@@ -800,11 +801,15 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                                     onCustomDefaultLensChange={(val) => updateStateAndRecord(s => ({ ...s, customDefaultLens: val }))}
                                     customMetaTokens={state.customMetaTokens || ''}
                                     onCustomMetaTokensChange={(val) => updateStateAndRecord(s => ({ ...s, customMetaTokens: val }))}
+
                                     onOpenScriptGenerator={() => setScriptModalOpen(true)}
                                     isScriptGenerating={isScriptGenerating}
                                     onTriggerFileUpload={triggerFileUpload}
                                     onOpenManualScript={() => setManualScriptModalOpen(true)}
+                                    generationConfig={state.generationConfig}
+                                    onGenerationConfigChange={(config) => updateStateAndRecord(s => ({ ...s, generationConfig: config }))}
                                 />
+
 
                                 <div id="scenes-map-section">
                                     <ScenesMapSection

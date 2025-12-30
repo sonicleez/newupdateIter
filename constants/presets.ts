@@ -330,8 +330,15 @@ export const INITIAL_STATE: ProjectState = {
     agents: {
         director: { status: 'idle' },
         dop: { status: 'idle' }
+    },
+    generationConfig: {
+        imageDelay: 500,
+        veoDelay: 200,
+        insertAngleDelay: 1000,
+        concurrencyLimit: 1
     }
 };
+
 
 
 export const CREATIVE_PRESETS = [

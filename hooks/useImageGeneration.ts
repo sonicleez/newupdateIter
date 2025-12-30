@@ -926,9 +926,11 @@ The NEW scene has its OWN camera style as specified in the current prompt. DO NO
                     }
                 }
 
-                await new Promise(r => setTimeout(r, 500));
+                const imageDelay = state.generationConfig?.imageDelay || 500;
+                await new Promise(r => setTimeout(r, imageDelay));
             }
         } catch (e) {
+
             console.error(e);
         } finally {
             setIsBatchGenerating(false);
