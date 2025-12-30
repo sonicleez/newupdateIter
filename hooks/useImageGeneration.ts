@@ -672,16 +672,27 @@ The NEW scene has its OWN camera style as specified in the current prompt. DO NO
                 currentState.resolution || '1K' // Pass resolution setting
             );
 
-            updateStateAndRecord(s => ({
-                ...s,
-                scenes: s.scenes.map(sc => sc.id === sceneId ? {
-                    ...sc,
-                    ...(fromManual ? { endFrameImage: imageUrl } : { generatedImage: imageUrl }),
-                    mediaId: fromManual ? sc.mediaId : (mediaId || sc.mediaId),
-                    isGenerating: false,
-                    error: null
-                } : sc)
-            }));
+            updateStateAndRecord(s => {
+                const resolutionKey = (currentState.resolution || '1K') as '1K' | '2K' | '4K';
+                const currentStats = s.usageStats || { '1K': 0, '2K': 0, '4K': 0, total: 0 };
+                const newCount = (currentStats[resolutionKey] || 0) + 1;
+
+                return {
+                    ...s,
+                    scenes: s.scenes.map(sc => sc.id === sceneId ? {
+                        ...sc,
+                        ...(fromManual ? { endFrameImage: imageUrl } : { generatedImage: imageUrl }),
+                        mediaId: fromManual ? sc.mediaId : (mediaId || sc.mediaId),
+                        isGenerating: false,
+                        error: null
+                    } : sc),
+                    usageStats: {
+                        ...currentStats,
+                        [resolutionKey]: newCount,
+                        total: (currentStats.total || 0) + 1
+                    }
+                };
+            });
 
             // Add to session gallery
             if (addToGallery) {
@@ -738,8 +749,24 @@ The NEW scene has its OWN camera style as specified in the current prompt. DO NO
                 currentState.resolution || '1K' // Pass resolution setting
             );
 
-            if (imageUrl && addToGallery) {
-                addToGallery(imageUrl, 'concept', conceptPrompt, groupName);
+            if (imageUrl) {
+                // Increment Usage Stats
+                updateStateAndRecord(s => {
+                    const resolutionKey = (currentState.resolution || '1K') as '1K' | '2K' | '4K';
+                    const currentStats = s.usageStats || { '1K': 0, '2K': 0, '4K': 0, total: 0 };
+                    return {
+                        ...s,
+                        usageStats: {
+                            ...currentStats,
+                            [resolutionKey]: (currentStats[resolutionKey] || 0) + 1,
+                            total: (currentStats.total || 0) + 1
+                        }
+                    };
+                });
+
+                if (addToGallery) {
+                    addToGallery(imageUrl, 'concept', conceptPrompt, groupName);
+                }
             }
 
             return imageUrl;

@@ -872,6 +872,7 @@ const App: React.FC = () => {
                                 scenes={state.scenes}
                                 characters={state.characters}
                                 products={state.products}
+                                usageStats={state.usageStats}
                                 onDeleteAsset={handleDeleteAsset}
                                 onClose={() => setLibraryOpen(false)}
                                 onReplaceScene={(id, img) => updateScene(id, { generatedImage: img })}

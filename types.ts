@@ -284,6 +284,14 @@ export interface ProjectState {
 
   productionLogs?: ProductionLogEntry[];
 
+  // Usage Statistics (Persisted)
+  usageStats?: {
+    '1K': number;
+    '2K': number;
+    '4K': number;
+    total: number;
+  };
+
   // Generation Configuration (NEW)
 
   generationConfig?: GenerationConfig;

@@ -7,6 +7,12 @@ interface AssetLibraryProps {
     scenes: Scene[];
     characters: Character[];
     products: Product[];
+    usageStats?: {
+        '1K': number;
+        '2K': number;
+        '4K': number;
+        total: number;
+    };
     onReplaceScene: (sceneId: string, image: string) => void;
     onReplaceCharacterView: (charId: string, image: string, view: 'master' | 'face' | 'body' | 'side' | 'back') => void;
     onReplaceProductView: (productId: string, image: string, view: string) => void;
@@ -19,6 +25,7 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({
     scenes,
     characters,
     products,
+    usageStats,
     onReplaceScene,
     onReplaceCharacterView,
     onReplaceProductView,
@@ -77,6 +84,30 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({
                 </button>
             </div>
 
+            {/* Usage Stats (Persistent) */}
+            <div className="px-4 py-3 border-b border-gray-800 bg-gray-900/20">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-[9px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                        <Wand2 size={10} /> Generated Count
+                    </h3>
+                    <span className="text-[9px] text-gray-600 font-mono">Total: {usageStats?.total || 0}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-gray-900/50 rounded p-1.5 text-center border border-gray-800/50">
+                        <span className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">1K Res</span>
+                        <span className="block text-xs font-black text-emerald-400 font-mono">{usageStats?.['1K'] || 0}</span>
+                    </div>
+                    <div className="bg-gray-900/50 rounded p-1.5 text-center border border-gray-800/50">
+                        <span className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">2K Res</span>
+                        <span className="block text-xs font-black text-blue-400 font-mono">{usageStats?.['2K'] || 0}</span>
+                    </div>
+                    <div className="bg-gray-900/50 rounded p-1.5 text-center border border-gray-800/50">
+                        <span className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">4K Res</span>
+                        <span className="block text-xs font-black text-purple-400 font-mono">{usageStats?.['4K'] || 0}</span>
+                    </div>
+                </div>
+            </div>
+
             {/* Filters & Search */}
             <div className="p-3 space-y-3">
                 <div className="relative">
@@ -95,8 +126,8 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({
                             key={cat.id}
                             onClick={() => setFilter(cat.id)}
                             className={`px-3 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all ${filter === cat.id
-                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/20'
-                                    : 'bg-gray-900 text-gray-500 hover:text-gray-300 border border-gray-800'
+                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/20'
+                                : 'bg-gray-900 text-gray-500 hover:text-gray-300 border border-gray-800'
                                 }`}
                         >
                             {cat.label}
@@ -121,8 +152,8 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({
                                     <p className="text-[8px] text-white line-clamp-2 leading-tight">{asset.prompt || 'Không có mô tả'}</p>
                                     <div className="flex items-center gap-1 mt-1">
                                         <span className={`px-1 rounded-[2px] text-[7px] font-bold uppercase ${asset.type === 'scene' ? 'bg-blue-600' :
-                                                asset.type === 'character' ? 'bg-green-600' :
-                                                    asset.type === 'product' ? 'bg-orange-600' : 'bg-purple-600'
+                                            asset.type === 'character' ? 'bg-green-600' :
+                                                asset.type === 'product' ? 'bg-orange-600' : 'bg-purple-600'
                                             }`}>
                                             {asset.type}
                                         </span>
