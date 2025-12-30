@@ -806,9 +806,15 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                                     isScriptGenerating={isScriptGenerating}
                                     onTriggerFileUpload={triggerFileUpload}
                                     onOpenManualScript={() => setManualScriptModalOpen(true)}
-                                    generationConfig={state.generationConfig}
+                                    generationConfig={state.generationConfig || {
+                                        imageDelay: 500,
+                                        veoDelay: 200,
+                                        insertAngleDelay: 1000,
+                                        concurrencyLimit: 1
+                                    }}
                                     onGenerationConfigChange={(config) => updateStateAndRecord(s => ({ ...s, generationConfig: config }))}
                                 />
+
 
 
                                 <div id="scenes-map-section">
@@ -872,7 +878,11 @@ Format as a single paragraph of style instructions, suitable for use as an AI im
                                 </div>
 
                                 {/* Floating AI Agents */}
-                                <ThinkingAgents agents={state.agents} />
+                                <ThinkingAgents agents={state.agents || {
+                                    director: { status: 'idle' },
+                                    dop: { status: 'idle' }
+                                }} />
+
 
                                 <div className="flex justify-end mt-8 gap-4">
                                     <button
