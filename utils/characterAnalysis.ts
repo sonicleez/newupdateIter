@@ -48,7 +48,7 @@ export async function analyzeCharacterImage(
     console.log('[Character Analysis] 🔍 Analyzing master image with Gemini...');
 
     const response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash-exp',
         contents: [{
             parts: [
                 { inlineData: { data: cleanData, mimeType: 'image/jpeg' } },

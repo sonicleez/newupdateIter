@@ -145,7 +145,7 @@ Return ONLY the video prompt string. NO explanations, NO markdown.
 `;
 
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-2.0-flash-exp',
                 contents: {
                     parts: [
                         { inlineData: { data, mimeType } },

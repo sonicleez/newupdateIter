@@ -80,7 +80,7 @@ export const callGeminiText = async (
     apiKey: string,
     prompt: string,
     systemPrompt: string = '',
-    model: string = 'gemini-1.5-flash',
+    model: string = 'gemini-2.0-flash-exp',
     jsonMode: boolean = false
 ): Promise<string> => {
     const trimmedKey = apiKey?.trim();
