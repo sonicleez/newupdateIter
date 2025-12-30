@@ -782,8 +782,8 @@ The NEW scene has its OWN camera style as specified in the current prompt. DO NO
         console.log('[BatchGen] handleGenerateAllImages called', { specificSceneIds, hasReferenceMap: !!referenceMap });
 
         const scenesToGenerate = specificSceneIds
-            ? state.scenes.filter(s => specificSceneIds.includes(s.id))
-            : state.scenes.filter(s => !s.generatedImage && s.contextDescription);
+            ? stateRef.current.scenes.filter(s => specificSceneIds.includes(s.id))
+            : stateRef.current.scenes.filter(s => !s.generatedImage && s.contextDescription);
 
         console.log('[BatchGen] Scenes to generate:', scenesToGenerate.length);
 
