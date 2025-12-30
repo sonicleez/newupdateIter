@@ -8,6 +8,7 @@ import {
     Command,
     Play,
     Pause,
+    Trash2,
     RotateCcw,
     Zap,
     Info,
@@ -26,8 +27,10 @@ interface UnifiedProductionHubProps {
     logs: ProductionLogEntry[];
     onSendCommand: (command: string) => void;
     onAddUserLog?: (message: string) => void;
+    onClearChat?: () => void;
     onToggleAgentVisibility?: () => void;
 }
+
 
 
 const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
@@ -35,8 +38,10 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
     logs,
     onSendCommand,
     onAddUserLog,
+    onClearChat,
     onToggleAgentVisibility
 }) => {
+
 
     const [isExpanded, setIsExpanded] = useState(false);
     const [command, setCommand] = useState('');
@@ -219,6 +224,17 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1 no-drag">
+                        {/* Clear Chat Button */}
+                        {onClearChat && logs.length > 0 && (
+                            <button
+                                onClick={onClearChat}
+                                aria-label="Clear Chat"
+                                title="Xóa lịch sử chat"
+                                className="p-1.5 rounded-lg hover:bg-rose-500/20 transition-colors text-slate-500 hover:text-rose-400"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
                         <button
                             onClick={() => setIsExpanded(!isExpanded)}
                             aria-label="Expand Hub"
@@ -228,6 +244,7 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                             {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
                         </button>
                     </div>
+
                 </div>
 
                 {/* Minimized Content: Status Messages */}
