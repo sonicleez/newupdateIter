@@ -18,7 +18,7 @@ interface UseDirectorChatProps {
     addProductionLog: (sender: 'director' | 'dop' | 'user' | 'system', message: string, type?: string, stage?: string) => void;
     stopBatchGeneration: () => void;
     updateStateAndRecord: (updater: (s: ProjectState) => ProjectState) => void;
-    handleGenerateAllImages: (specificSceneIds?: string[], referenceMap?: { [key: string]: string }) => Promise<void>;
+    handleGenerateAllImages: (specificSceneIds?: string[], referenceMap?: { [key: string]: string }, baseImageMap?: { [key: string]: string }) => Promise<void>;
     // Scene Management
     addScene: () => void;
     removeScene: (id: string) => void;
@@ -538,11 +538,12 @@ OUTPUT FORMAT: JSON only
                         )
                     }));
 
-                    // Regenerate the specific scene using Old Image as DNA Reference
-                    const refMap = oldImage ? { [pending.sceneId]: oldImage } : undefined;
-                    if (oldImage) addProductionLog('director', 'Đang dùng ảnh cũ làm tham chiếu (Visual DNA)...', 'info');
+                    // Regenerate the specific scene using Old Image as Base Image (Edit Mode)
+                    const baseMap = oldImage ? { [pending.sceneId]: oldImage } : undefined;
+                    if (oldImage) addProductionLog('director', 'Đang dùng ảnh gốc làm nền để chỉnh sửa...', 'info');
 
-                    await handleGenerateAllImages([pending.sceneId], refMap);
+                    // Arg 1: IDs, Arg 2: RefMap (undefined -> uses scene.referenceImage), Arg 3: BaseMap (oldImage)
+                    await handleGenerateAllImages([pending.sceneId], undefined, baseMap);
 
                     // Clear the pending action after execution
                     pendingActionRef.current = null;
@@ -567,11 +568,11 @@ OUTPUT FORMAT: JSON only
                             )
                         }));
 
-                        // Regenerate using Old Image as DNA Reference
-                        const refMap = oldImage ? { [sceneToExec.id]: oldImage } : undefined;
-                        if (oldImage) addProductionLog('director', 'Đang giữ lại Visual DNA từ ảnh cũ...', 'info');
+                        // Regenerate using Old Image as Base Image
+                        const baseMap = oldImage ? { [sceneToExec.id]: oldImage } : undefined;
+                        if (oldImage) addProductionLog('director', 'Đang giữ lại ảnh gốc để chỉnh sửa...', 'info');
 
-                        await handleGenerateAllImages([sceneToExec.id], refMap);
+                        await handleGenerateAllImages([sceneToExec.id], undefined, baseMap);
                         setAgentState('director', 'success', `Đã hoàn thành cảnh ${execSceneNum}!`);
                     } else {
                         setAgentState('director', 'error', `Không tìm thấy cảnh ${execSceneNum}.`);

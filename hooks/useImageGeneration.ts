@@ -629,7 +629,12 @@ The NEW scene has its OWN camera style as specified in the current prompt. DO NO
                 const imgData = await safeGetImageData(sceneToUpdate.referenceImage);
                 if (imgData) {
                     const focus = sceneToUpdate.referenceImageDescription || 'props and environment';
-                    parts.push({ text: `[AUTHORITATIVE_VISUAL_REFERENCE]: USE THIS IMAGE as the primary reference for the design, color, and texture of the ${focus}. Match the objects shown here exactly in the new scene. IGNORE any text descriptions of these specific objects that conflict with this image.` });
+                    parts.push({
+                        text: `[AUTHORITATIVE_VISUAL_REFERENCE]: 
+STEP 1: ANALYZE this image deeply. Identify the key visual attributes of the ${focus} (Material, Texture, Color Palette, Lighting Style, Design details).
+STEP 2: GENERATE the new scene by strictly applying these identified attributes.
+Match the ${focus} EXACTLY as shown in this reference.
+IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                     parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                     // Add to top of parts if it's really important? No, index-wise handles it.
                 }
@@ -778,8 +783,9 @@ The NEW scene has its OWN camera style as specified in the current prompt. DO NO
 
     // specificSceneIds: Optional list of specific IDs to regenerate
     // referenceMap: Optional mapping of sceneId -> sourceImageURL for DNA syncing
-    const handleGenerateAllImages = useCallback(async (specificSceneIds?: string[], referenceMap?: { [key: string]: string }) => {
-        console.log('[BatchGen] handleGenerateAllImages called', { specificSceneIds, hasReferenceMap: !!referenceMap });
+    // baseImageMap: Optional mapping of sceneId -> baseImageURL for Img2Img editing from a specific source
+    const handleGenerateAllImages = useCallback(async (specificSceneIds?: string[], referenceMap?: { [key: string]: string }, baseImageMap?: { [key: string]: string }) => {
+        console.log('[BatchGen] handleGenerateAllImages called', { specificSceneIds, hasReferenceMap: !!referenceMap, hasBaseImageMap: !!baseImageMap });
 
         const scenesToGenerate = specificSceneIds
             ? stateRef.current.scenes.filter(s => specificSceneIds.includes(s.id))
@@ -812,7 +818,8 @@ The NEW scene has its OWN camera style as specified in the current prompt. DO NO
                 const dnaReference = (referenceMap && referenceMap[scene.id]) || scene.referenceImage || undefined;
 
                 // Check if scene ALREADY has an image -> Treat as Base Image for Editing
-                const existingBaseImage = scene.generatedImage || undefined;
+                // PRIORITIZE explicitly passed baseImageMap
+                const existingBaseImage = (baseImageMap && baseImageMap[scene.id]) || scene.generatedImage || undefined;
 
                 await performImageGeneration(scene.id, undefined, false, dnaReference, existingBaseImage);
                 setAgentState('director', 'success', `Đã tạo xong ảnh Phân cảnh ${scene.sceneNumber}.`);
