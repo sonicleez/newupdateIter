@@ -100,16 +100,7 @@ const App: React.FC = () => {
     const [isProfileModalOpen, setProfileModalOpen] = useState(false);
 
     // --- AI Agent Helper ---
-    const setAgentState = useCallback((agent: 'director' | 'dop', status: AgentStatus, message?: string, stage?: string) => {
-        updateStateAndRecord(s => ({
-            ...s,
-            agents: {
-                ...s.agents!,
-                [agent]: { ...s.agents![agent], status, message, currentStage: stage, lastAction: Date.now() }
-            }
-        }));
-        // Note: Do NOT auto-log here. Hooks should call addProductionLog explicitly to avoid duplicates.
-    }, [updateStateAndRecord]);
+    const lastLogRef = useRef<{ agent: string; message: string; time: number }>({ agent: '', message: '', time: 0 });
 
     const addProductionLog = useCallback((sender: 'director' | 'dop' | 'user' | 'system', message: string, type: 'info' | 'success' | 'warning' | 'error' | 'directive' = 'info', stage?: string) => {
         updateStateAndRecord(s => ({
@@ -127,6 +118,29 @@ const App: React.FC = () => {
             ].slice(-100)
         }));
     }, [updateStateAndRecord]);
+
+    const setAgentState = useCallback((agent: 'director' | 'dop', status: AgentStatus, message?: string, stage?: string) => {
+        updateStateAndRecord(s => ({
+            ...s,
+            agents: {
+                ...s.agents!,
+                [agent]: { ...s.agents![agent], status, message, currentStage: stage, lastAction: Date.now() }
+            }
+        }));
+
+        // Auto-log for non-idle status with message, but prevent rapid duplicates
+        if (message && status !== 'idle') {
+            const now = Date.now();
+            const isDuplicate = lastLogRef.current.agent === agent &&
+                lastLogRef.current.message === message &&
+                (now - lastLogRef.current.time) < 2000;
+
+            if (!isDuplicate) {
+                lastLogRef.current = { agent, message, time: now };
+                addProductionLog(agent, message, status === 'error' ? 'error' : status === 'success' ? 'success' : 'info', stage);
+            }
+        }
+    }, [updateStateAndRecord, addProductionLog]);
 
     // Auto-dismissal for success messages
 
