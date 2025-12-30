@@ -524,6 +524,10 @@ OUTPUT FORMAT: JSON only
                     addProductionLog('director', response || `Đang thực thi yêu cầu đã xác nhận cho cảnh ${pending.sceneNumber}...`, 'info');
                     setAgentState('director', 'speaking', `Đang tạo lại cảnh ${pending.sceneNumber}...`, 'Executing');
 
+                    // Capture old image for reference (Self-Repair/Edit Mode)
+                    const sceneToExec = state.scenes.find(s => s.id === pending.sceneId);
+                    const oldImage = sceneToExec?.generatedImage;
+
                     // Clear the image first
                     updateStateAndRecord(s => ({
                         ...s,
@@ -534,8 +538,11 @@ OUTPUT FORMAT: JSON only
                         )
                     }));
 
-                    // Regenerate the specific scene
-                    await handleGenerateAllImages([pending.sceneId]);
+                    // Regenerate the specific scene using Old Image as DNA Reference
+                    const refMap = oldImage ? { [pending.sceneId]: oldImage } : undefined;
+                    if (oldImage) addProductionLog('director', 'Đang dùng ảnh cũ làm tham chiếu (Visual DNA)...', 'info');
+
+                    await handleGenerateAllImages([pending.sceneId], refMap);
 
                     // Clear the pending action after execution
                     pendingActionRef.current = null;
@@ -549,6 +556,8 @@ OUTPUT FORMAT: JSON only
                         addProductionLog('director', response || `Đang tạo lại cảnh ${execSceneNum}...`, 'info');
                         setAgentState('director', 'speaking', `Tạo lại cảnh ${execSceneNum}...`, 'Regenerating');
 
+                        const oldImage = sceneToExec.generatedImage;
+
                         updateStateAndRecord(s => ({
                             ...s,
                             scenes: s.scenes.map(scene =>
@@ -558,7 +567,11 @@ OUTPUT FORMAT: JSON only
                             )
                         }));
 
-                        await handleGenerateAllImages([sceneToExec.id]);
+                        // Regenerate using Old Image as DNA Reference
+                        const refMap = oldImage ? { [sceneToExec.id]: oldImage } : undefined;
+                        if (oldImage) addProductionLog('director', 'Đang giữ lại Visual DNA từ ảnh cũ...', 'info');
+
+                        await handleGenerateAllImages([sceneToExec.id], refMap);
                         setAgentState('director', 'success', `Đã hoàn thành cảnh ${execSceneNum}!`);
                     } else {
                         setAgentState('director', 'error', `Không tìm thấy cảnh ${execSceneNum}.`);
