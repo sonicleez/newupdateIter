@@ -149,14 +149,15 @@ const ThinkingAgents: React.FC<ThinkingAgentsProps> = ({ agents }) => {
             >
                 {/* Thought/Message Bubble */}
                 {!isMinimized && agent.message && (
-                    <div className={`mb-4 max-w-[200px] p-4 rounded-2xl backdrop-blur-2xl border ${side === 'left' ? 'rounded-bl-none' : 'rounded-br-none'} transition-all duration-500 shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative ${agent.status === 'error' ? 'bg-red-900/40 border-red-500/40 text-red-200' :
-                        agent.status === 'success' ? 'bg-green-900/40 border-green-500/40 text-green-200' :
-                            'bg-gray-900/80 border-white/10 text-white'
+                    <div className={`mb-4 max-w-[320px] w-fit p-4 rounded-2xl backdrop-blur-3xl border ${side === 'left' ? 'rounded-bl-none' : 'rounded-br-none'} transition-all duration-500 shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative ${agent.status === 'error' ? 'bg-red-900/40 border-red-500/40 text-red-100' :
+                        agent.status === 'success' ? 'bg-green-900/40 border-green-500/40 text-green-100' :
+                            'bg-gray-900/85 border-white/20 text-white'
                         }`}>
-                        <div className="flex items-start gap-2">
-                            <MessageSquare size={12} className="mt-1 opacity-50 shrink-0" />
-                            <p className="text-[11px] font-bold leading-relaxed tracking-tight">{agent.message}</p>
+                        <div className="flex items-start gap-2.5">
+                            <MessageSquare size={13} className="mt-1 opacity-60 shrink-0" />
+                            <p className="text-[12px] font-medium leading-normal tracking-tight whitespace-pre-wrap break-words">{agent.message}</p>
                         </div>
+
 
                         {/* Thinking Dots */}
                         {agent.status === 'thinking' && (
