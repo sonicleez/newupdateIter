@@ -78,10 +78,47 @@ const App: React.FC = () => {
         }));
     }, [updateStateAndRecord]);
 
-    // UI State
     const [zoom, setZoom] = useState(1);
     const [isProfileModalOpen, setProfileModalOpen] = useState(false);
+
+    // --- AI Agent Helper ---
+    const setAgentState = useCallback((agent: 'director' | 'dop', status: any, message?: string) => {
+        updateStateAndRecord(s => ({
+            ...s,
+            agents: {
+                ...s.agents!,
+                [agent]: { status, message, lastAction: Date.now() }
+            }
+        }));
+    }, [updateStateAndRecord]);
+
+    // Auto-dismissal for success messages
+    useEffect(() => {
+        const agents = state.agents;
+        if (!agents) return;
+
+        const timeout = setTimeout(() => {
+            let changed = false;
+            const newAgents = { ...agents };
+
+            ['director', 'dop'].forEach((key) => {
+                const agent = (agents as any)[key];
+                if (agent.status === 'success' && Date.now() - agent.lastAction > 5000) {
+                    newAgents[key as 'director' | 'dop'] = { ...agent, status: 'idle', message: '' };
+                    changed = true;
+                }
+            });
+
+            if (changed) {
+                updateStateAndRecord(s => ({ ...s, agents: newAgents }));
+            }
+        }, 1000);
+
+        return () => clearTimeout(timeout);
+    }, [state.agents, updateStateAndRecord]);
+
     const [isScriptModalOpen, setScriptModalOpen] = useState(false);
+
     const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null);
     const [editingProductId, setEditingProductId] = useState<string | null>(null);
     const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
@@ -111,13 +148,14 @@ const App: React.FC = () => {
 
     const mainContentRef = useRef<HTMLDivElement>(null);
 
-    // Functional Hooks
     const {
         isScriptGenerating,
         handleGenerateScript,
         handleRegenerateGroup,
         handleSmartMapAssets
-    } = useScriptGeneration(state, updateStateAndRecord, userApiKey, setProfileModalOpen);
+    } = useScriptGeneration(state, updateStateAndRecord, userApiKey, setProfileModalOpen, setAgentState);
+
+
 
     const {
         addCharacter,
@@ -150,7 +188,8 @@ const App: React.FC = () => {
         handleScriptUpload,
         triggerFileUpload,
         applyGeneratedScript
-    } = useSceneLogic(state, updateStateAndRecord);
+    } = useSceneLogic(state, updateStateAndRecord, setAgentState);
+
 
     const {
         analyzeRaccord,
@@ -174,13 +213,15 @@ const App: React.FC = () => {
         userApiKey,
         setProfileModalOpen,
         isContinuityMode,
-        session?.user.id,
+        setAgentState,
+        session?.user?.id,
         isOutfitLockMode,
         addToGallery,
         isDOPEnabled,
         validateRaccordWithVision,
         makeRetryDecision
     );
+
 
     const {
         isVeoGenerating,

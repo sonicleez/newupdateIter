@@ -4,8 +4,10 @@ import { generateId } from '../utils/helpers';
 
 export function useSceneLogic(
     state: ProjectState,
-    updateStateAndRecord: (updater: (prevState: ProjectState) => ProjectState) => void
+    updateStateAndRecord: (updater: (prevState: ProjectState) => ProjectState) => void,
+    setAgentState: (agent: 'director' | 'dop', status: any, message?: string) => void
 ) {
+
     const addScene = useCallback(() => {
         const defaultCharacter = state.characters.find(c => c.isDefault);
         const lastScene = state.scenes[state.scenes.length - 1];
@@ -179,8 +181,9 @@ export function useSceneLogic(
                     });
 
                 updateStateAndRecord(s => ({ ...s, scenes: newScenes }));
-                alert(`Đã tải lên thành công ${newScenes.length} phân cảnh.`);
+                setAgentState('dop', 'success', `Đã nhập thành công ${newScenes.length} phân cảnh từ Excel.`);
             } catch (error) {
+
                 console.error("Lỗi khi xử lý file Excel:", error);
                 alert("Đã xảy ra lỗi khi đọc file Excel. Vui lòng kiểm tra định dạng file.");
             }
@@ -248,7 +251,9 @@ export function useSceneLogic(
                 }
             };
         });
+        setAgentState('dop', 'success', `Đã trải kịch bản ra timeline với ${scenes.length} phân cảnh.`);
     }, [updateStateAndRecord]);
+
 
     return {
         addScene,

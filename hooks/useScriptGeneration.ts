@@ -9,8 +9,10 @@ export function useScriptGeneration(
     state: ProjectState,
     updateStateAndRecord: (updater: (prevState: ProjectState) => ProjectState) => void,
     userApiKey: string | null,
-    setApiKeyModalOpen: (open: boolean) => void
+    setApiKeyModalOpen: (open: boolean) => void,
+    setAgentState: (agent: 'director' | 'dop', status: any, message?: string) => void
 ) {
+
     const [isScriptGenerating, setIsScriptGenerating] = useState(false);
 
     const handleGenerateScript = useCallback(async (idea: string, count: number, selectedCharacterIds: string[], selectedProductIds: string[], director?: DirectorPreset) => {
@@ -23,6 +25,8 @@ export function useScriptGeneration(
         }
 
         setIsScriptGenerating(true);
+        setAgentState('dop', 'thinking', 'Đang phân tích ý tưởng và xây dựng kịch bản chi tiết...');
+
 
         try {
             const activePreset = getPresetById(state.activeScriptPreset, state.customScriptPresets);
@@ -125,7 +129,10 @@ export function useScriptGeneration(
             const rawText = response.text || '{}';
             const jsonResponse = JSON.parse(rawText);
 
+            setAgentState('dop', 'success', `Kịch bản với ${jsonResponse.scenes.length} phân cảnh đã sẵn sàng!`);
+
             return {
+
                 globalStoryContext: jsonResponse.global_story_context || '',
                 detailedStory: jsonResponse.detailed_story || '',
                 groups: jsonResponse.scene_groups || [],
@@ -150,6 +157,8 @@ export function useScriptGeneration(
         }
 
         setIsScriptGenerating(true);
+        setAgentState('dop', 'thinking', 'Đang tái cấu trúc nhóm phân cảnh...');
+
 
         try {
             const activePreset = getPresetById(state.activeScriptPreset, state.customScriptPresets);
@@ -192,7 +201,9 @@ export function useScriptGeneration(
             const rawText = response.text || '{}';
             const jsonResponse = JSON.parse(rawText);
 
+            setAgentState('dop', 'success', 'Cấu trúc nhóm phân cảnh đã được cập nhật.');
             return jsonResponse.scenes || [];
+
         } catch (error) {
             console.error("Group regeneration failed:", error);
             alert("Tái tạo nhóm kịch bản thất bại.");

@@ -58,6 +58,7 @@ export function useImageGeneration(
     userApiKey: string | null,
     setApiKeyModalOpen: (open: boolean) => void,
     isContinuityMode: boolean,
+    setAgentState: (agent: 'director' | 'dop', status: AgentStatus, message?: string) => void,
     userId?: string,
     isOutfitLockMode?: boolean,
     addToGallery?: (image: string, type: string, prompt?: string, sourceId?: string) => void,
@@ -65,20 +66,13 @@ export function useImageGeneration(
     validateRaccordWithVision?: (currentImage: string, prevImage: string, currentScene: Scene, prevScene: Scene, apiKey: string) => Promise<{ isValid: boolean; errors: { type: string; description: string }[]; correctionPrompt?: string }>,
     makeRetryDecision?: (failedImage: string, referenceImage: string, originalPrompt: string, errors: { type: string; description: string }[], apiKey: string) => Promise<{ action: 'retry' | 'skip' | 'try_once'; reason: string; enhancedPrompt?: string; confidence: number }>
 ) {
+
+
     const [isBatchGenerating, setIsBatchGenerating] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
     const stopRef = useRef(false);
 
-    // AI Agent Status Update Helper
-    const setAgentState = useCallback((agent: 'director' | 'dop', status: AgentStatus, message?: string) => {
-        updateStateAndRecord(s => ({
-            ...s,
-            agents: {
-                ...s.agents!,
-                [agent]: { status, message, lastAction: Date.now() }
-            }
-        }));
-    }, [updateStateAndRecord]);
+
 
 
     const stopBatchGeneration = useCallback(() => {
