@@ -67,8 +67,10 @@ export function useImageGeneration(
         if (apiKey && isHighRes) {
             const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
 
-            const fullParts = [...parts];
-            if (prompt) fullParts.push({ text: prompt });
+            // Build parts in Google's recommended order: TEXT FIRST, then IMAGES
+            const fullParts: any[] = [];
+            if (prompt) fullParts.push({ text: prompt }); // Text FIRST per docs
+            fullParts.push(...parts); // Then all image references
 
             console.log(`[ImageGen] Generating with resolution: ${imageSize}, aspectRatio: ${aspectRatio}`);
 
@@ -751,6 +753,14 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
             // (Base Image moved to start)
             if (continuityInstruction) {
                 finalImagePrompt = `${continuityInstruction.trim()} ${finalImagePrompt}`;
+            }
+
+            // --- REFERENCE LIMIT VALIDATION (Gemini 3 Pro: Max 14 images) ---
+            const imagePartsCount = parts.filter((p: any) => p.inlineData).length;
+            if (imagePartsCount > 14) {
+                console.warn(`[ImageGen] ⚠️ WARNING: ${imagePartsCount} reference images detected. Gemini 3 Pro supports max 14. Performance may degrade.`);
+            } else if (imagePartsCount > 0) {
+                console.log(`[ImageGen] 📷 Using ${imagePartsCount} reference image(s)`);
             }
 
             const { imageUrl, mediaId } = await callAIImageAPI(
