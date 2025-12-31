@@ -156,7 +156,7 @@ export function useScriptGeneration(
             OUTPUT: JSON array of string (the corrected visual_context for each scene), same order.`;
 
             try {
-                const auditedTextsRaw = await callGeminiText(apiKey, auditPrompt, 'System: Expert Film Director.', 'gemini-3-flash-preview', true);
+                const auditedTextsRaw = await callGeminiText(apiKey, auditPrompt, 'System: Expert Film Director.', 'gemini-2.5-flash', true);
 
 
                 const auditedTexts = JSON.parse(auditedTextsRaw);
@@ -175,7 +175,7 @@ export function useScriptGeneration(
                     OUTPUT: Just the comma-separated words.`;
 
                     try {
-                        const kit = await callGeminiText(apiKey, kitPrompt, 'System: Expert Technical Director.', 'gemini-3-flash-preview', false);
+                        const kit = await callGeminiText(apiKey, kitPrompt, 'System: Expert Technical Director.', 'gemini-2.5-flash', false);
 
 
                         updateStateAndRecord(s => ({
@@ -239,7 +239,7 @@ export function useScriptGeneration(
                 sceneCount
             );
 
-            const [modelId, thinkingLevel] = (state.scriptModel || 'gemini-3-flash-preview|high').split('|');
+            const [modelId, thinkingLevel] = (state.scriptModel || 'gemini-2.5-flash|high').split('|');
             const ai = new GoogleGenAI({ apiKey });
 
             const generationConfig: any = {
@@ -312,7 +312,7 @@ export function useScriptGeneration(
             `;
 
             const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
+                model: 'gemini-2.5-flash',
                 contents: mappingPrompt,
                 config: {
                     responseMimeType: "application/json",

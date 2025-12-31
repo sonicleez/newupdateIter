@@ -229,10 +229,10 @@ export const IMAGE_MODELS = [
 export const SCRIPT_MODELS = [
     { value: 'gemini-3-pro-preview|high', label: 'Gemini 3 Pro (High Reasoning)' },
     { value: 'gemini-3-pro-preview|low', label: 'Gemini 3 Pro (Low Latency)' },
-    { value: 'gemini-3-flash-preview|high', label: 'Gemini 3 Flash (Smart)' },
-    { value: 'gemini-3-flash-preview|medium', label: 'Gemini 3 Flash (Balanced)' },
-    { value: 'gemini-3-flash-preview|low', label: 'Gemini 3 Flash (Fast)' },
-    { value: 'gemini-3-flash-preview|minimal', label: 'Gemini 3 Flash (Minimal Thinking)' },
+    { value: 'gemini-2.5-flash|high', label: 'Gemini 3 Flash (Smart)' },
+    { value: 'gemini-2.5-flash|medium', label: 'Gemini 3 Flash (Balanced)' },
+    { value: 'gemini-2.5-flash|low', label: 'Gemini 3 Flash (Fast)' },
+    { value: 'gemini-2.5-flash|minimal', label: 'Gemini 3 Flash (Minimal Thinking)' },
     { value: 'gemini-2.5-flash|none', label: 'Gemini 2.5 Flash (Legacy)' },
 ];
 

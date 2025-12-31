@@ -121,7 +121,7 @@ export function useCharacterLogic(
 
             const analyzePrompt = `Analyze this character's main features. Return JSON: {"name": "Suggest a concise name", "description": "Short Vietnamese description (2-3 sentences) of key physical traits, clothing, and overall vibe. Focus on what makes them unique."}`;
             const analysisRes = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
+                model: 'gemini-2.5-flash',
                 contents: { parts: [{ inlineData: { data, mimeType } }, { text: analyzePrompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -233,7 +233,7 @@ Return JSON:
 
 
             const analysisRes = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
+                model: 'gemini-2.5-flash',
                 contents: { parts: [{ inlineData: { data, mimeType } }, { text: analyzePrompt }] },
                 config: {
                     responseMimeType: "application/json",

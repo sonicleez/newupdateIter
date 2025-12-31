@@ -133,7 +133,7 @@ export const IMAGE_MODELS = [
 export const SCRIPT_MODELS = [
     { value: 'gemini-3-pro-high', label: 'Gemini 3 Pro (High)' },
     { value: 'gemini-3-pro-low', label: 'Gemini 3 Pro (Low)' },
-    { value: 'gemini-3-flash', label: 'Gemini 3 Flash (New)' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 3 Flash (New)' },
     { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Default)' },
 ];
 
@@ -183,7 +183,7 @@ export const createInitialState = (): ProjectState => ({
     projectName: '',
     stylePrompt: 'cinematic-realistic',
     imageModel: 'gemini-3-pro-image-preview',
-    scriptModel: 'gemini-3-flash',
+    scriptModel: 'gemini-2.5-flash',
     aspectRatio: '16:9',
     genyuToken: '',
     resolution: '1K',
