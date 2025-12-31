@@ -170,6 +170,7 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                             </button>
                         )}
 
+                        {/* TEMPORARILY HIDDEN: Video Feature
                         <div className="w-px h-4 bg-gray-800 mx-1"></div>
 
                         <button
@@ -180,6 +181,7 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                             <Wind size={14} />
                             {isVideoGenerating ? '3. Video...' : '3. Video'}
                         </button>
+                        */}
                     </div>
 
                     <div className="h-6 w-px bg-gray-800 mx-1"></div>
