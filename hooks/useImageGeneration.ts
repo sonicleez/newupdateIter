@@ -434,6 +434,17 @@ This applies to EVERY human figure in the scene without ANY exception. If a hand
 
             // --- 5. CONTINUITY & MULTI-IMAGE REFERENCES ---
             const parts: any[] = [];
+
+            // 5.0.0 BASE IMAGE (CANVAS) - MUST BE FIRST FOR EDITING
+            // Placing the base image first tells the model this is the "Subject" to modify.
+            if (baseImage) {
+                const baseImgData = await safeGetImageData(baseImage);
+                if (baseImgData) {
+                    console.log('[ImageGen] 🖼️ Base Image Editing Mode: Injecting as PRIMARY input.');
+                    parts.push({ inlineData: { data: baseImgData.data, mimeType: baseImgData.mimeType } });
+                    parts.push({ text: `[PRIMARY_SOURCE]: The image above is the BASE SCENE. You are EDITING this image. Retain its structure, lighting, and composition unless explicitly asked to change it.` });
+                }
+            }
             let continuityInstruction = '';
             const isPro = currentState.imageModel === 'gemini-3-pro-image-preview';
 
@@ -736,20 +747,7 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 }
             }
 
-            // 5g. EXPLICIT BASE IMAGE (IMG2IMG / EDITING)
-            if (baseImage) {
-                const imgData = await safeGetImageData(baseImage);
-                if (imgData) {
-                    console.log('[ImageGen] Base Image Detected - Running in Edit/Variation Mode');
-                    parts.push({
-                        text: `[SOURCE_IMAGE_FOR_EDITING]:
-1. This is the PRIMARY BASE IMAGE.
-2. ACTION: Reshoot/Edit this shot based on the prompt.
-3. CONSTRAINT: If the prompt asks for camera movement (Zoom/Pan) or detail change, START from this image's composition and subjects. Do not hallucinate a new scene from scratch.`
-                    });
-                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                }
-            }
+            // (Base Image moved to start)
             if (continuityInstruction) {
                 finalImagePrompt = `${continuityInstruction.trim()} ${finalImagePrompt}`;
             }
