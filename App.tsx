@@ -518,17 +518,25 @@ const App: React.FC = () => {
         if (session?.user?.id) {
             const userId = session.user.id;
 
-            // Initial fetch - Check system key first, then user key
+            // Initial fetch - Check assigned key first, then system key, then user key
             const fetchApiKey = async () => {
-                // 1. First, check if user has a system-assigned key
+                // 1. First, check if user has a directly assigned key in profiles
                 const { data: profile, error: profileError } = await supabase
                     .from('profiles')
-                    .select('system_key_id')
+                    .select('assigned_api_key, system_key_id')
                     .eq('id', userId)
                     .maybeSingle();
 
+                // Priority 1: Direct assigned_api_key in profiles
+                if (profile?.assigned_api_key) {
+                    setUserApiKey(profile.assigned_api_key);
+                    localStorage.setItem('geminiApiKey', profile.assigned_api_key);
+                    console.log('[API Key] ✅ Loaded ASSIGNED key (directly in profile)');
+                    return;
+                }
+
+                // Priority 2: System key via system_key_id
                 if (profile?.system_key_id) {
-                    // User has system-assigned key, fetch it
                     const { data: systemKey, error: systemKeyError } = await supabase
                         .from('system_api_keys')
                         .select('encrypted_key')
@@ -539,12 +547,12 @@ const App: React.FC = () => {
                     if (systemKey && !systemKeyError) {
                         setUserApiKey(systemKey.encrypted_key);
                         localStorage.setItem('geminiApiKey', systemKey.encrypted_key);
-                        console.log('[API Key] ✅ Loaded SYSTEM key (admin-assigned)');
-                        return; // Don't check user_api_keys
+                        console.log('[API Key] ✅ Loaded SYSTEM key (from system_api_keys)');
+                        return;
                     }
                 }
 
-                // 2. Fall back to user-provided key
+                // Priority 3: User-provided key in user_api_keys
                 const { data, error } = await supabase
                     .from('user_api_keys')
                     .select('encrypted_key')
