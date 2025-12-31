@@ -76,6 +76,7 @@ export function useImageGeneration(
                 model: model,
                 contents: [{ parts: fullParts }],
                 config: {
+                    responseModalities: ["IMAGE"], // Enforce Image output
                     imageConfig: {
                         aspectRatio: aspectRatio || "16:9",
                         imageSize: imageSize || '1K' // Pass resolution to API
@@ -442,7 +443,7 @@ This applies to EVERY human figure in the scene without ANY exception. If a hand
                 if (baseImgData) {
                     console.log('[ImageGen] 🖼️ Base Image Editing Mode: Injecting as PRIMARY input.');
                     parts.push({ inlineData: { data: baseImgData.data, mimeType: baseImgData.mimeType } });
-                    parts.push({ text: `[PRIMARY_SOURCE]: The image above is the BASE SCENE. You are EDITING this image. Retain its structure, lighting, and composition unless explicitly asked to change it.` });
+                    parts.push({ text: `Using the provided image as the base scene, please EDIT it according to the instructions. Retain the original composition, lighting, and subject pose unless explicitly asked to change them.` });
                 }
             }
             let continuityInstruction = '';
