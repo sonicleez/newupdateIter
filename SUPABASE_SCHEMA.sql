@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMP WITH TIME ZONE;
 
--- 2. Create USER_API_KEYS table
+-- 2. Create USER_API_KEYS table (User-provided keys)
 CREATE TABLE public.user_api_keys (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
@@ -20,6 +20,23 @@ CREATE TABLE public.user_api_keys (
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- 2.1 Create SYSTEM_API_KEYS table (Admin-managed keys)
+CREATE TABLE public.system_api_keys (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  key_name TEXT NOT NULL,              -- Name for identification (e.g., "main_key", "backup_key")
+  encrypted_key TEXT NOT NULL,          -- Encrypted API key
+  provider TEXT DEFAULT 'gemini',       -- gemini, openai, etc.
+  is_active BOOLEAN DEFAULT true,
+  usage_count INTEGER DEFAULT 0,        -- Track usage
+  daily_limit INTEGER DEFAULT 1000,     -- Daily limit per key
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 2.2 Add system_key_id to profiles for admin-assigned keys
+ALTER TABLE public.profiles 
+ADD COLUMN IF NOT EXISTS system_key_id UUID REFERENCES public.system_api_keys(id);
+
 
 -- 3. Create PROJECTS table (For cloud sync)
 CREATE TABLE public.projects (
@@ -34,6 +51,7 @@ CREATE TABLE public.projects (
 -- 4. Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 
 -- 5. Policies: Users can only see/edit their own data
@@ -42,6 +60,12 @@ CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING
 
 CREATE POLICY "Users can manage own API keys" ON public.user_api_keys 
   FOR ALL USING (auth.uid() = user_id);
+
+-- System API Keys: Users can only SELECT keys assigned to them
+CREATE POLICY "Users can view assigned system key" ON public.system_api_keys 
+  FOR SELECT USING (
+    id IN (SELECT system_key_id FROM public.profiles WHERE id = auth.uid())
+  );
 
 CREATE POLICY "Users can manage own projects" ON public.projects 
   FOR ALL USING (auth.uid() = user_id);

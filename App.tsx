@@ -518,8 +518,33 @@ const App: React.FC = () => {
         if (session?.user?.id) {
             const userId = session.user.id;
 
-            // Initial fetch
+            // Initial fetch - Check system key first, then user key
             const fetchApiKey = async () => {
+                // 1. First, check if user has a system-assigned key
+                const { data: profile, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('system_key_id')
+                    .eq('id', userId)
+                    .maybeSingle();
+
+                if (profile?.system_key_id) {
+                    // User has system-assigned key, fetch it
+                    const { data: systemKey, error: systemKeyError } = await supabase
+                        .from('system_api_keys')
+                        .select('encrypted_key')
+                        .eq('id', profile.system_key_id)
+                        .eq('is_active', true)
+                        .maybeSingle();
+
+                    if (systemKey && !systemKeyError) {
+                        setUserApiKey(systemKey.encrypted_key);
+                        localStorage.setItem('geminiApiKey', systemKey.encrypted_key);
+                        console.log('[API Key] ✅ Loaded SYSTEM key (admin-assigned)');
+                        return; // Don't check user_api_keys
+                    }
+                }
+
+                // 2. Fall back to user-provided key
                 const { data, error } = await supabase
                     .from('user_api_keys')
                     .select('encrypted_key')
@@ -532,7 +557,7 @@ const App: React.FC = () => {
                 if (data && !error) {
                     setUserApiKey(data.encrypted_key);
                     localStorage.setItem('geminiApiKey', data.encrypted_key);
-                    console.log('[API Key] ✅ Loaded from Supabase');
+                    console.log('[API Key] ✅ Loaded from user_api_keys');
                 }
             };
             fetchApiKey();
