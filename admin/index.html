@@ -450,7 +450,7 @@
         let supabase = null;
 
         // Connect to Supabase
-        function connectSupabase() {
+        async function connectSupabase() {
             const url = document.getElementById('supabaseUrl').value.trim();
             const key = document.getElementById('serviceKey').value.trim();
 
@@ -460,7 +460,20 @@
             }
 
             try {
+                // Create client
                 supabase = window.supabase.createClient(url, key);
+
+                // Test connection by querying profiles table
+                showToast('Đang kết nối...', 'success');
+
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .limit(1);
+
+                if (error) {
+                    throw new Error(error.message);
+                }
 
                 // Save to localStorage for convenience
                 localStorage.setItem('admin_supabase_url', url);
@@ -472,7 +485,9 @@
                 loadData();
                 showToast('Kết nối thành công!', 'success');
             } catch (e) {
+                console.error('Connection error:', e);
                 showToast('Lỗi kết nối: ' + e.message, 'error');
+                supabase = null;
             }
         }
 
