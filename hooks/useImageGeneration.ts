@@ -10,7 +10,7 @@ import { DIRECTOR_PRESETS, DirectorCategory } from '../constants/directors';
 import { getPresetById } from '../utils/scriptPresets';
 import { uploadImageToSupabase, syncUserStatsToCloud } from '../utils/storageUtils';
 import { safeGetImageData, callGeminiVisionReasoning } from '../utils/geminiUtils';
-import { buildStoryboardPrompt } from '../utils/storyboardPrompt';
+import { buildStoryboardPromptWithRefs } from '../utils/storyboardPrompt';
 import { splitStoryboardImage } from '../utils/imageSplitter';
 
 // Helper function to clean VEO-specific tokens from prompt for image generation
@@ -1073,14 +1073,20 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                         });
 
                         try {
-                            // Build storyboard prompt
-                            const storyboardPrompt = buildStoryboardPrompt(batch);
+                            // Build storyboard prompt WITH character/style references
+                            const { parts: storyboardParts } = await buildStoryboardPromptWithRefs(
+                                batch,
+                                stateRef.current,
+                                safeGetImageData
+                            );
+
+                            console.log(`[BatchGen] Storyboard prompt built with ${storyboardParts.length} parts (text + ${storyboardParts.filter(p => (p as any).inlineData).length} images)`);
 
                             // Generate using Gemini (4-panel storyboard)
                             const ai = new GoogleGenAI({ apiKey: userApiKey! });
                             const response = await ai.models.generateContent({
                                 model: state.imageModel || 'gemini-2.0-flash-exp-image-generation',
-                                contents: storyboardPrompt,
+                                contents: storyboardParts,
                                 config: {
                                     responseModalities: ['TEXT', 'IMAGE'],
                                     temperature: 0.7,
