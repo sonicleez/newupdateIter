@@ -392,11 +392,26 @@ This applies to EVERY human figure in the scene without ANY exception. If a hand
                 const activeDirector = [...allDirectors, ...customDirectors].find(d => d.id === currentState.activeDirectorId);
 
                 if (activeDirector) {
-                    const cameraStyle = activeDirector.signatureCameraStyle
-                        ? `SIGNATURE CAMERA: ${activeDirector.signatureCameraStyle}.`
-                        : '';
-                    directorDNAPrompt = `[DIRECTORIAL VISION - ${activeDirector.name.toUpperCase()}]: MANDATORY CINEMATIC STYLE. Visual DNA: ${activeDirector.dna}. ${cameraStyle} ${activeDirector.description}. ALL visual elements and camera work must reflect this director's signature style.`;
-                    console.log('[ImageGen] 🎬 Director DNA injected:', activeDirector.name, '| DNA:', activeDirector.dna, '| Camera:', activeDirector.signatureCameraStyle);
+                    // Auto-detect Camera Only mode:
+                    // 1. If explicitly enabled via directorCameraOnlyMode
+                    // 2. OR if user has custom Meta Tokens (they want their own color grading)
+                    const hasCustomMetaTokens = currentState.customMetaTokens && currentState.customMetaTokens.trim().length > 0;
+                    const useCameraOnlyMode = currentState.directorCameraOnlyMode || hasCustomMetaTokens;
+
+                    if (useCameraOnlyMode) {
+                        // Camera Only Mode: Only inject camera techniques, skip color DNA
+                        if (activeDirector.signatureCameraStyle) {
+                            directorDNAPrompt = `[DIRECTOR CAMERA - ${activeDirector.name.toUpperCase()}]: Apply this director's CAMERA TECHNIQUES and FRAMING STYLE: ${activeDirector.signatureCameraStyle}. COLOR GRADING follows user's Meta Tokens/Style settings, NOT this director's color palette.`;
+                            console.log('[ImageGen] 🎬 Director CAMERA ONLY injected (auto-detect: customMetaTokens=' + hasCustomMetaTokens + '):', activeDirector.name, '| Camera:', activeDirector.signatureCameraStyle);
+                        }
+                    } else {
+                        // Full DNA Mode (default): Inject both color and camera
+                        const cameraStyle = activeDirector.signatureCameraStyle
+                            ? `SIGNATURE CAMERA: ${activeDirector.signatureCameraStyle}.`
+                            : '';
+                        directorDNAPrompt = `[DIRECTORIAL VISION - ${activeDirector.name.toUpperCase()}]: MANDATORY CINEMATIC STYLE. Visual DNA: ${activeDirector.dna}. ${cameraStyle} ${activeDirector.description}. ALL visual elements and camera work must reflect this director's signature style.`;
+                        console.log('[ImageGen] 🎬 Director FULL DNA injected:', activeDirector.name, '| DNA:', activeDirector.dna, '| Camera:', activeDirector.signatureCameraStyle);
+                    }
                 }
             }
 

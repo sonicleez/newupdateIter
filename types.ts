@@ -246,6 +246,7 @@ export interface ProjectState {
 
   // Director System (NEW)
   activeDirectorId?: string;
+  directorCameraOnlyMode?: boolean; // When true, Director only injects camera style, not color grading
   customDirectors?: DirectorPreset[];
 
   // Character Style System (NEW - Extensible)
