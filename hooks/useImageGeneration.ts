@@ -1034,15 +1034,19 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
         stopRef.current = false;
 
         console.log('[BatchGen] Starting batch generation...');
+        console.log('[BatchGen] 🔍 DEBUG: state.batchGenerationMode =', state.batchGenerationMode);
+        console.log('[BatchGen] 🔍 DEBUG: stateRef.current.batchGenerationMode =', stateRef.current.batchGenerationMode);
         const batchStartTime = Date.now();
         setAgentState('director', 'thinking', 'Đang lập kế hoạch sản xuất cho các phân cảnh...');
         setAgentState('dop', 'idle', '');
 
+        // Use stateRef for latest value
+        const currentBatchMode = stateRef.current.batchGenerationMode;
 
         try {
             // ========== BATCH COHERENT MODE ==========
             // Generate 4 scenes as a single storyboard grid, then split
-            if (state.batchGenerationMode === 'coherent') {
+            if (currentBatchMode === 'coherent') {
                 console.log('[BatchGen] 🎬 COHERENT MODE: Generating scenes as storyboard grids');
                 setAgentState('director', 'speaking', 'Chế độ Storyboard: Đang tạo ảnh theo nhóm 4...');
 
