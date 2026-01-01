@@ -93,13 +93,16 @@ INTENTS:
 10. INSERT_SCENE: Insert scene at specific position (e.g. "Chèn cảnh sau cảnh 5").
 11. CLEAR_ALL_IMAGES: Clear all generated images (e.g. "Xóa hết ảnh", "Clear ảnh").
 12. UPDATE_SCENE_PROMPT: Edit a specific scene's prompt (e.g. "Sửa prompt cảnh 3 thành...").
-13. EXECUTE_PENDING: User confirms to execute the previously discussed action (e.g. "thực thi", "bắt đầu", "làm đi", "OK", "xác nhận"). IMPORTANT: Check PENDING ACTION and RECENT CONVERSATION to determine what to execute.
+13. EXECUTE_PENDING: User confirms to execute the SINGLE previously discussed action (e.g. "thực thi", "OK" after discussing a specific scene change). ONLY use if there is a PENDING ACTION.
 14. COMPOSITE_OBJECT_TRANSFER: Take an object from one scene and add it to another scene (e.g. "tham chiếu cảnh 2, thêm chiếc cặp vào cảnh 1", "lấy cái túi từ cảnh 3 đặt lên bàn ở cảnh 1"). The TARGET scene (where object is added) should be EDITED, not regenerated. The SOURCE scene provides the object reference only.
+15. GENERATE_ALL: Start batch generation for ALL ungenerated scenes (e.g. "bắt đầu tạo ảnh", "tạo ảnh hàng loạt", "generate all", "chạy production", "bắt đầu sản xuất", "tạo tất cả ảnh"). Use this when user wants to generate images for multiple/all scenes without specifying which ones.
+16. GENERATE_SCENE: Generate image for a SPECIFIC scene (e.g. "tạo ảnh cảnh 5", "generate scene 10", "tạo ảnh cho cảnh này"). Use when user specifies exactly which scene to generate.
 
 IMPORTANT RULES:
-- If user says "thực thi", "bắt đầu", "làm đi" - check RECENT CONVERSATION to understand WHAT to execute.
+- If user says "bắt đầu tạo ảnh", "tạo ảnh", "chạy" WITHOUT specifying a scene number → use GENERATE_ALL
+- If user says "tạo ảnh cảnh 5", "generate scene 10" → use GENERATE_SCENE with sceneNumber
+- If user says "thực thi", "OK" AND there is a PENDING ACTION → use EXECUTE_PENDING
 - For SYNERGY_DIRECTIVE about camera angles/shots: store the scene number and directive for later execution.
-- For EXECUTE_PENDING: Look at conversation history to determine which specific scene to regenerate.
 
 OUTPUT FORMAT: JSON only
 {
@@ -714,6 +717,43 @@ INSTRUCTION: Using the provided target image as the base, add ${objectDesc} (vis
                 }
                 break;
 
+
+            case 'GENERATE_ALL':
+                // Batch generation for all ungenerated scenes
+                const ungeneratedScenes = state.scenes.filter(s => !s.generatedImage && s.contextDescription);
+
+                if (ungeneratedScenes.length === 0) {
+                    addProductionLog('director', 'Tất cả các cảnh đã có ảnh hoặc chưa có mô tả. Không có gì để tạo.', 'info');
+                    setAgentState('director', 'success', 'Không có cảnh nào cần tạo ảnh.');
+                } else {
+                    addProductionLog('director', response || `Bắt đầu sản xuất ${ungeneratedScenes.length} phân cảnh...`, 'info');
+                    setAgentState('director', 'speaking', `Đang khởi động production cho ${ungeneratedScenes.length} cảnh...`, 'Batch Generation');
+
+                    // Start batch generation for all ungenerated scenes
+                    await handleGenerateAllImages();
+                }
+                break;
+
+            case 'GENERATE_SCENE':
+                // Single scene generation
+                const targetSceneNumber = entities.sceneNumber;
+
+                if (targetSceneNumber) {
+                    const sceneToGen = state.scenes.find(s => parseInt(s.sceneNumber) === targetSceneNumber);
+
+                    if (sceneToGen) {
+                        addProductionLog('director', response || `Đang tạo ảnh cho cảnh ${targetSceneNumber}...`, 'info');
+                        setAgentState('director', 'speaking', `Đang tạo ảnh cảnh ${targetSceneNumber}...`, 'Single Generation');
+
+                        await handleGenerateAllImages([sceneToGen.id]);
+                        setAgentState('director', 'success', `Đã tạo xong ảnh cảnh ${targetSceneNumber}!`);
+                    } else {
+                        setAgentState('director', 'error', `Không tìm thấy cảnh ${targetSceneNumber}.`);
+                    }
+                } else {
+                    setAgentState('director', 'error', 'Vui lòng chỉ định số cảnh cần tạo ảnh.');
+                }
+                break;
 
             default:
                 // Only log via addProductionLog (setAgentState will NOT log if we pass the same message that's already in lastLogRef)
