@@ -103,7 +103,15 @@ export function useScriptAnalysis(userApiKey: string | null) {
                 'minimal': 512,
                 'none': undefined
             };
-            const thinkingBudget = thinkingBudgets[thinkingLevel] ?? undefined;
+
+            // Only apply thinking config to models that support it
+            // gemini-2.5-flash does NOT support thinkingConfig
+            const supportsThinking = modelName.includes('2.5-pro') || modelName.includes('thinking');
+            const thinkingBudget = supportsThinking ? (thinkingBudgets[thinkingLevel] ?? undefined) : undefined;
+
+            if (!supportsThinking && thinkingLevel !== 'none') {
+                console.warn(`[ScriptAnalysis] Model ${modelName} does not support thinking mode. Ignoring thinking level: ${thinkingLevel}`);
+            }
 
             // Context Injection
             let contextInstructions = "";
