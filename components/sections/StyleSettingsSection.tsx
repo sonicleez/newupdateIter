@@ -39,6 +39,8 @@ interface StyleSettingsSectionProps {
     onOpenManualScript?: () => void; // NEW: Open Manual Script Import modal
     generationConfig?: import('../../types').GenerationConfig;
     onGenerationConfigChange?: (config: import('../../types').GenerationConfig) => void;
+    batchGenerationMode?: 'sequential' | 'coherent';
+    onBatchGenerationModeChange?: (mode: 'sequential' | 'coherent') => void;
 }
 
 
@@ -79,7 +81,9 @@ export const StyleSettingsSection: React.FC<StyleSettingsSectionProps> = ({
     toggleOutfitLockMode,
     onOpenManualScript,
     generationConfig,
-    onGenerationConfigChange
+    onGenerationConfigChange,
+    batchGenerationMode,
+    onBatchGenerationModeChange
 }) => {
 
 
@@ -404,6 +408,23 @@ export const StyleSettingsSection: React.FC<StyleSettingsSectionProps> = ({
                                 <option value={4}>4 (Parallel)</option>
                             </select>
                         </div>
+                        {/* Batch Generation Mode */}
+                        {onBatchGenerationModeChange && (
+                            <div className="p-3 bg-black/20 rounded-xl border border-gray-700/30">
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Batch Mode</label>
+                                <select
+                                    value={batchGenerationMode || 'sequential'}
+                                    onChange={(e) => onBatchGenerationModeChange(e.target.value as 'sequential' | 'coherent')}
+                                    className="w-full bg-gray-950 text-brand-cream px-2 py-1 rounded text-xs border border-gray-800 focus:border-brand-orange outline-none appearance-none"
+                                >
+                                    <option value="sequential">Sequential (1 by 1)</option>
+                                    <option value="coherent">🎬 Storyboard (4 at once)</option>
+                                </select>
+                                {batchGenerationMode === 'coherent' && (
+                                    <p className="text-[9px] text-yellow-400/70 mt-1">Tạo 4 cảnh cùng lúc, consistency cao hơn</p>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

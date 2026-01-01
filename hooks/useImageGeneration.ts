@@ -10,6 +10,8 @@ import { DIRECTOR_PRESETS, DirectorCategory } from '../constants/directors';
 import { getPresetById } from '../utils/scriptPresets';
 import { uploadImageToSupabase, syncUserStatsToCloud } from '../utils/storageUtils';
 import { safeGetImageData, callGeminiVisionReasoning } from '../utils/geminiUtils';
+import { buildStoryboardPrompt } from '../utils/storyboardPrompt';
+import { splitStoryboardImage } from '../utils/imageSplitter';
 
 // Helper function to clean VEO-specific tokens from prompt for image generation
 const cleanPromptForImageGen = (prompt: string): string => {
@@ -1038,265 +1040,373 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
 
 
         try {
-            // KEY FRAME STRATEGY: Generate Key Frames FIRST within each group
-            // This ensures hero shots are available as references for other scenes
-            const sortedScenes = [...scenesToGenerate].sort((a, b) => {
-                // Key frames first
-                if (a.isKeyFrame && !b.isKeyFrame) return -1;
-                if (!a.isKeyFrame && b.isKeyFrame) return 1;
-                // Then by scene number
-                return parseInt(a.sceneNumber) - parseInt(b.sceneNumber);
-            });
+            // ========== BATCH COHERENT MODE ==========
+            // Generate 4 scenes as a single storyboard grid, then split
+            if (state.batchGenerationMode === 'coherent') {
+                console.log('[BatchGen] 🎬 COHERENT MODE: Generating scenes as storyboard grids');
+                setAgentState('director', 'speaking', 'Chế độ Storyboard: Đang tạo ảnh theo nhóm 4...');
 
-            const keyFrameCount = sortedScenes.filter(s => s.isKeyFrame).length;
-            if (keyFrameCount > 0) {
-                console.log(`[BatchGen] ⭐ Key Frame Strategy: ${keyFrameCount} key frames will be generated first`);
-            }
+                // Group scenes by SceneGroup for consistency
+                const groupedScenes: Record<string, Scene[]> = {};
+                scenesToGenerate.forEach(scene => {
+                    const groupId = scene.groupId || 'ungrouped';
+                    if (!groupedScenes[groupId]) groupedScenes[groupId] = [];
+                    groupedScenes[groupId].push(scene);
+                });
 
-            for (let i = 0; i < sortedScenes.length; i++) {
-                const scene = sortedScenes[i];
-                if (stopRef.current) break;
+                for (const [groupId, scenes] of Object.entries(groupedScenes)) {
+                    // Process in chunks of 4
+                    for (let i = 0; i < scenes.length; i += 4) {
+                        if (stopRef.current) break;
 
-                setAgentState('director', 'speaking', `Đang chỉ đạo Phân cảnh ${scene.sceneNumber}...`);
+                        const batch = scenes.slice(i, i + 4);
+                        const batchNumbers = batch.map(s => s.sceneNumber).join(', ');
+                        console.log(`[BatchGen] Generating storyboard for scenes: ${batchNumbers}`);
+                        setAgentState('director', 'thinking', `Đang tạo storyboard cho cảnh ${batchNumbers}...`);
 
-                // STORYBOARD MODE: Find cascade reference from same group for visual consistency
-                const cascadeRef = findCascadeReference(scene, stateRef.current);
-
-                // Check if this scene has a specific DNA reference image (from Reference Map OR Scene Attributes)
-                // Priority: explicit referenceMap > scene.referenceImage > cascadeReference
-                const dnaReference = (referenceMap && referenceMap[scene.id]) || scene.referenceImage || cascadeRef || undefined;
-
-                // Check if scene ALREADY has an image -> Treat as Base Image for Editing
-                // PRIORITIZE explicitly passed baseImageMap
-                const existingBaseImage = (baseImageMap && baseImageMap[scene.id]) || scene.generatedImage || undefined;
-
-                await performImageGeneration(scene.id, undefined, false, dnaReference, existingBaseImage);
-                setAgentState('director', 'success', `Đã tạo xong ảnh Phân cảnh ${scene.sceneNumber}.`);
-
-
-                // Get the newly generated image
-                const updatedState = stateRef.current;
-                const updatedScene = updatedState.scenes.find(s => s.id === scene.id);
-                const currentImage = updatedScene?.generatedImage;
-
-                // DOP Vision Validation (if enabled and not first scene)
-                if (isDOPEnabled && validateRaccordWithVision && currentImage && userApiKey) {
-                    const currentSceneIndex = updatedState.scenes.findIndex(s => s.id === scene.id);
-                    const prevScene = currentSceneIndex > 0 ? updatedState.scenes[currentSceneIndex - 1] : null;
-
-                    if (prevScene?.generatedImage) {
-                        setAgentState('dop', 'thinking', 'Đang kiểm tra tính nhất quán (Raccord) với cảnh trước...');
-                        console.log('[DOP] Validating raccord between scenes...');
-
-
-                        // [DOP UI FEEDBACK] Show validation in progress
-                        updateStateAndRecord(s => ({
-                            ...s,
-                            scenes: s.scenes.map(sc => sc.id === scene.id ? {
-                                ...sc,
-                                error: '🎬 DOP đang kiểm tra...'
-                            } : sc)
-                        }));
-
-                        let MAX_DOP_RETRIES = 2;
-                        let retryCount = 0;
-                        let lastValidation = await validateRaccordWithVision(
-                            currentImage,
-                            prevScene.generatedImage,
-                            updatedScene!,
-                            prevScene,
-                            userApiKey
-                        );
-
-                        // Filter for critical errors only (character/prop issues warrant regen)
-                        const criticalErrors = lastValidation.errors.filter(e =>
-                            e.type === 'character' || e.type === 'prop'
-                        );
-
-                        // FIX: If validation passed OR no critical errors, clear the checking status immediately
-                        if (lastValidation.isValid || criticalErrors.length === 0) {
+                        // Mark scenes as generating
+                        batch.forEach(scene => {
                             updateStateAndRecord(s => ({
                                 ...s,
-                                scenes: s.scenes.map(sc => sc.id === scene.id ? {
-                                    ...sc,
-                                    error: lastValidation.isValid ? null : `ℹ️ Minor issues (non-critical): ${lastValidation.errors.map(e => e.description).join('; ')}`
-                                } : sc)
+                                scenes: s.scenes.map(sc => sc.id === scene.id ? { ...sc, isGenerating: true } : sc)
                             }));
+                        });
 
-                            if (lastValidation.isValid) {
-                                console.log('[DOP] Raccord validation PASSED - clearing status');
-                                setAgentState('dop', 'success', `Cảnh ${scene.sceneNumber} khớp raccord hoàn hảo!`);
-                            } else {
-                                console.log('[DOP] Only minor issues found - continuing without retry');
-                                setAgentState('dop', 'idle', '');
+                        try {
+                            // Build storyboard prompt
+                            const storyboardPrompt = buildStoryboardPrompt(batch);
+
+                            // Generate using Gemini (4-panel storyboard)
+                            const ai = new GoogleGenAI({ apiKey: userApiKey! });
+                            const response = await ai.models.generateContent({
+                                model: state.imageModel || 'gemini-2.0-flash-exp-image-generation',
+                                contents: storyboardPrompt,
+                                config: {
+                                    responseModalities: ['TEXT', 'IMAGE'],
+                                    temperature: 0.7,
+                                }
+                            });
+
+                            // Extract image from response
+                            let storyboardImage: string | null = null;
+                            if (response.candidates?.[0]?.content?.parts) {
+                                for (const part of response.candidates[0].content.parts) {
+                                    if ((part as any).inlineData?.data) {
+                                        storyboardImage = `data:image/jpeg;base64,${(part as any).inlineData.data}`;
+                                        break;
+                                    }
+                                }
                             }
-                        }
 
-                        // Use Decision Agent if available, otherwise use simple retry logic
-                        if (!lastValidation.isValid && criticalErrors.length > 0) {
-                            console.log(`[DOP] RACCORD ERROR DETECTED:`, criticalErrors);
+                            if (storyboardImage) {
+                                // Split storyboard into individual panels
+                                const panels = await splitStoryboardImage(storyboardImage, batch.length);
+                                console.log(`[BatchGen] Split into ${panels.length} panels`);
 
-                            // Get original prompt for decision agent
-                            const originalPrompt = updatedScene?.contextDescription || '';
+                                // Assign panels to scenes
+                                batch.forEach((scene, idx) => {
+                                    if (panels[idx]) {
+                                        updateStateAndRecord(s => ({
+                                            ...s,
+                                            scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                                ...sc,
+                                                generatedImage: panels[idx],
+                                                isGenerating: false,
+                                                error: null
+                                            } : sc)
+                                        }));
+                                    }
+                                });
 
-                            // Ask Decision Agent if we should retry
-                            let shouldRetry = true;
-                            let enhancedCorrection = lastValidation.correctionPrompt;
-
-                            if (makeRetryDecision && currentImage) {
-                                setAgentState('dop', 'speaking', 'Phát hiện lỗi Raccord! Đang phân tích khả năng sửa đổi...');
-                                console.log('[DOP Agent] Analyzing if retry will succeed...');
-
-
-                                // [DOP UI FEEDBACK] Show decision agent thinking
+                                setAgentState('director', 'success', `Đã tạo xong ${batch.length} cảnh từ storyboard!`);
+                                if (addProductionLog) {
+                                    addProductionLog('director', `Storyboard batch hoàn thành: Cảnh ${batchNumbers}`, 'success');
+                                }
+                            } else {
+                                throw new Error('No image in storyboard response');
+                            }
+                        } catch (batchError) {
+                            console.error('[BatchGen] Storyboard batch failed:', batchError);
+                            // Mark batch as failed
+                            batch.forEach(scene => {
                                 updateStateAndRecord(s => ({
                                     ...s,
                                     scenes: s.scenes.map(sc => sc.id === scene.id ? {
                                         ...sc,
-                                        error: '🧠 DOP Agent đang phân tích lỗi...'
+                                        isGenerating: false,
+                                        error: `Storyboard failed: ${(batchError as Error).message}`
+                                    } : sc)
+                                }));
+                            });
+                        }
+
+                        // Delay between batches
+                        await new Promise(r => setTimeout(r, state.generationConfig?.imageDelay || 500));
+                    }
+                }
+            }
+            // ========== SEQUENTIAL MODE (Default) ==========
+            else {
+                // KEY FRAME STRATEGY: Generate Key Frames FIRST within each group
+                // This ensures hero shots are available as references for other scenes
+                const sortedScenes = [...scenesToGenerate].sort((a, b) => {
+                    // Key frames first
+                    if (a.isKeyFrame && !b.isKeyFrame) return -1;
+                    if (!a.isKeyFrame && b.isKeyFrame) return 1;
+                    // Then by scene number
+                    return parseInt(a.sceneNumber) - parseInt(b.sceneNumber);
+                });
+
+                const keyFrameCount = sortedScenes.filter(s => s.isKeyFrame).length;
+                if (keyFrameCount > 0) {
+                    console.log(`[BatchGen] ⭐ Key Frame Strategy: ${keyFrameCount} key frames will be generated first`);
+                }
+
+                for (let i = 0; i < sortedScenes.length; i++) {
+                    const scene = sortedScenes[i];
+                    if (stopRef.current) break;
+
+                    setAgentState('director', 'speaking', `Đang chỉ đạo Phân cảnh ${scene.sceneNumber}...`);
+
+                    // STORYBOARD MODE: Find cascade reference from same group for visual consistency
+                    const cascadeRef = findCascadeReference(scene, stateRef.current);
+
+                    // Check if this scene has a specific DNA reference image (from Reference Map OR Scene Attributes)
+                    // Priority: explicit referenceMap > scene.referenceImage > cascadeReference
+                    const dnaReference = (referenceMap && referenceMap[scene.id]) || scene.referenceImage || cascadeRef || undefined;
+
+                    // Check if scene ALREADY has an image -> Treat as Base Image for Editing
+                    // PRIORITIZE explicitly passed baseImageMap
+                    const existingBaseImage = (baseImageMap && baseImageMap[scene.id]) || scene.generatedImage || undefined;
+
+                    await performImageGeneration(scene.id, undefined, false, dnaReference, existingBaseImage);
+                    setAgentState('director', 'success', `Đã tạo xong ảnh Phân cảnh ${scene.sceneNumber}.`);
+
+
+                    // Get the newly generated image
+                    const updatedState = stateRef.current;
+                    const updatedScene = updatedState.scenes.find(s => s.id === scene.id);
+                    const currentImage = updatedScene?.generatedImage;
+
+                    // DOP Vision Validation (if enabled and not first scene)
+                    if (isDOPEnabled && validateRaccordWithVision && currentImage && userApiKey) {
+                        const currentSceneIndex = updatedState.scenes.findIndex(s => s.id === scene.id);
+                        const prevScene = currentSceneIndex > 0 ? updatedState.scenes[currentSceneIndex - 1] : null;
+
+                        if (prevScene?.generatedImage) {
+                            setAgentState('dop', 'thinking', 'Đang kiểm tra tính nhất quán (Raccord) với cảnh trước...');
+                            console.log('[DOP] Validating raccord between scenes...');
+
+
+                            // [DOP UI FEEDBACK] Show validation in progress
+                            updateStateAndRecord(s => ({
+                                ...s,
+                                scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                    ...sc,
+                                    error: '🎬 DOP đang kiểm tra...'
+                                } : sc)
+                            }));
+
+                            let MAX_DOP_RETRIES = 2;
+                            let retryCount = 0;
+                            let lastValidation = await validateRaccordWithVision(
+                                currentImage,
+                                prevScene.generatedImage,
+                                updatedScene!,
+                                prevScene,
+                                userApiKey
+                            );
+
+                            // Filter for critical errors only (character/prop issues warrant regen)
+                            const criticalErrors = lastValidation.errors.filter(e =>
+                                e.type === 'character' || e.type === 'prop'
+                            );
+
+                            // FIX: If validation passed OR no critical errors, clear the checking status immediately
+                            if (lastValidation.isValid || criticalErrors.length === 0) {
+                                updateStateAndRecord(s => ({
+                                    ...s,
+                                    scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                        ...sc,
+                                        error: lastValidation.isValid ? null : `ℹ️ Minor issues (non-critical): ${lastValidation.errors.map(e => e.description).join('; ')}`
                                     } : sc)
                                 }));
 
-                                const decision = await makeRetryDecision(
-                                    currentImage,
-                                    prevScene.generatedImage,
-                                    originalPrompt,
-                                    criticalErrors,
-                                    userApiKey
-                                );
+                                if (lastValidation.isValid) {
+                                    console.log('[DOP] Raccord validation PASSED - clearing status');
+                                    setAgentState('dop', 'success', `Cảnh ${scene.sceneNumber} khớp raccord hoàn hảo!`);
+                                } else {
+                                    console.log('[DOP] Only minor issues found - continuing without retry');
+                                    setAgentState('dop', 'idle', '');
+                                }
+                            }
 
-                                console.log('[DOP Agent] Decision:', decision);
+                            // Use Decision Agent if available, otherwise use simple retry logic
+                            if (!lastValidation.isValid && criticalErrors.length > 0) {
+                                console.log(`[DOP] RACCORD ERROR DETECTED:`, criticalErrors);
 
-                                if (decision.action === 'skip') {
-                                    console.log('[DOP Agent] SKIP - errors are unfixable, saving credits');
-                                    shouldRetry = false;
+                                // Get original prompt for decision agent
+                                const originalPrompt = updatedScene?.contextDescription || '';
 
-                                    // FIX: Clear checking status and show clear unfixable message
-                                    const unfixableMsg = decision.reason.includes('face') || decision.reason.includes('identity')
-                                        ? `🚫 UNFIXABLE: Nhân vật khác (AI không thể sửa - cần chọn reference khác hoặc regenerate từ đầu)`
-                                        : `⚠️ DOP Skip: ${decision.reason}`;
+                                // Ask Decision Agent if we should retry
+                                let shouldRetry = true;
+                                let enhancedCorrection = lastValidation.correctionPrompt;
 
+                                if (makeRetryDecision && currentImage) {
+                                    setAgentState('dop', 'speaking', 'Phát hiện lỗi Raccord! Đang phân tích khả năng sửa đổi...');
+                                    console.log('[DOP Agent] Analyzing if retry will succeed...');
+
+
+                                    // [DOP UI FEEDBACK] Show decision agent thinking
                                     updateStateAndRecord(s => ({
                                         ...s,
                                         scenes: s.scenes.map(sc => sc.id === scene.id ? {
                                             ...sc,
-                                            error: unfixableMsg
+                                            error: '🧠 DOP Agent đang phân tích lỗi...'
                                         } : sc)
                                     }));
 
-                                    setAgentState('dop', 'error', 'Lỗi không thể sửa tự động - cần review thủ công');
-                                    if (addProductionLog) {
-                                        addProductionLog('dop', unfixableMsg, 'warning');
-                                    }
-                                } else if (decision.action === 'try_once') {
-                                    MAX_DOP_RETRIES = 1; // Reduce retries for uncertain cases
-                                    if (decision.enhancedPrompt) {
+                                    const decision = await makeRetryDecision(
+                                        currentImage,
+                                        prevScene.generatedImage,
+                                        originalPrompt,
+                                        criticalErrors,
+                                        userApiKey
+                                    );
+
+                                    console.log('[DOP Agent] Decision:', decision);
+
+                                    if (decision.action === 'skip') {
+                                        console.log('[DOP Agent] SKIP - errors are unfixable, saving credits');
+                                        shouldRetry = false;
+
+                                        // FIX: Clear checking status and show clear unfixable message
+                                        const unfixableMsg = decision.reason.includes('face') || decision.reason.includes('identity')
+                                            ? `🚫 UNFIXABLE: Nhân vật khác (AI không thể sửa - cần chọn reference khác hoặc regenerate từ đầu)`
+                                            : `⚠️ DOP Skip: ${decision.reason}`;
+
+                                        updateStateAndRecord(s => ({
+                                            ...s,
+                                            scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                                ...sc,
+                                                error: unfixableMsg
+                                            } : sc)
+                                        }));
+
+                                        setAgentState('dop', 'error', 'Lỗi không thể sửa tự động - cần review thủ công');
+                                        if (addProductionLog) {
+                                            addProductionLog('dop', unfixableMsg, 'warning');
+                                        }
+                                    } else if (decision.action === 'try_once') {
+                                        MAX_DOP_RETRIES = 1; // Reduce retries for uncertain cases
+                                        if (decision.enhancedPrompt) {
+                                            enhancedCorrection = decision.enhancedPrompt;
+                                        }
+                                    } else if (decision.enhancedPrompt) {
                                         enhancedCorrection = decision.enhancedPrompt;
                                     }
-                                } else if (decision.enhancedPrompt) {
-                                    enhancedCorrection = decision.enhancedPrompt;
+                                }
+
+                                // Only retry if Decision Agent approves
+                                while (shouldRetry && !lastValidation.isValid && retryCount < MAX_DOP_RETRIES) {
+                                    // [Fix] Check stop signal inside retry loop
+                                    if (stopRef.current) {
+                                        console.log('[DOP] Batch stopped during retry.');
+                                        break;
+                                    }
+
+                                    console.log(`[DOP] Retrying with enhanced correction (attempt ${retryCount + 1}/${MAX_DOP_RETRIES})`);
+
+                                    // Clear the bad image and regenerate with correction
+                                    updateStateAndRecord(s => ({
+                                        ...s,
+                                        scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                            ...sc,
+                                            generatedImage: null,
+                                            error: `DOP Retry ${retryCount + 1}: ${lastValidation.errors.filter(e => e.type === 'character' || e.type === 'prop').map(e => e.description).join('; ')}`
+                                        } : sc)
+                                    }));
+
+                                    // Wait a bit then regenerate with enhanced correction prompt
+                                    await new Promise(r => setTimeout(r, 500));
+
+                                    console.log('[DOP] Auto-regenerating with correction:', enhancedCorrection);
+                                    await performImageGeneration(scene.id, enhancedCorrection);
+
+                                    // Re-validate
+                                    const reUpdatedState = stateRef.current;
+                                    const reUpdatedScene = reUpdatedState.scenes.find(s => s.id === scene.id);
+                                    const newImage = reUpdatedScene?.generatedImage;
+
+                                    if (newImage) {
+                                        lastValidation = await validateRaccordWithVision(
+                                            newImage,
+                                            prevScene.generatedImage,
+                                            reUpdatedScene!,
+                                            prevScene,
+                                            userApiKey
+                                        );
+
+                                        // [Fix] Re-evaluate critical errors to determine if we should continue retrying
+                                        const currentCriticalErrors = lastValidation.errors.filter(e =>
+                                            e.type === 'character' || e.type === 'prop'
+                                        );
+
+                                        // If no critical errors remain (only minor ones), stop retrying
+                                        if (currentCriticalErrors.length === 0) {
+                                            console.log('[DOP] Critical errors resolved. Stopping retries.');
+                                            break;
+                                        }
+                                    } else {
+                                        // If generation failed (no image), stick with previous validation result or break
+                                        console.warn('[DOP] Retry generation failed to produce image.');
+                                        break;
+                                    }
+
+                                    retryCount++;
                                 }
                             }
 
-                            // Only retry if Decision Agent approves
-                            while (shouldRetry && !lastValidation.isValid && retryCount < MAX_DOP_RETRIES) {
-                                // [Fix] Check stop signal inside retry loop
-                                if (stopRef.current) {
-                                    console.log('[DOP] Batch stopped during retry.');
-                                    break;
+                            if (retryCount >= MAX_DOP_RETRIES && !lastValidation.isValid) {
+                                console.warn('[DOP] Max retries reached. Marking scene for manual review.');
+                                if (addProductionLog) {
+                                    addProductionLog('dop', `CẢNH BÁO: Cảnh ${scene.sceneNumber} gặp lỗi raccord nghiêm trọng (${lastValidation.errors[0]?.description}). Đã cố gắng sửa ${MAX_DOP_RETRIES} lần nhưng không thành công.`, 'warning');
+                                }
+                                // Proactive: Inform Director to update DNA for future scenes
+                                if (lastValidation.errors.some(e => e.type === 'character')) {
+                                    addProductionLog('dop', 'Chỉ thị cho Director: Identity raccord bị trôi. Hãy rà soát lại Visual DNA cho các cảnh sau.', 'directive');
                                 }
 
-                                console.log(`[DOP] Retrying with enhanced correction (attempt ${retryCount + 1}/${MAX_DOP_RETRIES})`);
+                                updateStateAndRecord(s => ({
 
-                                // Clear the bad image and regenerate with correction
+                                    ...s,
+                                    scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                        ...sc,
+                                        error: `⚠️ DOP: Requires manual review (${lastValidation.errors.map(e => e.description).join('; ')})`
+                                    } : sc)
+                                }));
+                            } else if (lastValidation.isValid) {
+                                console.log('[DOP] Raccord validation PASSED');
+                                if (addProductionLog) {
+                                    addProductionLog('dop', `Cảnh ${scene.sceneNumber} khớp raccord hoàn hảo. Tiếp tục sản xuất.`, 'success');
+                                }
+                                // [DOP UI FEEDBACK] Clear status on success
                                 updateStateAndRecord(s => ({
                                     ...s,
                                     scenes: s.scenes.map(sc => sc.id === scene.id ? {
                                         ...sc,
-                                        generatedImage: null,
-                                        error: `DOP Retry ${retryCount + 1}: ${lastValidation.errors.filter(e => e.type === 'character' || e.type === 'prop').map(e => e.description).join('; ')}`
+                                        error: null // Clear the status indicator
                                     } : sc)
                                 }));
-
-                                // Wait a bit then regenerate with enhanced correction prompt
-                                await new Promise(r => setTimeout(r, 500));
-
-                                console.log('[DOP] Auto-regenerating with correction:', enhancedCorrection);
-                                await performImageGeneration(scene.id, enhancedCorrection);
-
-                                // Re-validate
-                                const reUpdatedState = stateRef.current;
-                                const reUpdatedScene = reUpdatedState.scenes.find(s => s.id === scene.id);
-                                const newImage = reUpdatedScene?.generatedImage;
-
-                                if (newImage) {
-                                    lastValidation = await validateRaccordWithVision(
-                                        newImage,
-                                        prevScene.generatedImage,
-                                        reUpdatedScene!,
-                                        prevScene,
-                                        userApiKey
-                                    );
-
-                                    // [Fix] Re-evaluate critical errors to determine if we should continue retrying
-                                    const currentCriticalErrors = lastValidation.errors.filter(e =>
-                                        e.type === 'character' || e.type === 'prop'
-                                    );
-
-                                    // If no critical errors remain (only minor ones), stop retrying
-                                    if (currentCriticalErrors.length === 0) {
-                                        console.log('[DOP] Critical errors resolved. Stopping retries.');
-                                        break;
-                                    }
-                                } else {
-                                    // If generation failed (no image), stick with previous validation result or break
-                                    console.warn('[DOP] Retry generation failed to produce image.');
-                                    break;
-                                }
-
-                                retryCount++;
                             }
+
                         }
-
-                        if (retryCount >= MAX_DOP_RETRIES && !lastValidation.isValid) {
-                            console.warn('[DOP] Max retries reached. Marking scene for manual review.');
-                            if (addProductionLog) {
-                                addProductionLog('dop', `CẢNH BÁO: Cảnh ${scene.sceneNumber} gặp lỗi raccord nghiêm trọng (${lastValidation.errors[0]?.description}). Đã cố gắng sửa ${MAX_DOP_RETRIES} lần nhưng không thành công.`, 'warning');
-                            }
-                            // Proactive: Inform Director to update DNA for future scenes
-                            if (lastValidation.errors.some(e => e.type === 'character')) {
-                                addProductionLog('dop', 'Chỉ thị cho Director: Identity raccord bị trôi. Hãy rà soát lại Visual DNA cho các cảnh sau.', 'directive');
-                            }
-
-                            updateStateAndRecord(s => ({
-
-                                ...s,
-                                scenes: s.scenes.map(sc => sc.id === scene.id ? {
-                                    ...sc,
-                                    error: `⚠️ DOP: Requires manual review (${lastValidation.errors.map(e => e.description).join('; ')})`
-                                } : sc)
-                            }));
-                        } else if (lastValidation.isValid) {
-                            console.log('[DOP] Raccord validation PASSED');
-                            if (addProductionLog) {
-                                addProductionLog('dop', `Cảnh ${scene.sceneNumber} khớp raccord hoàn hảo. Tiếp tục sản xuất.`, 'success');
-                            }
-                            // [DOP UI FEEDBACK] Clear status on success
-                            updateStateAndRecord(s => ({
-                                ...s,
-                                scenes: s.scenes.map(sc => sc.id === scene.id ? {
-                                    ...sc,
-                                    error: null // Clear the status indicator
-                                } : sc)
-                            }));
-                        }
-
                     }
-                }
 
-                const imageDelay = state.generationConfig?.imageDelay || 500;
-                await new Promise(r => setTimeout(r, imageDelay));
-            }
+                    const imageDelay = state.generationConfig?.imageDelay || 500;
+                    await new Promise(r => setTimeout(r, imageDelay));
+                }
+            } // End of sequential mode else block
         } catch (e) {
             console.error('[BatchGen] Generation interrupted:', e);
             setAgentState('director', 'error', 'Có lỗi xảy ra khi tạo ảnh.');

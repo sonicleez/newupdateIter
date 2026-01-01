@@ -250,6 +250,7 @@ export interface ProjectState {
   // Director System (NEW)
   activeDirectorId?: string;
   directorCameraOnlyMode?: boolean; // When true, Director only injects camera style, not color grading
+  batchGenerationMode?: 'sequential' | 'coherent'; // 'coherent' = generate 4 scenes as storyboard grid
   customDirectors?: DirectorPreset[];
 
   // Character Style System (NEW - Extensible)
