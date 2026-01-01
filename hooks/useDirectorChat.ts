@@ -557,11 +557,27 @@ INSTRUCTION: Using the provided target image as the base, add ${objectDesc} (vis
                     if (entities.visualDirective) {
                         setAgentState('director', 'speaking', `Đang tạo cảnh mới: ${entities.visualDirective}...`, 'Generating');
 
-                        // Wait for React state to sync before generating
-                        // Using 400ms which is typically enough for React to flush updates
-                        const startWait = Date.now();
-                        setTimeout(() => {
-                            console.log(`[Director] State sync wait: ${Date.now() - startWait}ms, starting generation for scene ${newId}`);
+                        // Wait for React state to sync using polling instead of fixed timeout
+                        // This ensures the scene exists before we try to generate
+                        const waitForScene = async (sceneId: string, maxWait = 2000): Promise<boolean> => {
+                            const startWait = Date.now();
+                            while (Date.now() - startWait < maxWait) {
+                                const scenes = state.scenes;
+                                const found = scenes.find(s => s.id === sceneId);
+                                if (found) {
+                                    console.log(`[Director] Scene ${sceneId} found in state after ${Date.now() - startWait}ms`);
+                                    return true;
+                                }
+                                await new Promise(r => setTimeout(r, 50)); // Poll every 50ms
+                            }
+                            console.warn(`[Director] Timeout waiting for scene ${sceneId}`);
+                            return false;
+                        };
+
+                        // Wait then generate
+                        const sceneReady = await waitForScene(newId);
+                        if (sceneReady) {
+                            console.log(`[Director] Starting generation for newly inserted scene ${newId}`);
 
                             // Pass as Base Image to maintain subject identity
                             // Works for both angle change (Reasoning controls angle) and style continuity
@@ -571,8 +587,10 @@ INSTRUCTION: Using the provided target image as the base, add ${objectDesc} (vis
                                 console.log('[Director] Passing Previous Image as Base Image for Continuity Insert');
                             }
 
-                            handleGenerateAllImages([newId], undefined, baseMap);
-                        }, 400);
+                            await handleGenerateAllImages([newId], undefined, baseMap);
+                        } else {
+                            setAgentState('director', 'error', 'Không thể đồng bộ cảnh mới. Vui lòng thử lại.');
+                        }
                     } else {
                         setAgentState('director', 'success', `Đã chèn cảnh mới sau cảnh ${insertAfterNum}.`);
                     }

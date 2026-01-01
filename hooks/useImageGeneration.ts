@@ -44,7 +44,8 @@ export function useImageGeneration(
     const [isStopping, setIsStopping] = useState(false);
     const stopRef = useRef(false);
 
-
+    // Generation Lock: Track which scenes are currently being generated to prevent duplicates
+    const generatingSceneIdsRef = useRef<Set<string>>(new Set());
 
 
     const stopBatchGeneration = useCallback(() => {
@@ -922,15 +923,27 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
     const handleGenerateAllImages = useCallback(async (specificSceneIds?: string[], referenceMap?: { [key: string]: string }, baseImageMap?: { [key: string]: string }) => {
         console.log('[BatchGen] handleGenerateAllImages called', { specificSceneIds, hasReferenceMap: !!referenceMap, hasBaseImageMap: !!baseImageMap });
 
-        const scenesToGenerate = specificSceneIds
+        const allScenesToGenerate = specificSceneIds
             ? stateRef.current.scenes.filter(s => specificSceneIds.includes(s.id))
             : stateRef.current.scenes.filter(s => !s.generatedImage && s.contextDescription);
 
-        console.log('[BatchGen] Scenes to generate:', scenesToGenerate.length);
+        // Generation Lock: Filter out scenes that are already being generated
+        const scenesToGenerate = allScenesToGenerate.filter(scene => {
+            if (generatingSceneIdsRef.current.has(scene.id)) {
+                console.warn(`[BatchGen] ⏸️ Scene ${scene.sceneNumber} (${scene.id}) already generating, skipping duplicate request`);
+                return false;
+            }
+            return true;
+        });
+
+        // Mark all scenes as generating
+        scenesToGenerate.forEach(scene => generatingSceneIdsRef.current.add(scene.id));
+
+        console.log('[BatchGen] Scenes to generate:', scenesToGenerate.length, '(filtered from', allScenesToGenerate.length, ')');
 
         if (scenesToGenerate.length === 0) {
-            console.log('[BatchGen] No scenes to generate, showing alert');
-            return alert("Không có phân cảnh nào cần tạo ảnh.");
+            console.log('[BatchGen] No scenes to generate (all duplicates or empty), returning');
+            return; // Don't show alert if we filtered out duplicates
         }
 
         setIsBatchGenerating(true);
@@ -1158,6 +1171,10 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
             console.error('[BatchGen] Generation interrupted:', e);
             setAgentState('director', 'error', 'Có lỗi xảy ra khi tạo ảnh.');
         } finally {
+            // Generation Lock Cleanup: Remove all scene IDs that were being generated
+            scenesToGenerate.forEach(scene => generatingSceneIdsRef.current.delete(scene.id));
+            console.log('[BatchGen] Cleaned up generation lock for', scenesToGenerate.length, 'scenes');
+
             setIsBatchGenerating(false);
             setAgentState('dop', 'idle', '');
 
