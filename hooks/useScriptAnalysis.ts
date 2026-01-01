@@ -54,6 +54,7 @@ export interface ScriptAnalysisResult {
     characters: CharacterAnalysis[];
     suggestedSceneCount: number;
     scenes: SceneAnalysis[];
+    globalContext?: string; // World setting, era, tone summary from AI
 }
 
 // Words per minute for duration estimation
@@ -289,7 +290,8 @@ RESPOND WITH JSON ONLY:
                 scenes: parsed.scenes.map((s: any) => ({
                     ...s,
                     estimatedDuration: Math.ceil((s.voiceOverText.split(/\s+/).length / wpm) * 60)
-                }))
+                })),
+                globalContext: parsed.globalContext // NEW: Save AI's world setting summary
             };
 
             setAnalysisResult(result);
