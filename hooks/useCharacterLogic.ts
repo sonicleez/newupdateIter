@@ -172,32 +172,61 @@ export function useCharacterLogic(
             let mimeType: string = 'image/jpeg';
             let finalMasterUrl = image;
 
+            console.log('[Lora Gen] Starting image processing...', {
+                isBase64: image.startsWith('data:'),
+                isUrl: image.startsWith('http'),
+                imagePreview: image.substring(0, 50) + '...'
+            });
+
             // Convert image to base64 if needed
             if (image.startsWith('data:')) {
+                console.log('[Lora Gen] Processing base64 image...');
                 const [header, base64Data] = image.split(',');
                 data = base64Data;
                 mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                console.log('[Lora Gen] ✅ Base64 extracted:', { mimeType, dataLength: data.length });
 
                 if (userId) {
                     try {
                         finalMasterUrl = await uploadImageToSupabase(image, 'project-assets', `${userId}/characters/${id}_master_${Date.now()}.jpg`);
+                        console.log('[Lora Gen] ✅ Uploaded to Supabase:', finalMasterUrl);
                     } catch (e) {
-                        console.error("Cloud upload failed for master image", e);
+                        console.error("[Lora Gen] Cloud upload failed for master image", e);
                     }
                 }
             } else if (image.startsWith('http')) {
-                const imgRes = await fetch(image);
-                if (!imgRes.ok) throw new Error(`Fetch failed`);
-                const blob = await imgRes.blob();
-                mimeType = blob.type || 'image/jpeg';
-                data = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                });
-                finalMasterUrl = image;
+                console.log('[Lora Gen] Fetching URL image...', image);
+                try {
+                    const imgRes = await fetch(image, { mode: 'cors' });
+                    if (!imgRes.ok) {
+                        console.error('[Lora Gen] ❌ Fetch failed:', imgRes.status, imgRes.statusText);
+                        throw new Error(`Fetch failed: ${imgRes.status}`);
+                    }
+                    const blob = await imgRes.blob();
+                    mimeType = blob.type || 'image/jpeg';
+                    console.log('[Lora Gen] ✅ Fetched blob:', { size: blob.size, type: mimeType });
+
+                    data = await new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const result = (reader.result as string).split(',')[1];
+                            console.log('[Lora Gen] ✅ Converted to base64:', result.length, 'chars');
+                            resolve(result);
+                        };
+                        reader.onerror = (e) => {
+                            console.error('[Lora Gen] ❌ FileReader error:', e);
+                            reject(e);
+                        };
+                        reader.readAsDataURL(blob);
+                    });
+                    finalMasterUrl = image;
+                } catch (fetchError: any) {
+                    console.error('[Lora Gen] ❌ Failed to fetch URL image:', fetchError.message);
+                    // If CORS fails, try to use the URL directly in the API call
+                    throw new Error(`Cannot fetch image from URL. CORS error: ${fetchError.message}`);
+                }
             } else {
+                console.error('[Lora Gen] ❌ Invalid image format:', image.substring(0, 30));
                 throw new Error("Invalid image format");
             }
 
@@ -324,18 +353,32 @@ ${charStyle.promptInjection.negative}
 
             const model = 'gemini-3-pro-image-preview'; // Use best model for style matching
 
+            console.log('[Lora Gen] 🎨 Starting Face & Body generation...', {
+                model,
+                referenceImage: image.substring(0, 50) + '...',
+                hasCharStylePreset: !!characterStyleInstruction
+            });
+
             let [faceUrl, bodyUrl] = await Promise.all([
                 callGeminiAPI(apiKey, facePrompt, "1:1", model, image),
                 callGeminiAPI(apiKey, bodyPrompt, "9:16", model, image),
             ]);
 
+            console.log('[Lora Gen] Generation results:', {
+                faceGenerated: !!faceUrl,
+                bodyGenerated: !!bodyUrl,
+                faceLength: faceUrl?.length || 0,
+                bodyLength: bodyUrl?.length || 0
+            });
 
             if (userId) {
                 if (faceUrl?.startsWith('data:')) {
                     faceUrl = await uploadImageToSupabase(faceUrl, 'project-assets', `${userId}/characters/${id}_face_${Date.now()}.jpg`);
+                    console.log('[Lora Gen] ✅ Face uploaded:', faceUrl);
                 }
                 if (bodyUrl?.startsWith('data:')) {
                     bodyUrl = await uploadImageToSupabase(bodyUrl, 'project-assets', `${userId}/characters/${id}_body_${Date.now()}.jpg`);
+                    console.log('[Lora Gen] ✅ Body uploaded:', bodyUrl);
                 }
             }
 
@@ -345,8 +388,10 @@ ${charStyle.promptInjection.negative}
                 isAnalyzing: false
             });
 
+            console.log('[Lora Gen] ✅ Lora generation complete!');
+
         } catch (error: any) {
-            console.error("Analyze and Generate Failed", error);
+            console.error("[Lora Gen] ❌ Analyze and Generate Failed", error);
             updateCharacter(id, { isAnalyzing: false });
         }
     }, [userApiKey, updateCharacter, setApiKeyModalOpen, userId, state.imageModel, state.characters]);
