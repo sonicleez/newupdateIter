@@ -439,11 +439,11 @@ RESPOND WITH JSON ONLY:
             sceneCharacterMap[scenes.length] = sceneAnalysis.characterNames || [];
 
             // AUTO-ASSIGN EXISTING CHARACTERS
-            if (activeCharacters && activeCharacters.length > 0) {
+            if (existingCharacters && existingCharacters.length > 0) {
                 const foundIds: string[] = [];
                 const namesInScene = (sceneAnalysis.characterNames || []).map((n: string) => n.toLowerCase());
 
-                activeCharacters.forEach(char => {
+                existingCharacters.forEach(char => {
                     const charName = char.name.toLowerCase();
                     // Check for full match or partial match (e.g. "John" in "John Doe")
                     const isMatch = namesInScene.some((n: string) =>
