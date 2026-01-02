@@ -1240,6 +1240,9 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                                     if (e.type === 'lighting') {
                                         negativeConstraints.push('bad lighting', 'wrong exposure', 'dark image');
                                     }
+                                    if (e.type === 'spatial' || desc.includes('scale') || desc.includes('perspective') || desc.includes('floating')) {
+                                        negativeConstraints.push('same background', 'floating furniture', 'double exposure', 'collage', 'surreal', 'bad perspective');
+                                    }
                                 });
                                 const negativePrompt = negativeConstraints.length > 0
                                     ? `(${[...new Set(negativeConstraints)].join(', ')})`

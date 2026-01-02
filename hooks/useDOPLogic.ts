@@ -241,7 +241,12 @@ CHECK FOR:
 1. PROP CONTINUITY: Are props that should appear actually visible? Check position consistency (same hand, same table position).
 2. CHARACTER IDENTITY: Do faces match between shots? Same costume? (CRITICAL)
 3. LIGHTING (Relaxed): Is the general lighting direction consistent? Ignore minor mood/exposure shifts. Only report CRITICAL failures (e.g. Day vs Night).
-4. SPATIAL: Are background elements consistent (furniture, walls, etc.)?${mannequinCheck}
+4. SPATIAL: Are background elements consistent (furniture, walls, etc.)?
+5. LOGICAL SPATIAL SCALE (CRITICAL):
+   - Check if the Shot Type changed (e.g. Wide -> Close Up).
+   - If changed to Close Up/Interior, does the background logically zoom in or change?
+   - ERROR: If prompt says "Interior Shop" but image still shows "Wide City Street" background from previous shot.
+   - ERROR: Floating objects (counters, doors) in open space without walls.${mannequinCheck}
 
 RESPOND IN JSON ONLY:
 {
