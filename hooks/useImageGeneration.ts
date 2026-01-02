@@ -598,11 +598,24 @@ Use this image strictly as a "Style & Material" reference, NOT a pixel-perfect l
                 if (char.faceImage) {
                     const imgData = await safeGetImageData(char.faceImage);
                     if (imgData) {
-                        const refLabel = `IDENTITY_${char.name.toUpperCase()}`;
+                        const refLabel = `IDENTITY_${char.name.toUpperCase().replace(/\s+/g, '_')}`;
                         // Google pattern: explicit name + "use as reference for how X should look"
-                        parts.push({ text: `[${refLabel}]: MANDATORY IDENTITY LOCK. Use this supplied image as the ONLY AUTHORITATIVE reference for how ${char.name} should look. Match face structure, features, and identity 100%. ABSOLUTELY NO VARIATION in facial structure allowed. ${char.description}` });
+                        parts.push({ text: `[${refLabel}]: !!! MANDATORY IDENTITY LOCK !!! Use this supplied image as the ONLY AUTHORITATIVE reference for how ${char.name} should look. Match face structure, features, and identity 100%. ABSOLUTELY NO VARIATION in facial structure allowed. ${char.description}` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                         continuityInstruction += `(STRICT IDENTITY LOCK: ${char.name}) `;
+                        console.log(`[ImageGen] 👤 Injected FACE reference for ${char.name}`);
+                    } else {
+                        console.warn(`[ImageGen] ⚠️ Failed to load FACE image for ${char.name}`);
+                    }
+                } else if (char.masterImage) {
+                    // Fallback to Master Image if Face Image is missing
+                    const imgData = await safeGetImageData(char.masterImage);
+                    if (imgData) {
+                        const refLabel = `IDENTITY_${char.name.toUpperCase().replace(/\s+/g, '_')}`;
+                        parts.push({ text: `[${refLabel}]: !!! MANDATORY IDENTITY LOCK (MASTER) !!! Use this supplied image as the ONLY AUTHORITATIVE reference for ${char.name}. Focus on the face and identity from this image. ${char.description}` });
+                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        continuityInstruction += `(STRICT IDENTITY LOCK (MASTER): ${char.name}) `;
+                        console.log(`[ImageGen] 👤 Injected MASTER reference (as Face fallback) for ${char.name}`);
                     }
                 }
 
@@ -1077,12 +1090,12 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 const result = await performImageGeneration(scene.id, undefined, false, dnaReference, existingBaseImage);
 
                 if (result === 'critical_error') {
-                    console.error(`[BatchGen] 🛑 CRITICAL DOP ERROR in Scene ${scene.sceneNumber}. Stopping batch generation to prevent cascade failure.`);
-                    setAgentState('director', 'error', `Dừng tạo hàng loạt: Lỗi nghiêm trọng tại cảnh ${scene.sceneNumber} (Sai nhân vật/Unfixable).`);
-                    break;
+                    console.warn(`[BatchGen] ⚠️ CRITICAL DOP ERROR in Scene ${scene.sceneNumber}. Marking as unfixable but CONTINUING batch.`);
+                    // We do NOT break here anymore, per user request.
+                    // The scene is already marked as error in state by performImageGeneration.
                 }
 
-                setAgentState('director', 'success', `Đã tạo xong ảnh Phân cảnh ${scene.sceneNumber}.`);
+                setAgentState('director', 'success', `Đã xử lý xong Phân cảnh ${scene.sceneNumber}.`);
 
 
                 // Get the newly generated image
