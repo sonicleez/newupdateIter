@@ -15,9 +15,11 @@ import {
     AlertCircle,
     CheckCircle2,
     Settings,
-    User
+    User,
+    Film
 } from 'lucide-react';
 import { AgentStatus, ProductionLogEntry } from '../../types';
+import { DirectorPreset, DIRECTOR_PRESETS } from '../../constants/directors';
 
 interface UnifiedProductionHubProps {
     agents: {
@@ -29,6 +31,9 @@ interface UnifiedProductionHubProps {
     onAddUserLog?: (message: string) => void;
     onClearChat?: () => void;
     onToggleAgentVisibility?: () => void;
+    // Quick Director
+    activeDirectorId?: string;
+    onDirectorChange?: (directorId: string) => void;
 }
 
 
@@ -39,12 +44,15 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
     onSendCommand,
     onAddUserLog,
     onClearChat,
-    onToggleAgentVisibility
+    onToggleAgentVisibility,
+    activeDirectorId,
+    onDirectorChange
 }) => {
 
 
     const [isExpanded, setIsExpanded] = useState(false);
     const [command, setCommand] = useState('');
+    const [showDirectorPicker, setShowDirectorPicker] = useState(false);
     const [position, setPosition] = useState(() => {
         const saved = localStorage.getItem('unified_hub_position');
         return saved ? JSON.parse(saved) : { x: window.innerWidth - 380, y: window.innerHeight - 100 };
@@ -224,6 +232,53 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1 no-drag">
+                        {/* Quick Director Picker */}
+                        {onDirectorChange && (
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowDirectorPicker(!showDirectorPicker)}
+                                    aria-label="Change Director"
+                                    title="Đổi Director nhanh"
+                                    className="p-1.5 rounded-lg hover:bg-amber-500/20 transition-colors text-slate-400 hover:text-amber-400 flex items-center gap-1"
+                                >
+                                    <Film className="w-4 h-4" />
+                                    {activeDirectorId && (
+                                        <span className="text-[9px] font-bold text-amber-400 uppercase max-w-[40px] truncate">
+                                            {Object.values(DIRECTOR_PRESETS).flat().find(d => d.id === activeDirectorId)?.name.split(' ')[0] || ''}
+                                        </span>
+                                    )}
+                                </button>
+
+                                {/* Director Dropdown */}
+                                {showDirectorPicker && (
+                                    <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                                        <div className="max-h-64 overflow-y-auto py-1">
+                                            {Object.entries(DIRECTOR_PRESETS).map(([category, directors]) => (
+                                                <div key={category}>
+                                                    <div className="text-[9px] text-slate-500 uppercase tracking-wider px-3 py-1.5 bg-white/5">{category}</div>
+                                                    {directors.map(d => (
+                                                        <button
+                                                            key={d.id}
+                                                            onClick={() => {
+                                                                onDirectorChange(d.id);
+                                                                setShowDirectorPicker(false);
+                                                            }}
+                                                            className={`w-full text-left px-3 py-2 text-xs transition-colors ${d.id === activeDirectorId
+                                                                    ? 'bg-amber-500/20 text-amber-300'
+                                                                    : 'hover:bg-white/5 text-slate-300'
+                                                                }`}
+                                                        >
+                                                            {d.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Clear Chat Button */}
                         {onClearChat && logs.length > 0 && (
                             <button
@@ -313,8 +368,8 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                                         </span>
                                     </div>
                                     <div className={`px-4 py-3 rounded-2xl border rounded-tl-none shadow-sm flex items-center gap-2 ${agents.director.status === 'thinking'
-                                            ? 'bg-purple-900/40 border-purple-500/20 text-purple-300'
-                                            : 'bg-blue-900/40 border-blue-500/20 text-blue-300'
+                                        ? 'bg-purple-900/40 border-purple-500/20 text-purple-300'
+                                        : 'bg-blue-900/40 border-blue-500/20 text-blue-300'
                                         }`}>
                                         <div className="flex space-x-1">
                                             <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:-0.3s]"></div>

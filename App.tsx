@@ -1198,6 +1198,8 @@ const App: React.FC = () => {
                 onSendCommand={handleSendCommand}
                 onAddUserLog={(msg) => addProductionLog('user', msg, 'info')}
                 onClearChat={() => updateStateAndRecord(s => ({ ...s, productionLogs: [] }))}
+                activeDirectorId={state.activeDirectorId}
+                onDirectorChange={(directorId) => updateStateAndRecord(s => ({ ...s, activeDirectorId: directorId }))}
             />
         </div>
     );
