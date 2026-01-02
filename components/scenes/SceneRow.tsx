@@ -150,20 +150,25 @@ export const SceneRow: React.FC<SceneRowProps> = ({
             <div className="md:col-span-2 space-y-2">
                 {(scene.voiceOverText || scene.isVOScene) && (
                     <div className="relative group/vo">
+                        <div className="absolute -top-2 left-2 z-10 flex items-center gap-1">
+                            <span className="text-[8px] px-1.5 py-0.5 rounded font-bold bg-violet-500/20 text-violet-400 border border-violet-500/30">
+                                🎙️ VO (Narrator)
+                            </span>
+                        </div>
                         <ExpandableTextarea
                             value={scene.voiceOverText || ''}
                             onChange={(val) => updateScene(scene.id, { voiceOverText: val })}
-                            placeholder="Voice Over (Lời bình)..."
+                            placeholder="Voice Over (Lời bình/Thuyết minh - không phải lời thoại nhân vật)..."
                             rows={2}
-                            className="w-full bg-violet-900/20 border border-violet-500/30 rounded p-2 text-xs text-violet-100 placeholder-violet-500/50 focus:border-violet-500 resize-none font-medium pr-8"
-                            title="Voice Over Script (AI/Manual)"
+                            className="w-full bg-violet-900/20 border border-violet-500/30 rounded p-2 pt-4 text-xs text-violet-100 placeholder-violet-500/50 focus:border-violet-500 resize-none font-medium pr-8"
+                            title="Voice Over - Lời bình ngoài cảnh (Narrator)"
                         />
                         {/* Expand Sequence Button */}
                         {onExpandScene && (scene.voiceOverText && scene.voiceOverText.length > 50) && (
                             <button
                                 onClick={() => onExpandScene(scene.id)}
                                 disabled={isExpandingSequence}
-                                className="absolute right-1 top-1 p-1 text-violet-400 hover:text-white hover:bg-violet-500 rounded transition-all opacity-0 group-hover/vo:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="absolute right-1 top-3 p-1 text-violet-400 hover:text-white hover:bg-violet-500 rounded transition-all opacity-0 group-hover/vo:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="✨ Expand Sequence: AI will split this long VO into multiple visual shots"
                             >
                                 {isExpandingSequence ? (
@@ -197,11 +202,16 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                                 <ExpandableTextarea
                                     value={useVietnameseField ? scene.vietnamese : scene.language1}
                                     onChange={(val) => updateScene(scene.id, useVietnameseField ? { vietnamese: val } : { language1: val })}
-                                    placeholder={`Script (${currentLang.label})...`}
+                                    placeholder={`Dialogue / Lời thoại (${currentLang.label})...`}
                                     rows={scene.voiceOverText ? 2 : 3}
-                                    className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-xs text-white focus:border-green-500 resize-none"
-                                    title={currentLang.label}
+                                    className="w-full bg-gray-900 border border-gray-600 rounded p-2 pt-4 text-xs text-white focus:border-green-500 resize-none"
+                                    title={`Dialogue - Lời thoại nhân vật (${currentLang.label})`}
                                 />
+                                <div className="absolute -top-2 left-2 flex gap-1">
+                                    <span className="text-[8px] px-1.5 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                        💬 Dialogue
+                                    </span>
+                                </div>
                                 <div className="absolute -top-2 right-2 flex gap-1">
                                     <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold ${currentLang.color}`}>
                                         {currentLang.flag} {currentLang.short}
