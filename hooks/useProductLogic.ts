@@ -102,11 +102,11 @@ export function useProductLogic(
             const promptTemplate = (viewInfo: string) => `(STRICT REFERENCE: EXACT REPLICA) Generate a ${viewInfo} of the product described: ${json.description}. BACKGROUND: Pure Solid White Studio Background. STYLE: Product Photography.`.trim();
 
             let [front, back, left, right, top] = await Promise.all([
-                callGeminiAPI(apiKey, promptTemplate('OFFICIAL FRONT VIEW (0 degrees)'), '1:1', 'gemini-2.0-flash', referenceImage),
-                callGeminiAPI(apiKey, promptTemplate('OFFICIAL BACK VIEW (180 degrees)'), '1:1', 'gemini-2.0-flash', referenceImage),
-                callGeminiAPI(apiKey, promptTemplate('OFFICIAL LEFT PROFILE VIEW (90 degrees)'), '1:1', 'gemini-2.0-flash', referenceImage),
-                callGeminiAPI(apiKey, promptTemplate('OFFICIAL RIGHT PROFILE VIEW (90 degrees)'), '1:1', 'gemini-2.0-flash', referenceImage),
-                callGeminiAPI(apiKey, promptTemplate('TOP-DOWN BIRD\'S EYE VIEW'), '1:1', 'gemini-2.0-flash', referenceImage),
+                callGeminiAPI(apiKey, promptTemplate('OFFICIAL FRONT VIEW (0 degrees)'), '1:1', 'gemini-3-pro-image-preview', referenceImage),
+                callGeminiAPI(apiKey, promptTemplate('OFFICIAL BACK VIEW (180 degrees)'), '1:1', 'gemini-3-pro-image-preview', referenceImage),
+                callGeminiAPI(apiKey, promptTemplate('OFFICIAL LEFT PROFILE VIEW (90 degrees)'), '1:1', 'gemini-3-pro-image-preview', referenceImage),
+                callGeminiAPI(apiKey, promptTemplate('OFFICIAL RIGHT PROFILE VIEW (90 degrees)'), '1:1', 'gemini-3-pro-image-preview', referenceImage),
+                callGeminiAPI(apiKey, promptTemplate('TOP-DOWN BIRD\'S EYE VIEW'), '1:1', 'gemini-3-pro-image-preview', referenceImage),
             ]);
 
             if (userId) {
