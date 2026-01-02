@@ -1158,13 +1158,14 @@ const App: React.FC = () => {
                     <ExcelImportModal
                         isOpen={isExcelImportModalOpen}
                         onClose={() => setExcelImportModalOpen(false)}
-                        onImport={(result) => {
+                        onImport={(result, directorId) => {
                             // Merge imported data into state
                             updateStateAndRecord(s => ({
                                 ...s,
                                 sceneGroups: [...(s.sceneGroups || []), ...result.groups],
                                 scenes: [...s.scenes, ...result.scenes],
-                                characters: [...s.characters, ...result.characters]
+                                characters: [...s.characters, ...result.characters],
+                                activeDirectorId: directorId || s.activeDirectorId
                             }));
                         }}
                     />

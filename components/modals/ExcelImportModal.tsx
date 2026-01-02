@@ -6,14 +6,15 @@
  */
 
 import React, { useState, useCallback, useRef } from 'react';
-import { X, Upload, FileSpreadsheet, Check, AlertCircle, ChevronDown, Loader2 } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, Check, AlertCircle, ChevronDown, Loader2, Film } from 'lucide-react';
 import { useExcelImport, ColumnMapping, ExcelImportResult } from '../../hooks/useExcelImport';
 import { Scene, SceneGroup, Character } from '../../types';
+import { DirectorPreset, DIRECTOR_PRESETS } from '../../constants/directors';
 
 interface ExcelImportModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onImport: (result: ExcelImportResult) => void;
+    onImport: (result: ExcelImportResult, directorId?: string) => void;
 }
 
 export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
@@ -27,6 +28,10 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
     const [mapping, setMapping] = useState<ColumnMapping | null>(null);
     const [showMapping, setShowMapping] = useState(false);
 
+    // Director selection
+    const [selectedDirectorId, setSelectedDirectorId] = useState<string>('werner_herzog');
+    const [showDirectorPicker, setShowDirectorPicker] = useState(false);
+
     const {
         isProcessing,
         error,
@@ -37,6 +42,10 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
         autoDetectMapping,
         DEFAULT_MAPPING
     } = useExcelImport();
+
+    // Get all directors
+    const allDirectors = Object.values(DIRECTOR_PRESETS).flat();
+    const selectedDirector = allDirectors.find(d => d.id === selectedDirectorId);
 
     const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -56,10 +65,10 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
 
         const result = await importFile(selectedFile, mapping);
         if (result) {
-            onImport(result);
+            onImport(result, selectedDirectorId);
             onClose();
         }
-    }, [selectedFile, mapping, importFile, onImport, onClose]);
+    }, [selectedFile, mapping, importFile, onImport, onClose, selectedDirectorId]);
 
     const updateMapping = (field: keyof ColumnMapping, value: string) => {
         if (!mapping) return;
@@ -110,6 +119,59 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
                                 {selectedFile ? `${rowCount} rows detected` : 'Supports .xlsx, .xls, .csv'}
                             </p>
                         </button>
+                    </div>
+
+                    {/* Director Selection */}
+                    <div className="bg-zinc-800/50 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-medium text-white flex items-center gap-2">
+                                <Film className="w-4 h-4 text-amber-400" />
+                                Director Style
+                            </h3>
+                            <button
+                                onClick={() => setShowDirectorPicker(!showDirectorPicker)}
+                                className="text-xs text-zinc-400 hover:text-white"
+                            >
+                                {showDirectorPicker ? 'Close' : 'Change'}
+                            </button>
+                        </div>
+
+                        {/* Selected Director Display */}
+                        <div className="flex items-center gap-3 p-3 bg-zinc-900/50 rounded-lg">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white text-sm font-bold">
+                                {selectedDirector?.name.charAt(0) || '?'}
+                            </div>
+                            <div className="flex-1">
+                                <div className="text-white font-medium">{selectedDirector?.name || 'No Director'}</div>
+                                <div className="text-xs text-zinc-500 truncate">{selectedDirector?.description}</div>
+                            </div>
+                        </div>
+
+                        {/* Director Picker Dropdown */}
+                        {showDirectorPicker && (
+                            <div className="mt-3 max-h-48 overflow-y-auto space-y-1">
+                                {Object.entries(DIRECTOR_PRESETS).map(([category, directors]) => (
+                                    <div key={category}>
+                                        <div className="text-xs text-zinc-500 uppercase tracking-wider py-1 px-2">{category}</div>
+                                        {directors.map(d => (
+                                            <button
+                                                key={d.id}
+                                                onClick={() => {
+                                                    setSelectedDirectorId(d.id);
+                                                    setShowDirectorPicker(false);
+                                                }}
+                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${d.id === selectedDirectorId
+                                                        ? 'bg-amber-500/20 text-amber-300'
+                                                        : 'hover:bg-zinc-700 text-zinc-300'
+                                                    }`}
+                                            >
+                                                {d.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {/* Error */}
@@ -247,3 +309,4 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
 };
 
 export default ExcelImportModal;
+
