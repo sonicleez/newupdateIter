@@ -208,8 +208,12 @@ export const StyleSettingsSection: React.FC<StyleSettingsSectionProps> = ({
                                 onChange={onScriptLanguageChange}
                                 className="w-full bg-gray-700 text-white px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 border border-gray-600"
                             >
-                                <option value="vietnamese">Tiếng Việt</option>
-                                <option value="language1">Tiếng Anh (Default)</option>
+                                <option value="vietnamese">🇻🇳 Tiếng Việt</option>
+                                <option value="language1">🇺🇸 Tiếng Anh (Default)</option>
+                                <option value="spanish">🇪🇸 Tiếng Tây Ban Nha</option>
+                                <option value="chinese">🇨🇳 Tiếng Trung Quốc</option>
+                                <option value="hindi">🇮🇳 Tiếng Ấn Độ (Hindi)</option>
+                                <option value="arabic">🇸🇦 Tiếng Ả Rập</option>
                                 <option value="custom" className="text-brand-orange font-bold">+ Custom Language...</option>
                             </select>
                             {scriptLanguage === 'custom' && (

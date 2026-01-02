@@ -88,14 +88,22 @@ export function useVideoGeneration(
             }
 
             // Determine effective language for script text
-            const effectiveLanguage = state.scriptLanguage === 'custom'
-                ? (state.customScriptLanguage || 'English')
-                : (state.scriptLanguage === 'vietnamese' ? 'Vietnamese' : 'English');
+            const languageNames: Record<string, string> = {
+                'vietnamese': 'Vietnamese',
+                'language1': 'English',
+                'spanish': 'Spanish',
+                'chinese': 'Chinese (Mandarin)',
+                'hindi': 'Hindi',
+                'arabic': 'Arabic',
+                'custom': state.customScriptLanguage || 'English'
+            };
+            const effectiveLanguage = languageNames[state.scriptLanguage] || 'English';
 
             // Get script text based on language setting
+            // Vietnamese uses 'vietnamese' field, all others use 'language1' field
             const scriptText = state.scriptLanguage === 'vietnamese'
                 ? scene.vietnamese
-                : scene.language1; // For 'custom', we use language1 field with the custom language label
+                : scene.language1;
 
             const context = scene.contextDescription || '';
             const promptName = scene.promptName || '';

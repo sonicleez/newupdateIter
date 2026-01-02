@@ -40,9 +40,16 @@ export function useScriptGeneration(
             const activeCharacters = state.characters.filter(c => selectedCharacterIds.includes(c.id));
             const activeProducts = (state.products || []).filter(p => selectedProductIds.includes(p.id));
 
-            const effectiveLanguage = state.scriptLanguage === 'custom'
-                ? (state.customScriptLanguage || 'English')
-                : (state.scriptLanguage === 'vietnamese' ? 'Vietnamese' : 'English');
+            const languageNames: Record<string, string> = {
+                'vietnamese': 'Vietnamese',
+                'language1': 'English',
+                'spanish': 'Spanish',
+                'chinese': 'Chinese (Mandarin)',
+                'hindi': 'Hindi',
+                'arabic': 'Arabic',
+                'custom': state.customScriptLanguage || 'English'
+            };
+            const effectiveLanguage = languageNames[state.scriptLanguage] || 'English';
 
             const prompt = buildScriptPrompt(idea, activePreset, activeCharacters, activeProducts, count, effectiveLanguage, state.customScriptInstruction, director);
 
@@ -222,9 +229,16 @@ export function useScriptGeneration(
             const activePreset = getPresetById(state.activeScriptPreset, state.customScriptPresets);
             if (!activePreset) throw new Error("Preset not found");
 
-            const effectiveLanguage = state.scriptLanguage === 'custom'
-                ? (state.customScriptLanguage || 'English')
-                : (state.scriptLanguage === 'vietnamese' ? 'Vietnamese' : 'English');
+            const languageNames: Record<string, string> = {
+                'vietnamese': 'Vietnamese',
+                'language1': 'English',
+                'spanish': 'Spanish',
+                'chinese': 'Chinese (Mandarin)',
+                'hindi': 'Hindi',
+                'arabic': 'Arabic',
+                'custom': state.customScriptLanguage || 'English'
+            };
+            const effectiveLanguage = languageNames[state.scriptLanguage] || 'English';
 
             const prompt = buildGroupRegenerationPrompt(
                 detailedStory,
