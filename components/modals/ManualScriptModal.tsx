@@ -153,7 +153,8 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
                 director: directorNotes || undefined,
                 dop: dopNotes || undefined,
                 story: storyContext || undefined // [New]
-            } : null
+            } : null,
+            existingCharacters // [Fixed] Check against existing characters
         );
     }, [scriptText, readingSpeed, selectedModel, analyzeScript, selectedStyle, selectedDirector, directorNotes, dopNotes, storyContext]);
 

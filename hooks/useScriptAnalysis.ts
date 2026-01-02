@@ -78,7 +78,8 @@ export function useScriptAnalysis(userApiKey: string | null) {
         modelSelector: string = 'gemini-2.0-flash|none', // format: model|thinkingLevel
         characterStyle?: CharacterStyleDefinition | null,
         director?: DirectorPreset | null,
-        researchNotes?: { director?: string; dop?: string; story?: string } | null  // [Updated]
+        researchNotes?: { director?: string; dop?: string; story?: string } | null,
+        activeCharacters: { id: string; name: string; description?: string }[] = [] // New Param for auto-assignment
     ): Promise<ScriptAnalysisResult | null> => {
         if (!userApiKey) {
             setAnalysisError('API key required');
@@ -434,7 +435,28 @@ RESPOND WITH JSON ONLY:
 
 
             // Map characters to scene index (0-based)
+            // Map characters to scene index (0-based)
             sceneCharacterMap[scenes.length] = sceneAnalysis.characterNames || [];
+
+            // AUTO-ASSIGN EXISTING CHARACTERS
+            if (activeCharacters && activeCharacters.length > 0) {
+                const foundIds: string[] = [];
+                const namesInScene = (sceneAnalysis.characterNames || []).map((n: string) => n.toLowerCase());
+
+                activeCharacters.forEach(char => {
+                    const charName = char.name.toLowerCase();
+                    // Check for full match or partial match (e.g. "John" in "John Doe")
+                    const isMatch = namesInScene.some((n: string) =>
+                        charName.includes(n) || n.includes(charName) ||
+                        (char.description && char.description.toLowerCase().includes(n))
+                    );
+                    if (isMatch) {
+                        foundIds.push(char.id);
+                    }
+                });
+                mainScene.characterIds = foundIds;
+            }
+
             scenes.push(mainScene);
             sceneNumber++;
 
