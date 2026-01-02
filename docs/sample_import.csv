@@ -1,0 +1,9 @@
+scene_number,group,voice_over,dialogue,dialogue_speaker,visual_context,camera_angle,lens,character_names,is_key_frame
+1,Chương 1 - Mở đầu,Năm 1985 tại Sài Gòn...,,,"WIDE SHOT. Exterior, Saigon street 1985, motorbikes, French colonial buildings, morning light, golden hour atmosphere.",Wide Shot,35mm,,TRUE
+2,Chương 1 - Mở đầu,Một người đàn ông bước đi trên con phố quen thuộc.,,,"MEDIUM SHOT. Same street. A man in 1980s clothing walks slowly, nostalgic expression, documentary style.",Medium Shot,50mm,Minh,FALSE
+3,Chương 1 - Mở đầu,Anh dừng lại trước một quán cà phê cũ.,Chào chị! Một ly đen đá.,Minh,"CLOSE-UP. Minh standing outside a traditional Vietnamese coffee shop, ordering from the counter.",Close-Up,85mm,Minh,FALSE
+4,Chương 2 - Hồi ức,Cô ấy là Lan - người bạn thuở nhỏ của anh.,,,"MEDIUM SHOT. Interior coffee shop. A woman (Lan) sits at a wooden table, reading a book, soft light from window.",Medium Shot,50mm,"Lan",TRUE
+5,Chương 2 - Hồi ức,"Họ đã không gặp nhau suốt 20 năm.",Lan? Có phải là Lan không?,Minh,"TWO-SHOT. Minh approaches Lan's table, surprised expression, warm ambient lighting.",Medium Shot,35mm,"Minh, Lan",FALSE
+6,Chương 2 - Hồi ức,Lan ngước lên nhìn.,"Minh? Trời ơi, Minh!",Lan,"CLOSE-UP. Lan looks up, recognition and joy on her face, tears forming.",Close-Up,85mm,Lan,FALSE
+7,Chương 3 - Kết thúc,Họ ngồi xuống và bắt đầu kể về những năm tháng đã qua.,,,"WIDE SHOT. Two friends sitting across from each other, coffee cups on table, golden afternoon light streaming through window.",Wide Shot,35mm,"Minh, Lan",FALSE
+8,Chương 3 - Kết thúc,Có những câu chuyện không bao giờ kết thúc...,,,"POV SHOT. Looking out the coffee shop window at the busy Saigon street, reflective mood, fade to warm tones.",POV,50mm,,TRUE

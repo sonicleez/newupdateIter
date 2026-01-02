@@ -100,12 +100,21 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
     // Analysis hook
     const { isAnalyzing, analysisResult, analysisError, analyzeScript, generateSceneMap, setAnalysisResult } = useScriptAnalysis(userApiKey);
 
-    // [NEW] Restore analysis result from initial state
+    // Track if user manually went back (to prevent auto-restore)
+    const userWentBack = React.useRef(false);
+
+    // [NEW] Restore analysis result from initial state (only on first mount)
     React.useEffect(() => {
-        if (initialState?.analysisResult && !analysisResult) {
+        if (initialState?.analysisResult && !analysisResult && !userWentBack.current) {
             setAnalysisResult(initialState.analysisResult);
         }
     }, [initialState?.analysisResult, analysisResult, setAnalysisResult]);
+
+    // Handler for "Back to Edit" button
+    const handleBackToEdit = useCallback(() => {
+        userWentBack.current = true;
+        setAnalysisResult(null);
+    }, [setAnalysisResult]);
 
     // [NEW] Notify parent of state changes for persistence
     React.useEffect(() => {
@@ -142,6 +151,7 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
     // Handle analyze
     const handleAnalyze = useCallback(async () => {
         if (!scriptText.trim()) return;
+        userWentBack.current = false; // Reset flag when starting new analysis
         await analyzeScript(
             scriptText,
             readingSpeed,
@@ -811,7 +821,7 @@ John enters the room, wearing a tailored Armani suit..."
                     ) : (
                         <>
                             <button
-                                onClick={() => { setAnalysisResult(null); }}
+                                onClick={handleBackToEdit}
                                 className="px-4 py-2 text-zinc-400 hover:text-white transition-colors"
                             >
                                 ← Back to Edit
