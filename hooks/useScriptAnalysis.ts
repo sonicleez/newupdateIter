@@ -325,7 +325,7 @@ RESPOND WITH JSON ONLY:
                     parsed.scenes.reduce((sum: number, s: any) => sum + (s.expansionScenes?.length || 0), 0),
                 scenes: parsed.scenes.map((s: any) => ({
                     ...s,
-                    estimatedDuration: Math.ceil((s.voiceOverText.split(/\s+/).length / wpm) * 60)
+                    estimatedDuration: Math.ceil(((s.voiceOverText || '').split(/\s+/).length / wpm) * 60)
                 })),
                 globalContext: parsed.globalContext // NEW: Save AI's world setting summary
             };
