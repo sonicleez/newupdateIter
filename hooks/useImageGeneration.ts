@@ -1074,7 +1074,14 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 // PRIORITIZE explicitly passed baseImageMap
                 const existingBaseImage = (baseImageMap && baseImageMap[scene.id]) || scene.generatedImage || undefined;
 
-                await performImageGeneration(scene.id, undefined, false, dnaReference, existingBaseImage);
+                const result = await performImageGeneration(scene.id, undefined, false, dnaReference, existingBaseImage);
+
+                if (result === 'critical_error') {
+                    console.error(`[BatchGen] 🛑 CRITICAL DOP ERROR in Scene ${scene.sceneNumber}. Stopping batch generation to prevent cascade failure.`);
+                    setAgentState('director', 'error', `Dừng tạo hàng loạt: Lỗi nghiêm trọng tại cảnh ${scene.sceneNumber} (Sai nhân vật/Unfixable).`);
+                    break;
+                }
+
                 setAgentState('director', 'success', `Đã tạo xong ảnh Phân cảnh ${scene.sceneNumber}.`);
 
 
@@ -1307,6 +1314,11 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                                     error: `⚠️ DOP: Requires manual review (${lastValidation.errors.map(e => e.description).join('; ')})`
                                 } : sc)
                             }));
+
+                            // FAIL FAST RETURN
+                            if (lastValidation.decision === 'skip') {
+                                return 'critical_error';
+                            }
                         } else if (lastValidation.isValid) {
                             console.log('[DOP] Raccord validation PASSED');
                             if (addProductionLog) {

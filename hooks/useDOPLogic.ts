@@ -175,6 +175,39 @@ export function useDOPLogic(state: ProjectState) {
     }, [state.scenes]);
 
     /**
+    /**
+     * Quick Win: Classify errors as fixable or unfixable
+     * Saves credits by not retrying unfixable errors
+     */
+    const classifyErrors = useCallback((errors: DopError[]): {
+        fixable: DopError[];
+        unfixable: DopError[];
+        decision: 'retry' | 'skip' | 'try_once';
+    } => {
+        const fixable: DopError[] = [];
+        const unfixable: DopError[] = [];
+
+        errors.forEach(e => {
+            const isFixable = FIXABLE_ERROR_TYPES.includes(e.type) ||
+                (!UNFIXABLE_KEYWORDS.some(k => e.description.toLowerCase().includes(k)) &&
+                    !e.type.includes('identity') && !e.type.includes('face'));
+
+            if (isFixable) fixable.push(e);
+            else unfixable.push(e);
+        });
+
+        // Fail Fast Strategy:
+        // If ANY unfixable error exists (e.g. Identity Mismatch), DO NOT RETRY.
+        if (unfixable.length > 0) {
+            return { fixable, unfixable, decision: 'skip' };
+        } else if (fixable.length > 0) {
+            return { fixable, unfixable, decision: 'retry' };
+        }
+
+        return { fixable, unfixable, decision: 'skip' };
+    }, []);
+
+    /**
      * AI Vision-powered raccord validation
      * Compares two consecutive images to detect continuity errors
      */
@@ -188,6 +221,7 @@ export function useDOPLogic(state: ProjectState) {
         isValid: boolean;
         errors: { type: string; description: string }[];
         correctionPrompt?: string;
+        decision?: 'retry' | 'skip' | 'try_once';
     }> => {
         if (!apiKey || !currentImage || !prevImage) {
             return { isValid: true, errors: [] };
@@ -300,66 +334,29 @@ RESPOND IN JSON ONLY:
             const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const jsonMatch = text.match(/\{[\s\S]*\}/);
 
-            if (jsonMatch) {
-                const result = JSON.parse(jsonMatch[0]);
+            try {
+                const result = JSON.parse(text);
                 console.log('[DOP Vision] Validation result:', result);
+
+                // Quick Classification
+                const { decision } = classifyErrors(result.errors || []);
+
                 return {
                     isValid: result.isValid ?? true,
                     errors: result.errors || [],
-                    correctionPrompt: result.correctionPrompt
+                    correctionPrompt: result.correctionPrompt,
+                    decision // Return classification decision
                 };
+            } catch (e) {
+                console.error('JSON Parse Error', e);
             }
 
-            return { isValid: true, errors: [] };
+            return { isValid: true, errors: [], decision: 'skip' };
         } catch (error) {
             console.error('[DOP Vision] Error:', error);
-            return { isValid: true, errors: [] }; // Fail-open: don't block on errors
+            return { isValid: true, errors: [], decision: 'skip' }; // Fail-open: don't block on errors
         }
-    }, [state.characters, state.products]);
-
-    /**
-     * Quick Win: Classify errors as fixable or unfixable
-     * Saves credits by not retrying unfixable errors
-     */
-    const classifyErrors = useCallback((errors: DopError[]): {
-        fixable: DopError[];
-        unfixable: DopError[];
-        decision: 'retry' | 'skip' | 'try_once';
-    } => {
-        const fixable: DopError[] = [];
-        const unfixable: DopError[] = [];
-
-        for (const error of errors) {
-            const descLower = error.description.toLowerCase();
-            const typeLower = error.type.toLowerCase();
-
-            // Check if error contains unfixable keywords
-            const isUnfixable = UNFIXABLE_KEYWORDS.some(kw => descLower.includes(kw));
-
-            // Check if error type is known to be fixable
-            const isFixableType = FIXABLE_ERROR_TYPES.some(ft => typeLower.includes(ft));
-
-            if (isUnfixable) {
-                unfixable.push(error);
-            } else if (isFixableType) {
-                fixable.push(error);
-            } else {
-                // Unknown type - try once
-                fixable.push(error);
-            }
-        }
-
-        // Decision logic - FAIL FAST STRATEGY
-        if (unfixable.length > 0) {
-            // If ANY unfixable error (identity/face/etc) is present, STOP immediately.
-            // Don't waste credits trying to fix mixed errors if the main character is wrong.
-            return { fixable, unfixable, decision: 'skip' };
-        } else if (fixable.length > 0) {
-            return { fixable, unfixable, decision: 'retry' };
-        }
-
-        return { fixable, unfixable, decision: 'skip' };
-    }, []);
+    }, [state.characters, state.products, classifyErrors]);
 
     /**
      * Full Decision Agent: Analyze if retry will succeed before wasting credits
