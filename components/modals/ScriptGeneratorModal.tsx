@@ -366,9 +366,9 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
                         </div>
 
                         {/* Products Section */}
-                        {products.length > 0 && (
-                            <div className="bg-gray-800/30 p-4 rounded-xl border border-orange-500/20">
-                                <label className="block text-xs font-bold text-orange-400 uppercase mb-3">📦 Sản phẩm / Đạo cụ ({selectedProductIds.length})</label>
+                        <div className="bg-gray-800/30 p-4 rounded-xl border border-orange-500/20">
+                            <label className="block text-xs font-bold text-orange-400 uppercase mb-3">📦 Sản phẩm / Đạo cụ ({selectedProductIds.length}/{products.length})</label>
+                            {products.length > 0 ? (
                                 <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto">
                                     {products.map(prod => (
                                         <label key={prod.id} className={`flex items-center space-x-2 p-1.5 rounded-lg border cursor-pointer ${selectedProductIds.includes(prod.id) ? 'bg-orange-500/10 border-orange-500/50' : 'bg-gray-900/50 border-gray-800'}`}>
@@ -380,9 +380,14 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
                                         </label>
                                     ))}
                                 </div>
-                                <p className="text-[9px] text-gray-500 mt-2 italic">Chọn sản phẩm/đạo cụ để AI tự gán vào các cảnh phù hợp.</p>
-                            </div>
-                        )}
+                            ) : (
+                                <div className="text-center py-4 text-gray-500 text-xs">
+                                    <p>Chưa có sản phẩm nào.</p>
+                                    <p className="text-[10px] mt-1 italic">Tạo sản phẩm trong mục "Weapon/Product/Props" trước.</p>
+                                </div>
+                            )}
+                            <p className="text-[9px] text-gray-500 mt-2 italic">Chọn sản phẩm/đạo cụ để AI tự gán vào các cảnh phù hợp.</p>
+                        </div>
 
                         <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700">
                             <label className="block text-xs font-bold text-gray-400 uppercase mb-3 text-purple-400">Tư duy đạo diễn (Directorial Vision)</label>
