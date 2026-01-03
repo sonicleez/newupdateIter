@@ -300,12 +300,13 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                                 <Trash2 className="w-4 h-4" />
                             </button>
                         )}
+                        {/* Expand/Collapse Button - Always visible */}
                         <button
                             onClick={() => setIsExpanded(!isExpanded)}
-                            aria-label="Expand Hub"
-                            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-slate-400 hover:text-white"
+                            aria-label={isExpanded ? "Thu gọn" : "Mở rộng"}
+                            title={isExpanded ? "Thu gọn" : "Mở rộng chat"}
+                            className="p-1.5 rounded-lg hover:bg-indigo-500/20 transition-colors text-indigo-400 hover:text-indigo-300 bg-indigo-500/10"
                         >
-
                             {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
                         </button>
                     </div>
