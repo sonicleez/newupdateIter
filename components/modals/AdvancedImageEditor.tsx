@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Type, GoogleGenAI } from "@google/genai";
-import { X, Undo, Redo, Eraser, Brush, Download, Wand2, Image as ImageIcon, History, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Scan, Maximize, Layers, Palette, Search, Upload, LayoutGrid, List, Shirt, ChevronDown, RectangleHorizontal } from 'lucide-react';
+import { X, Undo, Redo, Eraser, Brush, Download, Wand2, Image as ImageIcon, History, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Scan, Maximize, Layers, Palette, Search, Upload, LayoutGrid, List, Shirt, ChevronDown, RectangleHorizontal, Sparkles } from 'lucide-react';
 import MaskCanvas, { MaskCanvasHandle } from '../MaskCanvas';
 import { upscaleImage, expandImage, editImageWithMask, analyzeImage, compositeImages, applyStyleTransfer, generateImageFromImage, tryOnOutfit, GeneratedImage } from '../../utils/geminiImageEdit';
 import { IMAGE_MODELS, ASPECT_RATIOS } from '../../constants/presets';
@@ -665,16 +665,33 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
 
     return (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60]">
-            <div className="bg-[#121212] w-full h-full md:w-[95vw] md:h-[90vh] md:rounded-2xl flex flex-col overflow-hidden relative shadow-2xl border border-gray-800">
+            <div className="bg-[#121212] w-full h-full md:w-[95vw] md:h-[95vh] md:max-w-[1600px] md:rounded-2xl flex flex-col overflow-hidden relative shadow-2xl border border-gray-800">
 
                 {/* Header */}
-                <div className="h-16 border-b border-gray-800 flex items-center justify-between px-6 bg-[#1a1a1a]">
-                    <div className="flex items-center space-x-2 text-purple-400">
-                        <Wand2 size={24} />
-                        <span className="font-bold text-lg tracking-wide text-white">CyberMask Studio</span>
+                <div className="h-14 min-h-[56px] border-b border-gray-800 flex items-center justify-between px-4 bg-[#1a1a1a]">
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center space-x-2 text-purple-400">
+                            <Wand2 size={20} />
+                            <span className="font-bold text-base tracking-wide text-white hidden sm:inline">CyberMask Studio</span>
+                        </div>
+
+                        {/* New Image Button */}
+                        <button
+                            onClick={() => {
+                                setCurrentImage('');
+                                setHistory([]);
+                                setIsCreateMode(true);
+                                setPrompt('');
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 rounded-lg text-white text-xs font-bold transition-all"
+                            title="Tạo ảnh mới"
+                        >
+                            <Sparkles size={14} />
+                            <span className="hidden sm:inline">New</span>
+                        </button>
                     </div>
 
-                    <div className="flex items-center space-x-4">
+                    <div className="flex items-center gap-2">
                         {/* Ratio Selector - Quick Toggle */}
                         <div className="flex items-center bg-gray-800/50 rounded-lg p-0.5 border border-gray-700">
                             {EDITOR_RATIOS.map(ratio => (
