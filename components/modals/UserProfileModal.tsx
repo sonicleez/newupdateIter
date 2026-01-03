@@ -142,28 +142,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 setGommoCredentials(domain, token);
             }
 
-            // Save to Supabase for persistence
+            // Save to Supabase for persistence (gommo_credentials table)
             if (session?.user?.id) {
                 try {
-                    // Save domain as gommo_domain
                     await supabase
-                        .from('user_api_keys')
+                        .from('gommo_credentials')
                         .upsert({
                             user_id: session.user.id,
-                            provider: 'gommo_domain',
-                            encrypted_key: domain,
-                            is_active: true
-                        }, { onConflict: 'user_id,provider' });
-
-                    // Save token as gommo_token
-                    await supabase
-                        .from('user_api_keys')
-                        .upsert({
-                            user_id: session.user.id,
-                            provider: 'gommo_token',
-                            encrypted_key: token,
-                            is_active: true
-                        }, { onConflict: 'user_id,provider' });
+                            domain: domain,
+                            access_token: token,
+                            credits_ai: info.balancesInfo.credits_ai || 0
+                        }, { onConflict: 'user_id' });
 
                     console.log('[Gommo] ✅ Credentials saved to Supabase');
                 } catch (e: any) {

@@ -58,6 +58,20 @@ CREATE TABLE public.system_api_keys (
 ALTER TABLE public.profiles 
 ADD COLUMN IF NOT EXISTS system_key_id UUID REFERENCES public.system_api_keys(id);
 
+-- 2.3 Create GOMMO_CREDENTIALS table (Gommo AI API credentials)
+CREATE TABLE public.gommo_credentials (
+    user_id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+    domain TEXT NOT NULL,
+    access_token TEXT NOT NULL,
+    credits_ai INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- RLS for gommo_credentials
+ALTER TABLE public.gommo_credentials ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their own gommo credentials" ON public.gommo_credentials
+  FOR ALL USING (auth.uid() = user_id);
+
 
 -- 3. Create PROJECTS table (For cloud sync)
 CREATE TABLE public.projects (

@@ -627,21 +627,19 @@ const App: React.FC = () => {
             let domain: string | null = null;
             let token: string | null = null;
 
-            // Priority 1: Try Supabase if logged in
+            // Priority 1: Try Supabase if logged in (gommo_credentials table)
             if (session?.user?.id) {
                 try {
                     const { data: gommoData } = await supabase
-                        .from('user_api_keys')
-                        .select('provider, encrypted_key')
+                        .from('gommo_credentials')
+                        .select('domain, access_token, credits_ai')
                         .eq('user_id', session.user.id)
-                        .in('provider', ['gommo_domain', 'gommo_token']);
+                        .maybeSingle();
 
-                    if (gommoData && gommoData.length > 0) {
-                        for (const row of gommoData) {
-                            if (row.provider === 'gommo_domain') domain = row.encrypted_key;
-                            if (row.provider === 'gommo_token') token = row.encrypted_key;
-                        }
-                        console.log('[Gommo] ✅ Loaded from Supabase');
+                    if (gommoData) {
+                        domain = gommoData.domain;
+                        token = gommoData.access_token;
+                        console.log('[Gommo] ✅ Loaded from Supabase, credits:', gommoData.credits_ai);
                     }
                 } catch (e: any) {
                     console.error('[Gommo] Failed to load from Supabase:', e.message);
