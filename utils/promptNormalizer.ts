@@ -172,10 +172,81 @@ const MODEL_CONFIG: Record<ModelType, {
 export interface NormalizedPrompt {
     original: string;
     normalized: string;
+    negativePrompt?: string; // Auto-generated negative prompt
     modelType: ModelType;
     changes: string[];
     truncated: boolean;
     translated: boolean;
+    suggestedAspectRatio?: string; // AI-suggested AR
+}
+
+// Negative prompts for character mode
+const CHARACTER_NEGATIVE_PROMPT = `
+cropped image, partial body, cut off body,
+headshot only, face close-up, bust shot,
+missing legs, missing feet, no feet visible,
+colored background, gradient background, busy background,
+multiple characters, duplicates, character sheet, multiple views,
+blurry face, distorted features, deformed,
+text, watermark, signature, logo
+`.trim().replace(/\n/g, ' ');
+
+// Negative prompts for scene mode  
+const SCENE_NEGATIVE_PROMPT = `
+blurry, low quality, distorted,
+text, watermark, signature, logo,
+deformed, ugly, bad anatomy
+`.trim().replace(/\n/g, ' ');
+
+/**
+ * Get negative prompt for mode
+ */
+export function getNegativePrompt(mode: 'character' | 'scene'): string {
+    return mode === 'character' ? CHARACTER_NEGATIVE_PROMPT : SCENE_NEGATIVE_PROMPT;
+}
+
+/**
+ * Suggest aspect ratio based on prompt content and mode
+ */
+export function suggestAspectRatio(prompt: string, mode: 'character' | 'scene'): string {
+    const promptLower = prompt.toLowerCase();
+
+    // Character mode defaults
+    if (mode === 'character') {
+        // Full body needs vertical
+        if (promptLower.includes('full body') || promptLower.includes('standing')) {
+            return '9:16';
+        }
+        // Portrait/headshot can be square
+        if (promptLower.includes('portrait') || promptLower.includes('headshot')) {
+            return '1:1';
+        }
+        return '9:16'; // Default for characters
+    }
+
+    // Scene mode analysis
+    if (promptLower.includes('landscape') || promptLower.includes('wide shot') ||
+        promptLower.includes('panorama') || promptLower.includes('environment')) {
+        return '16:9';
+    }
+
+    if (promptLower.includes('portrait') || promptLower.includes('vertical') ||
+        promptLower.includes('tall') || promptLower.includes('phone')) {
+        return '9:16';
+    }
+
+    if (promptLower.includes('square') || promptLower.includes('instagram') ||
+        promptLower.includes('profile')) {
+        return '1:1';
+    }
+
+    if (promptLower.includes('group') || promptLower.includes('multiple people') ||
+        promptLower.includes('crowd')) {
+        return '3:2'; // Wider for groups
+    }
+
+    // Default for scenes
+    return '16:9';
 }
 /**
  * Translate and optimize prompt using Gemini
@@ -494,13 +565,27 @@ export async function normalizePromptAsync(
         changes.push(`Truncated to ${config.maxLength} chars`);
     }
 
+    // Generate negative prompt for supported models
+    const negativePrompt = config.supportsNegative ? getNegativePrompt(mode) : undefined;
+    if (negativePrompt) {
+        changes.push('🚫 Negative prompt added');
+    }
+
+    // Suggest aspect ratio
+    const suggestedAspectRatio = suggestAspectRatio(rawPrompt, mode);
+    if (suggestedAspectRatio !== aspectRatio) {
+        changes.push(`📐 Suggested AR: ${suggestedAspectRatio}`);
+    }
+
     return {
         original: rawPrompt,
         normalized,
+        negativePrompt,
         modelType,
         changes,
         truncated,
-        translated
+        translated,
+        suggestedAspectRatio
     };
 }
 
