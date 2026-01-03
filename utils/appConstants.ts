@@ -135,11 +135,11 @@ export const IMAGE_PROVIDERS = [
 // User can select any model regardless of imageProvider setting
 // The hook will automatically use the correct provider based on model.provider
 export const IMAGE_MODELS = [
-    // Gemini Direct (requires Gemini API key)
-    { value: 'gemini-3-pro-image-preview', label: '🔵 Nano Banana Pro [Gemini Direct]', provider: 'gemini', description: 'Via Google AI Studio API' },
+    // Gemini Direct (requires Gemini API key) - Full edit support
+    { value: 'gemini-3-pro-image-preview', label: '🔵 Nano Banana Pro [Gemini Direct]', provider: 'gemini', description: 'Via Google AI Studio API', supportsEdit: true },
 
-    // Gommo Proxy (requires Gommo credentials)
-    { value: 'google_nano_banana_pro', label: '🟡 Nano Banana Pro [Gommo Proxy]', provider: 'gommo', description: 'Via Gommo API' },
+    // Gommo Proxy (requires Gommo credentials) - Create only, no advanced edit
+    { value: 'google_nano_banana_pro', label: '🟡 Nano Banana Pro [Gommo Proxy]', provider: 'gommo', description: 'Via Gommo API', supportsEdit: false },
 ];
 
 // CHARACTER_MODELS - Models for character/lora generation
@@ -152,6 +152,10 @@ export const CHARACTER_MODELS = [
     // { value: 'seed_dream', label: '🟣 Seed Dream [Gommo]', provider: 'gommo', supportsLora: false },
     // { value: 'z_image', label: '🟣 Z-Image [Gommo]', provider: 'gommo', supportsLora: false },
 ];
+
+// EDIT_MODELS - Models that support image editing (mask, upscale, expand)
+// Used in AdvancedImageEditor
+export const EDIT_MODELS = IMAGE_MODELS.filter(m => m.supportsEdit);
 
 export const SCRIPT_MODELS = [
     { value: 'gemini-3-pro-high', label: 'Gemini 3 Pro (High)' },
