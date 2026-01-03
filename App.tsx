@@ -621,20 +621,51 @@ const App: React.FC = () => {
         syncStats();
     }, [session?.user?.id, updateStateAndRecord]);
 
-    // Hydrate Gommo credentials from localStorage on startup
+    // Hydrate Gommo credentials from Supabase (priority) or localStorage (fallback)
     useEffect(() => {
-        const gommoDomain = localStorage.getItem('gommoDomain');
-        const gommoAccessToken = localStorage.getItem('gommoAccessToken');
+        const loadGommoCredentials = async () => {
+            let domain: string | null = null;
+            let token: string | null = null;
 
-        if (gommoDomain || gommoAccessToken) {
-            console.log('[Gommo] Hydrating credentials from localStorage');
-            updateStateAndRecord(s => ({
-                ...s,
-                gommoDomain: gommoDomain || s.gommoDomain,
-                gommoAccessToken: gommoAccessToken || s.gommoAccessToken,
-            }));
-        }
-    }, []); // Run once on mount
+            // Priority 1: Try Supabase if logged in
+            if (session?.user?.id) {
+                try {
+                    const { data: gommoData } = await supabase
+                        .from('user_api_keys')
+                        .select('provider, encrypted_key')
+                        .eq('user_id', session.user.id)
+                        .in('provider', ['gommo_domain', 'gommo_token']);
+
+                    if (gommoData && gommoData.length > 0) {
+                        for (const row of gommoData) {
+                            if (row.provider === 'gommo_domain') domain = row.encrypted_key;
+                            if (row.provider === 'gommo_token') token = row.encrypted_key;
+                        }
+                        console.log('[Gommo] ✅ Loaded from Supabase');
+                    }
+                } catch (e: any) {
+                    console.error('[Gommo] Failed to load from Supabase:', e.message);
+                }
+            }
+
+            // Priority 2: Fallback to localStorage
+            if (!domain) domain = localStorage.getItem('gommoDomain');
+            if (!token) token = localStorage.getItem('gommoAccessToken');
+
+            if (domain || token) {
+                if (!domain || !token) {
+                    console.log('[Gommo] Hydrating credentials from localStorage');
+                }
+                updateStateAndRecord(s => ({
+                    ...s,
+                    gommoDomain: domain || s.gommoDomain,
+                    gommoAccessToken: token || s.gommoAccessToken,
+                }));
+            }
+        };
+
+        loadGommoCredentials();
+    }, [session?.user?.id]); // Re-run when session changes
 
     useEffect(() => {
         // Hydration logic if any

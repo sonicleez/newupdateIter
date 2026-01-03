@@ -136,9 +136,39 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             const client = new GommoAI(domain, token);
             const info = await client.getAccountInfo();
 
-            // Save credentials
+
+            // Save credentials to state and localStorage
             if (setGommoCredentials) {
                 setGommoCredentials(domain, token);
+            }
+
+            // Save to Supabase for persistence
+            if (session?.user?.id) {
+                try {
+                    // Save domain as gommo_domain
+                    await supabase
+                        .from('user_api_keys')
+                        .upsert({
+                            user_id: session.user.id,
+                            provider: 'gommo_domain',
+                            encrypted_key: domain,
+                            is_active: true
+                        }, { onConflict: 'user_id,provider' });
+
+                    // Save token as gommo_token
+                    await supabase
+                        .from('user_api_keys')
+                        .upsert({
+                            user_id: session.user.id,
+                            provider: 'gommo_token',
+                            encrypted_key: token,
+                            is_active: true
+                        }, { onConflict: 'user_id,provider' });
+
+                    console.log('[Gommo] ✅ Credentials saved to Supabase');
+                } catch (e: any) {
+                    console.error('[Gommo] Failed to save to Supabase:', e.message);
+                }
             }
 
             // Show credits
