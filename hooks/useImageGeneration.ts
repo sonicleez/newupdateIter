@@ -139,11 +139,56 @@ export function useImageGeneration(
         model: string,
         aspectRatio: string,
         parts: any[] = [],
-        imageSize: string = '1K' // Added resolution parameter: '1K', '2K', or '4K'
+        imageSize: string = '1K',
+        gommoCredentials?: { domain: string; accessToken: string }
     ): Promise<{ imageUrl: string; mediaId?: string }> => {
+        const provider = getProviderFromModel(model);
+
+        console.log(`[ImageGen] Provider: ${provider}, Model: ${model}`);
+
+        // ═══════════════════════════════════════════════════════════════
+        // GOMMO PATH: Prompt-only generation (no image references)
+        // ═══════════════════════════════════════════════════════════════
+        if (provider === 'gommo' && gommoCredentials?.domain && gommoCredentials?.accessToken) {
+            console.log('[ImageGen] 🟡 Using GOMMO provider');
+
+            // Warn if parts contain image references (Gommo doesn't support them)
+            const hasImageParts = parts.some(p => p.inlineData);
+            if (hasImageParts) {
+                console.warn('[ImageGen] ⚠️ Gommo does not support image references. Character/Product refs will be IGNORED!');
+            }
+
+            try {
+                const client = new GommoAI(gommoCredentials.domain, gommoCredentials.accessToken);
+                const gommoRatio = GommoAI.convertRatio(aspectRatio);
+
+                // Generate image via Gommo (async with polling)
+                const cdnUrl = await client.generateImage(prompt, {
+                    ratio: gommoRatio,
+                    model: model,
+                    onProgress: (status, attempt) => {
+                        console.log(`[Gommo] Polling ${attempt}/60: ${status}`);
+                    }
+                });
+
+                // Convert CDN URL to base64 for consistency with existing code
+                const base64Image = await urlToBase64(cdnUrl);
+                console.log('[ImageGen] ✅ Gommo image generated successfully');
+
+                return { imageUrl: base64Image };
+            } catch (error: any) {
+                console.error('[ImageGen] ❌ Gommo generation failed:', error.message);
+                throw new Error(`Gommo Error: ${error.message}`);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // GEMINI PATH: Full multi-modal generation with image references
+        // ═══════════════════════════════════════════════════════════════
         const isHighRes = model === 'gemini-3-pro-image-preview';
 
         if (apiKey && isHighRes) {
+            console.log('[ImageGen] 🔵 Using GEMINI provider');
             const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
 
             // Build parts in Google's recommended order: TEXT FIRST, then IMAGES
@@ -151,7 +196,7 @@ export function useImageGeneration(
             if (prompt) fullParts.push({ text: prompt }); // Text FIRST per docs
             fullParts.push(...parts); // Then all image references
 
-            console.log(`[ImageGen] Generating with resolution: ${imageSize}, aspectRatio: ${aspectRatio}`);
+            console.log(`[ImageGen] Generating with resolution: ${imageSize}, aspectRatio: ${aspectRatio}, parts: ${fullParts.length}`);
 
             const response = await ai.models.generateContent({
                 model: model,
@@ -172,7 +217,7 @@ export function useImageGeneration(
                 throw new Error("Không nhận được ảnh từ API.");
             }
         } else {
-            throw new Error("Missing Credentials (API Key)");
+            throw new Error("Missing Credentials (API Key hoặc Gommo Token)");
         }
     };
 
@@ -921,7 +966,8 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 currentState.imageModel || 'gemini-3-pro-image-preview',
                 currentState.aspectRatio,
                 isHighRes ? parts : [],
-                currentState.resolution || '1K' // Pass resolution setting
+                currentState.resolution || '1K',
+                { domain: currentState.gommoDomain || '', accessToken: currentState.gommoAccessToken || '' }
             );
 
             updateStateAndRecord(s => {
@@ -1011,7 +1057,8 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 currentState.imageModel || 'gemini-3-pro-image-preview',
                 currentState.aspectRatio,
                 [], // No parts for concept art
-                currentState.resolution || '1K' // Pass resolution setting
+                currentState.resolution || '1K',
+                { domain: currentState.gommoDomain || '', accessToken: currentState.gommoAccessToken || '' }
             );
 
             if (imageUrl) {
