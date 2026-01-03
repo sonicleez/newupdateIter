@@ -257,8 +257,23 @@ Output: "${mode === 'character'
             }]
         });
 
-        const optimized = response.text?.trim() || userDescription;
+        let optimized = response.text?.trim() || userDescription;
         const wasTranslated = containsVietnamese(userDescription);
+
+        // For character mode: Force append critical keywords if not present
+        if (mode === 'character') {
+            const mustHaveKeywords = [
+                { check: /full\s*body/i, add: 'full body from head to toe' },
+                { check: /white\s*(studio\s*)?background/i, add: 'pure white studio background' },
+                { check: /8k|ultra.?sharp|hyper.?detail/i, add: '8K ultra-sharp' }
+            ];
+
+            const missing = mustHaveKeywords.filter(k => !k.check.test(optimized)).map(k => k.add);
+            if (missing.length > 0) {
+                optimized = `${optimized}, ${missing.join(', ')}`;
+                console.log('[PromptNormalizer] Injected missing character keywords:', missing);
+            }
+        }
 
         console.log('[PromptNormalizer] AI Optimized:', {
             mode,
