@@ -634,7 +634,18 @@ CRITICAL: ONE SINGLE FULL-BODY IMAGE on solid white background. Face must be rec
                 console.log('[CharacterGen] 🧠 Added learned keywords:', learnedKeywords);
             }
 
-            if (needsNormalization(model)) {
+            // Check if normalization is needed (only for non-Google models)
+            const requiresNormalization = needsNormalization(model);
+            console.log('[CharacterGen] Model:', model, '| Needs normalization:', requiresNormalization);
+
+            if (!requiresNormalization) {
+                // Google/Gemini models - Vietnamese OK, no translation needed
+                if (setAgentState) {
+                    setAgentState('dop', 'working', `🟢 ${model} hỗ trợ tiếng Việt - không cần dịch`, 'skip_normalize');
+                }
+            }
+
+            if (requiresNormalization) {
                 console.log('[CharacterGen] 🔧 Normalizing prompt for model:', model);
 
                 // DOP Status: Normalizing
