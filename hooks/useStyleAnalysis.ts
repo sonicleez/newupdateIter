@@ -47,7 +47,7 @@ Return the style description in English, including:
 Format as a single paragraph of style instructions, suitable for use as an AI image generation prompt. Be specific and detailed.`;
 
             const response = await ai.models.generateContent({
-                model: 'gemini-2.0-flash',
+                model: 'gemini-2.5-flash',
                 contents: { parts: [{ inlineData: { data, mimeType } }, { text: analyzePrompt }] }
             });
 

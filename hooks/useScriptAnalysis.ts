@@ -75,7 +75,7 @@ export function useScriptAnalysis(userApiKey: string | null) {
     const analyzeScript = useCallback(async (
         scriptText: string,
         readingSpeed: 'slow' | 'medium' | 'fast' = 'medium',
-        modelSelector: string = 'gemini-2.0-flash|none', // format: model|thinkingLevel
+        modelSelector: string = 'gemini-2.5-flash|none', // format: model|thinkingLevel
         characterStyle?: CharacterStyleDefinition | null,
         director?: DirectorPreset | null,
         researchNotes?: { director?: string; dop?: string; story?: string } | null,

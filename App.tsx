@@ -551,6 +551,8 @@ const App: React.FC = () => {
                         localStorage.setItem('geminiApiKey', systemKey.encrypted_key);
                         console.log('[API Key] ✅ Loaded SYSTEM key (from system_api_keys)');
                         return;
+                    } else if (systemKeyError) {
+                        console.warn('[API Key] ⚠️ System key fetch failed:', systemKeyError.message);
                     }
                 }
 

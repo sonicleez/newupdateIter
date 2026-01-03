@@ -66,7 +66,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         try {
             const ai = new GoogleGenAI({ apiKey: trimmedKey });
             const response = await ai.models.generateContent({
-                model: 'gemini-2.0-flash',
+                model: 'gemini-2.5-flash',
                 contents: 'Test connection'
             });
 
@@ -222,6 +222,22 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         <Key className="text-gray-400" size={18} />
                         <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wide">Cấu hình API Key</h3>
                     </div>
+
+                    {/* System/Assigned Key Warning */}
+                    {(profile?.assigned_api_key || profile?.system_key_id) && (
+                        <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-3 flex items-start space-x-2">
+                            <ShieldCheck className="text-blue-400 flex-shrink-0 mt-0.5" size={16} />
+                            <div className="text-xs">
+                                <p className="text-blue-300 font-medium">
+                                    {profile?.assigned_api_key ? '🔑 Đang sử dụng API Key được Admin cấp' : '🔒 Đang sử dụng System Key'}
+                                </p>
+                                <p className="text-blue-400/70 mt-1">
+                                    Key tự nhập sẽ không được sử dụng khi có key từ Admin.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     <p className="text-xs text-gray-500">Nhập Google AI Studio Key (Gemini) để thực hiện các tác vụ tạo ảnh và kịch bản.</p>
 
                     <div className="relative">
