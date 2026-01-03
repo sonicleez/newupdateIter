@@ -171,7 +171,7 @@ export function useImageGeneration(
             }
 
             if (subjects.length > 0) {
-                console.log(`[ImageGen] 🎭 Converted ${subjects.length} Face ID references to Gommo subjects`);
+                console.log(`[ImageGen] 🎭 Converted ${subjects.length} reference image(s) to Gommo subjects (Face ID / Continuity)`);
             }
 
             try {
