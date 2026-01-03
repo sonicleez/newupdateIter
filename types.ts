@@ -146,6 +146,7 @@ export interface Scene {
   // Stats
   generationDuration?: number; // Time taken to generate this image (ms)
   generationStartTime?: number; // Timestamp when generation started (for realtime timer)
+  generatedByModel?: string; // Which AI model generated this image (e.g., 'midjourney_7_0', 'gemini-3-pro-image-preview')
 
   // UI state
   isGenerating: boolean;

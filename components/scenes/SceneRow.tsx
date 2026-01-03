@@ -489,8 +489,13 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                         ) : scene.generatedImage ? (
                             <>
                                 <img src={scene.generatedImage} alt="Generated" className="w-full h-full object-cover" />
-                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                     <span className="text-white text-xs font-bold border border-white px-3 py-1 rounded-full backdrop-blur-sm">🔍 Phóng to</span>
+                                    {scene.generatedByModel && (
+                                        <span className={`mt-2 text-[9px] px-2 py-0.5 rounded-full ${scene.generatedByModel.startsWith('gemini') ? 'bg-blue-500/80 text-white' : 'bg-yellow-500/80 text-black'}`}>
+                                            {scene.generatedByModel.startsWith('gemini') ? '🔵' : '🟡'} {scene.generatedByModel.replace(/_/g, ' ').replace('google image gen ', '').slice(0, 20)}
+                                        </span>
+                                    )}
                                 </div>
                             </>
                         ) : (

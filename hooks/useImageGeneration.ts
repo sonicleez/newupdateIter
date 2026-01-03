@@ -1024,6 +1024,7 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                         generationDuration: duration,
                         generationStartTime: undefined,
                         ...(fromManual ? { endFrameImage: imageUrl } : { generatedImage: imageUrl }),
+                        generatedByModel: currentState.imageModel, // Track which model generated this
                         mediaId: fromManual ? sc.mediaId : (mediaId || sc.mediaId),
                         isGenerating: false,
                         error: null
