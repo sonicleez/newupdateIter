@@ -138,8 +138,12 @@ export const IMAGE_MODELS = [
     // Gemini Direct (requires Gemini API key) - Full edit support
     { value: 'gemini-3-pro-image-preview', label: '🔵 Nano Banana Pro [Gemini Direct]', provider: 'gemini', description: 'Via Google AI Studio API', supportsEdit: true },
 
-    // Gommo Proxy (requires Gommo credentials) - Create only, no advanced edit
-    { value: 'google_nano_banana_pro', label: '🟡 Nano Banana Pro [Gommo Proxy]', provider: 'gommo', description: 'Via Gommo API', supportsEdit: false },
+    // Gommo Proxy (requires Gommo credentials) - Supports editImage
+    { value: 'google_nano_banana_pro', label: '🟡 Nano Banana Pro [Gommo Proxy]', provider: 'gommo', description: 'Via Gommo API', supportsEdit: true },
+
+    // TODO: Add more Gommo models when list is available
+    // { value: 'midjourney', label: '🟡 Midjourney [Gommo]', provider: 'gommo', supportsEdit: true },
+    // { value: 'flux', label: '🟡 Flux [Gommo]', provider: 'gommo', supportsEdit: true },
 ];
 
 // CHARACTER_MODELS - Models for character/lora generation
