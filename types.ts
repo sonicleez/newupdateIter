@@ -299,6 +299,12 @@ export interface ProjectState {
     '2K': number;
     '4K': number;
     total: number;
+    // Per-type counters
+    scenes?: number;
+    characters?: number;
+    products?: number;
+    concepts?: number;
+    lastGeneratedAt?: string;
   };
 
   // Generation Configuration (NEW)

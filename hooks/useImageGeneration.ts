@@ -925,7 +925,9 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 const updatedStats = {
                     ...currentStats,
                     [resolutionKey]: newCount,
-                    total: (currentStats.total || 0) + 1
+                    total: (currentStats.total || 0) + 1,
+                    scenes: (currentStats.scenes || 0) + 1,
+                    lastGeneratedAt: new Date().toISOString()
                 };
 
                 // Sync to Supabase if userId is present
@@ -1013,7 +1015,9 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                     const updatedStats = {
                         ...currentStats,
                         [resolutionKey]: (currentStats[resolutionKey] || 0) + 1,
-                        total: (currentStats.total || 0) + 1
+                        total: (currentStats.total || 0) + 1,
+                        concepts: (currentStats.concepts || 0) + 1,
+                        lastGeneratedAt: new Date().toISOString()
                     };
 
                     if (userId) {

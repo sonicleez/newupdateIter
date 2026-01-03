@@ -5,7 +5,7 @@ import { generateId } from '../utils/helpers';
 import { GLOBAL_STYLES, CHARACTER_STYLES } from '../constants/presets';
 import { getCharacterStyleById } from '../constants/characterStyles';
 import { callGeminiAPI } from '../utils/geminiUtils';
-import { uploadImageToSupabase } from '../utils/storageUtils';
+import { uploadImageToSupabase, syncUserStatsToCloud } from '../utils/storageUtils';
 
 export function useCharacterLogic(
     state: ProjectState,
@@ -557,6 +557,19 @@ CRITICAL: ONE SINGLE FULL-BODY IMAGE on solid white background. Face must be rec
 
                 updateCharacter(charId, { generatedImage: imageUrl, isGenerating: false });
                 if (addToGallery) addToGallery(imageUrl, 'character', prompt, charId);
+
+                // Sync usage stats to Supabase
+                updateStateAndRecord(s => {
+                    const currentStats = s.usageStats || { '1K': 0, '2K': 0, '4K': 0, total: 0 };
+                    const updatedStats = {
+                        ...currentStats,
+                        total: (currentStats.total || 0) + 1,
+                        characters: (currentStats.characters || 0) + 1,
+                        lastGeneratedAt: new Date().toISOString()
+                    };
+                    if (userId) syncUserStatsToCloud(userId, updatedStats);
+                    return { ...s, usageStats: updatedStats };
+                });
             } else {
                 throw new Error("AI không trả về ảnh.");
             }

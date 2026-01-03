@@ -11,6 +11,18 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMP WITH TIME ZONE;
 
+-- Usage statistics for tracking image generation per user
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS usage_stats JSONB DEFAULT '{
+  "1K": 0,
+  "2K": 0,
+  "4K": 0,
+  "total": 0,
+  "scenes": 0,
+  "characters": 0,
+  "products": 0,
+  "concepts": 0
+}'::jsonb;
+
 -- 2. Create USER_API_KEYS table (User-provided keys)
 CREATE TABLE public.user_api_keys (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

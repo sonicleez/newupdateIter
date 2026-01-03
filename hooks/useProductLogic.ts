@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { ProjectState, Product } from '../types';
 import { generateId } from '../utils/helpers';
 import { callGeminiAPI } from '../utils/geminiUtils';
-import { uploadImageToSupabase } from '../utils/storageUtils';
+import { uploadImageToSupabase, syncUserStatsToCloud } from '../utils/storageUtils';
 
 export function useProductLogic(
     state: ProjectState,
@@ -129,6 +129,20 @@ export function useProductLogic(
                 if (right) addToGallery(right, 'product', `Right View: ${json.name}`, id);
                 if (top) addToGallery(top, 'product', `Top View: ${json.name}`, id);
             }
+
+            // Count generated product views and sync stats
+            const viewCount = [front, back, left, right, top].filter(Boolean).length;
+            updateStateAndRecord(s => {
+                const currentStats = s.usageStats || { '1K': 0, '2K': 0, '4K': 0, total: 0 };
+                const updatedStats = {
+                    ...currentStats,
+                    total: (currentStats.total || 0) + viewCount,
+                    products: (currentStats.products || 0) + viewCount,
+                    lastGeneratedAt: new Date().toISOString()
+                };
+                if (userId) syncUserStatsToCloud(userId, updatedStats);
+                return { ...s, usageStats: updatedStats };
+            });
         } catch (error) {
             console.error("Product Analysis Error:", error);
             updateProduct(id, { isAnalyzing: false });
