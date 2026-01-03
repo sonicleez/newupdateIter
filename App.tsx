@@ -621,6 +621,20 @@ const App: React.FC = () => {
         syncStats();
     }, [session?.user?.id, updateStateAndRecord]);
 
+    // Hydrate Gommo credentials from localStorage on startup
+    useEffect(() => {
+        const gommoDomain = localStorage.getItem('gommoDomain');
+        const gommoAccessToken = localStorage.getItem('gommoAccessToken');
+
+        if (gommoDomain || gommoAccessToken) {
+            console.log('[Gommo] Hydrating credentials from localStorage');
+            updateStateAndRecord(s => ({
+                ...s,
+                gommoDomain: gommoDomain || s.gommoDomain,
+                gommoAccessToken: gommoAccessToken || s.gommoAccessToken,
+            }));
+        }
+    }, []); // Run once on mount
 
     useEffect(() => {
         // Hydration logic if any

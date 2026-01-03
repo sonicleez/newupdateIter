@@ -209,6 +209,17 @@ export function useImageGeneration(
         }
 
         // ═══════════════════════════════════════════════════════════════
+        // ERROR: Gommo model selected but credentials missing
+        // ═══════════════════════════════════════════════════════════════
+        if (provider === 'gommo') {
+            console.error('[ImageGen] ❌ Gommo model selected but credentials missing!', {
+                domain: gommoCredentials?.domain || '(empty)',
+                token: gommoCredentials?.accessToken ? '(set)' : '(empty)'
+            });
+            throw new Error('Gommo credentials chưa được cấu hình. Vào Profile → Gommo AI để nhập Domain và Access Token.');
+        }
+
+        // ═══════════════════════════════════════════════════════════════
         // GEMINI PATH: Full multi-modal generation with image references
         // ═══════════════════════════════════════════════════════════════
         const isHighRes = model === 'gemini-3-pro-image-preview';
