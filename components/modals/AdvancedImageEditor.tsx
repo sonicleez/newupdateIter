@@ -1,10 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Type, GoogleGenAI } from "@google/genai";
-import { X, Undo, Redo, Eraser, Brush, Download, Wand2, Image as ImageIcon, History, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Scan, Maximize, Layers, Palette, Search, Upload, LayoutGrid, List, Shirt } from 'lucide-react';
+import { X, Undo, Redo, Eraser, Brush, Download, Wand2, Image as ImageIcon, History, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Scan, Maximize, Layers, Palette, Search, Upload, LayoutGrid, List, Shirt, ChevronDown } from 'lucide-react';
 import MaskCanvas, { MaskCanvasHandle } from '../MaskCanvas';
 import { upscaleImage, expandImage, editImageWithMask, analyzeImage, compositeImages, applyStyleTransfer, generateImageFromImage, tryOnOutfit, GeneratedImage } from '../../utils/geminiImageEdit';
+import { IMAGE_MODELS } from '../../constants/presets';
 
 import { Character, Product } from '../../types';
+
+// Filter models that support editing
+const EDIT_MODELS = IMAGE_MODELS.filter(m => m.supportsEdit);
 
 interface AdvancedImageEditorProps {
     isOpen: boolean;
@@ -69,6 +73,8 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
     const [imageAspectRatio, setImageAspectRatio] = useState("1:1");
     const [currentView, setCurrentView] = useState<string | undefined>(initialActiveView);
     const [currentResolution, setCurrentResolution] = useState<'1k' | '2k' | '4k'>('1k');
+    const [editModel, setEditModel] = useState(EDIT_MODELS[0]?.value || 'gemini-3-pro-image-preview');
+    const [showModelDropdown, setShowModelDropdown] = useState(false);
 
     // Dimensions for the canvas
     const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -624,6 +630,35 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                     </div>
 
                     <div className="flex items-center space-x-4">
+                        {/* Model Selector */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowModelDropdown(!showModelDropdown)}
+                                className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg border border-gray-600 text-sm text-white transition-colors"
+                            >
+                                <span className="max-w-[180px] truncate">
+                                    {EDIT_MODELS.find(m => m.value === editModel)?.label || 'Select Model'}
+                                </span>
+                                <ChevronDown size={14} />
+                            </button>
+                            {showModelDropdown && (
+                                <div className="absolute right-0 top-full mt-1 w-80 max-h-72 overflow-y-auto bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50">
+                                    {EDIT_MODELS.map(model => (
+                                        <button
+                                            key={model.value}
+                                            onClick={() => {
+                                                setEditModel(model.value);
+                                                setShowModelDropdown(false);
+                                            }}
+                                            className={`w-full text-left px-4 py-2 hover:bg-gray-800 transition-colors ${editModel === model.value ? 'bg-purple-600/20 text-purple-300' : 'text-white'}`}
+                                        >
+                                            <div className="font-medium text-sm">{model.label}</div>
+                                            <div className="text-[10px] text-gray-500">{model.description}</div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         <button onClick={handleAnalyze} disabled={isGenerating} className="p-2 text-blue-400 hover:text-blue-300 transition-colors" title="Analyze Image">
                             <Search size={20} />
                         </button>
