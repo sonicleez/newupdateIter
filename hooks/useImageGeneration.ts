@@ -145,6 +145,11 @@ export function useImageGeneration(
         const provider = getProviderFromModel(model);
 
         console.log(`[ImageGen] Provider: ${provider}, Model: ${model}`);
+        console.log(`[ImageGen] Gommo credentials check:`, {
+            domain: gommoCredentials?.domain || '(empty)',
+            hasToken: !!gommoCredentials?.accessToken,
+            tokenLength: gommoCredentials?.accessToken?.length || 0
+        });
 
         // ═══════════════════════════════════════════════════════════════
         // GOMMO PATH: Supports subjects array for Face ID references
