@@ -15,7 +15,12 @@ export type ModelType =
     | 'kling'
     | 'dreamina'
     | 'z_image'
-    | 'hailuo';
+    | 'hailuo'
+    | 'flux'
+    | 'ideogram'
+    | 'recraft'
+    | 'stable_diffusion'
+    | 'dalle';
 
 // Detect model type from model ID
 export function detectModelType(modelId: string): ModelType {
@@ -26,6 +31,11 @@ export function detectModelType(modelId: string): ModelType {
     if (modelId.includes('dreamina')) return 'dreamina';
     if (modelId.includes('z_image')) return 'z_image';
     if (modelId.includes('hailuo')) return 'hailuo';
+    if (modelId.includes('flux')) return 'flux';
+    if (modelId.includes('ideogram')) return 'ideogram';
+    if (modelId.includes('recraft')) return 'recraft';
+    if (modelId.includes('sd_') || modelId.includes('stable')) return 'stable_diffusion';
+    if (modelId.includes('dalle')) return 'dalle';
     if (modelId.includes('imagen') || modelId.includes('google_image_gen')) return 'imagen';
     if (modelId.includes('banana')) return 'banana_pro';
     return 'gemini'; // Default
@@ -115,6 +125,47 @@ const MODEL_CONFIG: Record<ModelType, {
         styleFirst: true,
         supportsNegative: false,
         format: 'concise'
+    },
+    // New models
+    flux: {
+        maxLength: 1000,
+        language: 'en',
+        styleFirst: false,
+        supportsNegative: false,
+        format: 'concise',
+        promptTemplate: '[SUBJECT], [ACTION], [STYLE], [LIGHTING], [CAMERA]'
+    },
+    ideogram: {
+        maxLength: 800,
+        language: 'en',
+        styleFirst: false,
+        supportsNegative: false,
+        format: 'concise',
+        promptTemplate: '[SUBJECT], [ACTION], [TEXT if any], [STYLE]'
+    },
+    recraft: {
+        maxLength: 600,
+        language: 'en',
+        styleFirst: true,
+        supportsNegative: false,
+        format: 'concise',
+        promptTemplate: '[STYLE], [SUBJECT], vector art, clean lines'
+    },
+    stable_diffusion: {
+        maxLength: 400,
+        language: 'en',
+        styleFirst: true,
+        supportsNegative: true,
+        format: 'danbooru',
+        promptTemplate: 'masterpiece, best quality, [SUBJECT], [ACTION], [STYLE]'
+    },
+    dalle: {
+        maxLength: 1000,
+        language: 'en',
+        styleFirst: false,
+        supportsNegative: false,
+        format: 'concise',
+        promptTemplate: '[SUBJECT] [ACTION]. [STYLE]. [CAMERA].'
     }
 };
 
