@@ -108,36 +108,6 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({
                             <span>Studio</span>
                         </button>
                     )}
-                    {/* Upload Image Button */}
-                    {onUploadForEdit && (
-                        <>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                        const reader = new FileReader();
-                                        reader.onloadend = () => {
-                                            onUploadForEdit(reader.result as string);
-                                        };
-                                        reader.readAsDataURL(file);
-                                    }
-                                    e.target.value = ''; // Reset for re-upload
-                                }}
-                            />
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 rounded-lg text-white text-xs font-bold transition-all shadow-lg shadow-blue-900/20"
-                                title="Tải ảnh lên để chỉnh sửa"
-                            >
-                                <Upload size={14} />
-                                <span>Upload</span>
-                            </button>
-                        </>
-                    )}
                     {/* Gommo Library Button */}
                     {hasGommoCredentials && onOpenGommoLibrary && (
                         <button

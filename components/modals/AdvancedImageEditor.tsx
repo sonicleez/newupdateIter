@@ -83,6 +83,7 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
     const [upscaleLevel, setUpscaleLevel] = useState<'1k' | '2k' | '4k'>('2k');
     const layerInputRef = useRef<HTMLInputElement>(null);
     const styleInputRef = useRef<HTMLInputElement>(null);
+    const dropzoneInputRef = useRef<HTMLInputElement>(null);
     const [activeTab, setActiveTab] = useState<'tools' | 'layers' | 'analysis' | 'try-on'>('tools');
     const [imageAspectRatio, setImageAspectRatio] = useState("1:1");
     const [currentView, setCurrentView] = useState<string | undefined>(initialActiveView);
@@ -798,30 +799,84 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
 
                         {/* Canvas Container */}
                         <div className="flex-1 flex items-center justify-center p-8 overflow-hidden group/canvas" ref={containerRef}>
-                            <div className="relative shadow-2xl border border-gray-800">
-                                {/* Character/Product Navigation */}
-                                <div className="absolute inset-x-0 bottom-0 pointer-events-none z-30 opacity-0 group-hover/canvas:opacity-100 transition-opacity duration-300">
-                                    <div className="pointer-events-auto">
-                                        <ViewNavigator />
+                            {/* Create Mode: Dropzone */}
+                            {(isCreateMode || !currentImage) ? (
+                                <div
+                                    className="w-full max-w-2xl aspect-video border-2 border-dashed border-gray-600 hover:border-purple-500 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all bg-gray-900/30 hover:bg-gray-900/50"
+                                    onClick={() => dropzoneInputRef.current?.click()}
+                                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-purple-500', 'bg-purple-500/10'); }}
+                                    onDragLeave={(e) => { e.currentTarget.classList.remove('border-purple-500', 'bg-purple-500/10'); }}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        e.currentTarget.classList.remove('border-purple-500', 'bg-purple-500/10');
+                                        const file = e.dataTransfer.files[0];
+                                        if (file && file.type.startsWith('image/')) {
+                                            const reader = new FileReader();
+                                            reader.onloadend = () => {
+                                                const base64 = reader.result as string;
+                                                setCurrentImage(base64);
+                                                addToHistory(base64, 'Uploaded');
+                                                setIsCreateMode(false);
+                                            };
+                                            reader.readAsDataURL(file);
+                                        }
+                                    }}
+                                >
+                                    <input
+                                        ref={dropzoneInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                const reader = new FileReader();
+                                                reader.onloadend = () => {
+                                                    const base64 = reader.result as string;
+                                                    setCurrentImage(base64);
+                                                    addToHistory(base64, 'Uploaded');
+                                                    setIsCreateMode(false);
+                                                };
+                                                reader.readAsDataURL(file);
+                                            }
+                                            e.target.value = '';
+                                        }}
+                                    />
+                                    <Upload size={48} className="text-gray-500 mb-4" />
+                                    <p className="text-gray-400 text-lg font-medium mb-2">Kéo thả ảnh vào đây</p>
+                                    <p className="text-gray-600 text-sm mb-4">hoặc click để chọn file</p>
+                                    <div className="flex items-center gap-2 text-gray-500 text-xs">
+                                        <span className="px-2 py-1 bg-gray-800 rounded">PNG</span>
+                                        <span className="px-2 py-1 bg-gray-800 rounded">JPG</span>
+                                        <span className="px-2 py-1 bg-gray-800 rounded">WEBP</span>
                                     </div>
+                                    <p className="text-purple-400 text-sm mt-6">Hoặc nhập prompt bên dưới để tạo ảnh mới</p>
                                 </div>
-
-
-                                <MaskCanvas
-                                    ref={canvasRef}
-                                    image={currentImage}
-                                    width={dimensions.width}
-                                    height={dimensions.height}
-                                    brushRadius={brushSize / 2}
-                                    brushColor={isEraser ? "#000001" : "rgba(168, 85, 247, 0.8)"}
-                                    disabled={!isDrawMode || (activeTab !== 'tools' && activeTab !== 'try-on')}
-                                />
-
-                                {layerImage && activeTab === 'layers' && (
-                                    <div className="absolute top-2 right-2 bg-black/60 text-xs text-white px-2 py-1 rounded pointer-events-none border border-white/20">
+                            ) : (
+                                <div className="relative shadow-2xl border border-gray-800">
+                                    {/* Character/Product Navigation */}
+                                    <div className="absolute inset-x-0 bottom-0 pointer-events-none z-30 opacity-0 group-hover/canvas:opacity-100 transition-opacity duration-300">
+                                        <div className="pointer-events-auto">
+                                            <ViewNavigator />
+                                        </div>
                                     </div>
-                                )}
-                            </div>
+
+                                    <MaskCanvas
+                                        ref={canvasRef}
+                                        image={currentImage}
+                                        width={dimensions.width}
+                                        height={dimensions.height}
+                                        brushRadius={brushSize / 2}
+                                        brushColor={isEraser ? "#000001" : "rgba(168, 85, 247, 0.8)"}
+                                        disabled={!isDrawMode || (activeTab !== 'tools' && activeTab !== 'try-on')}
+                                    />
+
+                                    {layerImage && activeTab === 'layers' && (
+                                        <div className="absolute top-2 right-2 bg-black/60 text-xs text-white px-2 py-1 rounded pointer-events-none border border-white/20">
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
