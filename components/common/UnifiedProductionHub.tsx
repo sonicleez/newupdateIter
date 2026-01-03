@@ -126,7 +126,7 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
 
             // Constraints
             const padding = 20;
-            const hubWidth = isExpanded ? 360 : 200;
+            const hubWidth = isExpanded ? 360 : 300;
             const hubHeight = isExpanded ? 500 : 70;
 
             newX = Math.max(padding, Math.min(window.innerWidth - hubWidth - padding, newX));
@@ -139,7 +139,7 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
             if (isDragging) {
                 setIsDragging(false);
                 // Snap to edges
-                const hubWidth = isExpanded ? 360 : 200;
+                const hubWidth = isExpanded ? 360 : 300;
                 const centerX = position.x + hubWidth / 2;
                 if (centerX < window.innerWidth / 2) {
                     setSnapEdge('left');
@@ -191,7 +191,7 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
             style={{
                 left: position.x,
                 top: position.y,
-                width: isExpanded ? '360px' : '220px'
+                width: isExpanded ? '360px' : '300px' // Increased from 220px to fit expand button
             }}
             onMouseDown={handleMouseDown}
         >
