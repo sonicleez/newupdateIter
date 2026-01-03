@@ -170,24 +170,38 @@ export const CharacterDetailModal: React.FC<CharacterDetailModalProps> = ({
                     <h3 className="text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Góc Nhìn Nhân Vật</h3>
                     <div className="grid grid-cols-2 gap-4">
                         {/* 1. Face ID */}
-                        <SingleImageSlot
-                            label="Face ID"
-                            image={character.faceImage}
-                            onUpload={(img) => updateCharacter(character.id, { faceImage: img })}
-                            onDelete={() => updateCharacter(character.id, { faceImage: null })}
-                            onEdit={character.faceImage ? () => onEditImage(character.id, character.faceImage!, 'face') : undefined}
-                            subLabel="Gương mặt"
-                        />
+                        <div>
+                            <SingleImageSlot
+                                label="Face ID"
+                                image={character.faceImage}
+                                onUpload={(img) => updateCharacter(character.id, { faceImage: img })}
+                                onDelete={() => updateCharacter(character.id, { faceImage: null })}
+                                onEdit={character.faceImage ? () => onEditImage(character.id, character.faceImage!, 'face') : undefined}
+                                subLabel="Gương mặt"
+                            />
+                            {character.faceImage && (
+                                <div className="mt-1 flex justify-center">
+                                    <QualityRating size="sm" className="bg-gray-800/50 px-2 py-1 rounded" />
+                                </div>
+                            )}
+                        </div>
                         {/* 2. Full Body */}
-                        <SingleImageSlot
-                            label="Full Body"
-                            image={character.bodyImage}
-                            onUpload={(img) => updateCharacter(character.id, { bodyImage: img })}
-                            onDelete={() => updateCharacter(character.id, { bodyImage: null })}
-                            onEdit={character.bodyImage ? () => onEditImage(character.id, character.bodyImage!, 'body') : undefined}
-                            aspect="portrait"
-                            subLabel="Toàn thân"
-                        />
+                        <div>
+                            <SingleImageSlot
+                                label="Full Body"
+                                image={character.bodyImage}
+                                onUpload={(img) => updateCharacter(character.id, { bodyImage: img })}
+                                onDelete={() => updateCharacter(character.id, { bodyImage: null })}
+                                onEdit={character.bodyImage ? () => onEditImage(character.id, character.bodyImage!, 'body') : undefined}
+                                aspect="portrait"
+                                subLabel="Toàn thân"
+                            />
+                            {character.bodyImage && (
+                                <div className="mt-1 flex justify-center">
+                                    <QualityRating size="sm" className="bg-gray-800/50 px-2 py-1 rounded" />
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

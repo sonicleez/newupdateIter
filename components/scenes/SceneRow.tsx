@@ -497,11 +497,13 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                                             {scene.generatedByModel.startsWith('gemini') ? '🔵' : '🟡'} {scene.generatedByModel.replace(/_/g, ' ').replace('google image gen ', '').slice(0, 20)}
                                         </span>
                                     )}
-                                    {/* DOP Learning Rating */}
-                                    <QualityRating
-                                        dopRecordId={scene.dopRecordId}
-                                        className="mt-2 bg-black/60 px-2 py-1 rounded-full"
-                                    />
+                                    {/* DOP Learning Rating - stopPropagation to prevent zoom */}
+                                    <div onClick={(e) => e.stopPropagation()}>
+                                        <QualityRating
+                                            dopRecordId={scene.dopRecordId}
+                                            className="mt-2 bg-black/60 px-2 py-1 rounded-full"
+                                        />
+                                    </div>
                                 </div>
                             </>
                         ) : (
