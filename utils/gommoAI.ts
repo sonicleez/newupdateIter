@@ -62,11 +62,41 @@ export interface GommoModel {
     startImage?: boolean;
 }
 
+/**
+ * Gommo Space (for organizing media assets)
+ */
+export interface GommoSpace {
+    id_base: string;
+    name: string;
+    description?: string;
+    project_id?: string;
+    created_time: number;
+    updated_time: number;
+}
+
+/**
+ * Gommo Generation Group (collection of generated images/videos)
+ */
+export interface GommoGenerationGroup {
+    id_base: string;
+    name: string;
+    description?: string;
+    project_id?: string;
+    status: 'ACTIVE' | 'ARCHIVED';
+    type: 'IMAGE' | 'VIDEO';
+    created_at: number;
+    updated_at: number;
+}
+
 const GOMMO_ENDPOINTS = {
     createImage: 'https://api.gommo.net/ai/generateImage',
     checkImageStatus: 'https://api.gommo.net/ai/image',
     accountInfo: 'https://api.gommo.net/api/apps/go-mmo/ai/me',
     listModels: 'https://api.gommo.net/ai/models',
+    // Library Management
+    generationGroups: 'https://api.gommo.net/ai/generationGroups',
+    listSpaces: 'https://api.gommo.net/api/apps/go-mmo/ai_spaces/getAll',
+    createSpace: 'https://api.gommo.net/api/apps/go-mmo/ai_spaces/create',
 };
 
 /**
@@ -170,6 +200,56 @@ export class GommoAI {
             { type }
         );
         console.log(`[Gommo AI] Found ${result.data?.length || 0} ${type} models`);
+        return result.data || [];
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // LIBRARY MANAGEMENT (Spaces & Generation Groups)
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * List all spaces (folders for organizing media)
+     * @param projectId - Optional project ID to filter
+     */
+    async listSpaces(projectId?: string): Promise<GommoSpace[]> {
+        const result = await this.request<{ data: GommoSpace[]; runtime: number }>(
+            GOMMO_ENDPOINTS.listSpaces,
+            { project_id: projectId || 'default' }
+        );
+        console.log(`[Gommo AI] Found ${result.data?.length || 0} spaces`);
+        return result.data || [];
+    }
+
+    /**
+     * Create a new space for organizing media
+     */
+    async createSpace(name: string, description?: string, projectId?: string): Promise<GommoSpace> {
+        const result = await this.request<{ spaceInfo: GommoSpace; runtime: number }>(
+            GOMMO_ENDPOINTS.createSpace,
+            {
+                name,
+                description: description || '',
+                project_id: projectId || 'default'
+            }
+        );
+        console.log(`[Gommo AI] Created space: ${result.spaceInfo?.name}`);
+        return result.spaceInfo;
+    }
+
+    /**
+     * List generation groups (collections of generated images/videos)
+     * @param type - 'IMAGE' or 'VIDEO'
+     * @param projectId - Optional project ID to filter
+     */
+    async listGenerationGroups(type: 'IMAGE' | 'VIDEO' = 'IMAGE', projectId?: string): Promise<GommoGenerationGroup[]> {
+        const result = await this.request<{ data: GommoGenerationGroup[]; runtime: number }>(
+            GOMMO_ENDPOINTS.generationGroups,
+            {
+                type,
+                project_id: projectId || 'default'
+            }
+        );
+        console.log(`[Gommo AI] Found ${result.data?.length || 0} ${type} generation groups`);
         return result.data || [];
     }
 
