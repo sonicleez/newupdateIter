@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Image as ImageIcon, Search, Trash2, CheckCircle2, Copy, Replace, Layers, X, Clock, Filter, Wand2, FolderOpen, Upload, Sparkles } from 'lucide-react';
+import { Image as ImageIcon, Search, Trash2, CheckCircle2, Copy, Replace, Layers, X, Clock, Filter, Wand2, FolderOpen, Upload, Sparkles, Edit3 } from 'lucide-react';
 import { ProjectState, GalleryAsset, Scene, Character, Product } from '../../types';
 
 interface AssetLibraryProps {
@@ -25,6 +25,8 @@ interface AssetLibraryProps {
     onUploadForEdit?: (base64: string) => void;
     // Open Studio in create mode
     onOpenStudio?: () => void;
+    // Edit image in Studio
+    onEditInStudio?: (base64: string, prompt?: string) => void;
 }
 
 export const AssetLibrary: React.FC<AssetLibraryProps> = ({
@@ -41,7 +43,8 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({
     onOpenGommoLibrary,
     hasGommoCredentials,
     onUploadForEdit,
-    onOpenStudio
+    onOpenStudio,
+    onEditInStudio
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [filter, setFilter] = useState<string>('all');
@@ -60,6 +63,8 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({
         { id: 'scene', label: 'Cảnh phim' },
         { id: 'character', label: 'Nhân vật' },
         { id: 'product', label: 'Sản phẩm' },
+        { id: 'concept', label: 'Concept' },
+        { id: 'end-frame', label: 'End Frame' },
         { id: 'edit', label: 'Đã chỉnh sửa' },
     ];
 
@@ -274,13 +279,26 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({
                         </div>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                        {/* Edit in Studio Button */}
+                        {onEditInStudio && (
+                            <button
+                                onClick={() => {
+                                    onEditInStudio(selectedAsset.image, selectedAsset.prompt);
+                                    setSelectedAsset(null);
+                                }}
+                                className="py-2.5 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-pink-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                            >
+                                <Edit3 size={16} />
+                                Chỉnh sửa
+                            </button>
+                        )}
                         <button
                             onClick={() => setShowReplaceMenu(!showReplaceMenu)}
-                            className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-purple-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                            className={`py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-purple-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${!onEditInStudio ? 'col-span-2' : ''}`}
                         >
                             <Replace size={16} />
-                            Thay thế vào dự án
+                            Thay thế
                         </button>
                     </div>
 

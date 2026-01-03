@@ -995,6 +995,10 @@ const App: React.FC = () => {
                                     // Open editor in create mode (no source image)
                                     openEditor('studio-' + Date.now(), '', 'scene');
                                 }}
+                                onEditInStudio={(base64, prompt) => {
+                                    // Open editor with selected gallery image
+                                    openEditor('gallery-' + Date.now(), base64, 'scene');
+                                }}
                             />
                         )}
                     </div>
