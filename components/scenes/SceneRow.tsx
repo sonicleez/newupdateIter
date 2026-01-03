@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { GripVertical, Copy, Download, Layers, Play, Plus, RefreshCw, Trash, User, Box, Sparkles, Wand2, Image as ImageIcon } from 'lucide-react';
 import { Scene, Character, Product } from '../../types';
+import { QualityRating } from '../common/QualityRating';
 
 const LiveTimer: React.FC<{ startTime: number }> = ({ startTime }) => {
     const [elapsed, setElapsed] = useState(0);
@@ -496,6 +497,11 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                                             {scene.generatedByModel.startsWith('gemini') ? '🔵' : '🟡'} {scene.generatedByModel.replace(/_/g, ' ').replace('google image gen ', '').slice(0, 20)}
                                         </span>
                                     )}
+                                    {/* DOP Learning Rating */}
+                                    <QualityRating
+                                        dopRecordId={scene.dopRecordId}
+                                        className="mt-2 bg-black/60 px-2 py-1 rounded-full"
+                                    />
                                 </div>
                             </>
                         ) : (

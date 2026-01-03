@@ -62,6 +62,9 @@ export interface Character {
   backEditHistory?: { id: string; image: string; prompt: string }[];
 
   editHistory?: { id: string; image: string; prompt: string }[]; // Deprecated, kept for compat
+
+  // DOP Learning System
+  dopRecordId?: string; // ID for quality rating and learning
 }
 
 export interface SceneDialogue {

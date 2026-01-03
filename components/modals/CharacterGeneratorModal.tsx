@@ -4,6 +4,7 @@ import Modal from '../Modal';
 import { Character } from '../../types';
 import { IMAGE_MODELS, CHARACTER_STYLES, PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from '../../constants/presets';
 import { ModelSelector } from '../common/ModelSelector';
+import { QualityRating } from '../common/QualityRating';
 
 // LiveTimer component for realtime generation timer
 const LiveTimer: React.FC<{ startTime: number }> = ({ startTime }) => {
@@ -53,6 +54,7 @@ export const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = (
     const generationStartTime = character?.generationStartTime;
     const generationStatus = character?.generationStatus || '';
     const generatedImage = character?.generatedImage || null;
+    const dopRecordId = character?.dopRecordId;
 
     useEffect(() => {
         if (isOpen) {
@@ -192,7 +194,17 @@ export const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = (
                             )}
                         </div>
                     ) : generatedImage ? (
-                        <img src={generatedImage} alt="Generated Character" className="w-full h-full object-contain" />
+                        <div className="relative w-full h-full">
+                            <img src={generatedImage} alt="Generated Character" className="w-full h-full object-contain" />
+                            {/* DOP Learning Rating */}
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2">
+                                <QualityRating
+                                    dopRecordId={dopRecordId}
+                                    size="md"
+                                    className="bg-black/70 px-3 py-1.5 rounded-full backdrop-blur-sm"
+                                />
+                            </div>
+                        </div>
                     ) : (
                         <span className="text-gray-600 text-sm">Ảnh sẽ hiện ở đây</span>
                     )}

@@ -748,7 +748,12 @@ CRITICAL: ONE SINGLE FULL-BODY IMAGE on solid white background. Face must be rec
                     updateCharacter(charId, { generationStatus: qualityMsg });
                 }
 
-                updateCharacter(charId, { generatedImage: finalUrl, isGenerating: false, generationStartTime: undefined });
+                updateCharacter(charId, {
+                    generatedImage: finalUrl,
+                    isGenerating: false,
+                    generationStartTime: undefined,
+                    dopRecordId: dopRecordId || undefined // Store for UI rating
+                });
                 if (addToGallery) addToGallery(finalUrl, 'character', prompt, charId);
 
                 // Sync usage stats to Supabase
