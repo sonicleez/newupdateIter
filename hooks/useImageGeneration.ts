@@ -1004,16 +1004,16 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
             }
 
             // --- REFERENCE LIMIT VALIDATION (Gemini 3 Pro: Max 14 images) ---
-            const imagePartsCount = parts.filter((p: any) => p.inlineData).length;
-            if (imagePartsCount > 14) {
-                console.warn(`[ImageGen] ⚠️ WARNING: ${imagePartsCount} reference images detected. Gemini 3 Pro supports max 14. Performance may degrade.`);
+            const refImageCount = parts.filter((p: any) => p.inlineData).length;
+            if (refImageCount > 14) {
+                console.warn(`[ImageGen] ⚠️ WARNING: ${refImageCount} reference images detected. Gemini 3 Pro supports max 14. Performance may degrade.`);
                 if (addProductionLog) {
-                    addProductionLog('dop', `⚠️ ${imagePartsCount} reference images (max 14)`, 'warning', 'ref_warning');
+                    addProductionLog('dop', `⚠️ ${refImageCount} reference images (max 14)`, 'warning', 'ref_warning');
                 }
-            } else if (imagePartsCount > 0) {
-                console.log(`[ImageGen] 📷 Using ${imagePartsCount} reference image(s)`);
+            } else if (refImageCount > 0) {
+                console.log(`[ImageGen] 📷 Using ${refImageCount} reference image(s)`);
                 if (addProductionLog) {
-                    addProductionLog('dop', `📷 Using ${imagePartsCount} reference image(s)`, 'info', 'ref_count');
+                    addProductionLog('dop', `📷 Using ${refImageCount} reference image(s)`, 'info', 'ref_count');
                 }
             }
 
@@ -1146,6 +1146,24 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 console.warn('[ImageGen] ⚠️ DOP skipped - missing userId:', !!userId, 'or apiKey:', !!userApiKey);
                 if (addProductionLog && !userId) {
                     addProductionLog('dop', `⚠️ DOP: Chưa đăng nhập Supabase (userId missing)`, 'warning', 'no_user');
+                }
+            }
+
+            // --- LOG REFERENCE SUMMARY TO DOP CHAT (right before generation) ---
+            // refImageCount already declared above at line 1007
+            if (addProductionLog && refImageCount > 0) {
+                addProductionLog('dop', `📷 Using ${refImageCount} reference image(s) for generation`, 'info', 'ref_summary');
+
+                // Log character names if any
+                if (sceneToUpdate.characterIds && sceneToUpdate.characterIds.length > 0) {
+                    const allCharacters = currentState.characters || [];
+                    const charNames = sceneToUpdate.characterIds
+                        .map((cid: string) => allCharacters.find((c: any) => c.id === cid)?.name || 'Unknown')
+                        .filter((n: string) => n !== 'Unknown')
+                        .join(', ');
+                    if (charNames) {
+                        addProductionLog('dop', `👤 Characters: ${charNames}`, 'info', 'char_summary');
+                    }
                 }
             }
 
