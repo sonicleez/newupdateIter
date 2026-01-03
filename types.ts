@@ -316,6 +316,10 @@ export interface ProjectState {
     characters?: number;
     products?: number;
     concepts?: number;
+    // Provider breakdown
+    geminiImages?: number;  // Images generated via Gemini Direct
+    gommoImages?: number;   // Images generated via Gommo Proxy
+    estimatedPromptTokens?: number; // Cumulative estimated prompt tokens
     // Token usage
     textTokens?: number;     // Total text tokens used
     promptTokens?: number;   // Input tokens

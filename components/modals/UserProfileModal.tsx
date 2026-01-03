@@ -28,6 +28,9 @@ export interface UserProfileModalProps {
         characters?: number;
         products?: number;
         concepts?: number;
+        geminiImages?: number;
+        gommoImages?: number;
+        estimatedPromptTokens?: number;
         textTokens?: number;
         promptTokens?: number;
         candidateTokens?: number;
@@ -277,6 +280,25 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                             <p className="text-[9px] text-gray-600 mt-2 text-center">
                                 {usageStats.textCalls || 0} API calls • Last: {usageStats.lastGeneratedAt ? new Date(usageStats.lastGeneratedAt).toLocaleString('vi-VN') : 'N/A'}
                             </p>
+                        </div>
+
+                        {/* Provider Breakdown */}
+                        <div className="border-t border-gray-700 pt-3">
+                            <p className="text-[10px] text-gray-500 uppercase font-bold mb-2">📊 Image Provider Breakdown</p>
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="text-center bg-blue-500/10 rounded-lg py-2">
+                                    <p className="text-lg font-bold text-blue-400">{usageStats.geminiImages || 0}</p>
+                                    <p className="text-[9px] text-gray-500">🔵 Gemini</p>
+                                </div>
+                                <div className="text-center bg-yellow-500/10 rounded-lg py-2">
+                                    <p className="text-lg font-bold text-yellow-400">{usageStats.gommoImages || 0}</p>
+                                    <p className="text-[9px] text-gray-500">🟡 Gommo</p>
+                                </div>
+                                <div className="text-center bg-purple-500/10 rounded-lg py-2">
+                                    <p className="text-lg font-bold text-purple-400">{((usageStats.estimatedPromptTokens || 0) / 1000).toFixed(1)}K</p>
+                                    <p className="text-[9px] text-gray-500">Est. Tokens</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

@@ -1020,6 +1020,10 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 { domain: currentState.gommoDomain || '', accessToken: currentState.gommoAccessToken || '' }
             );
 
+            // Calculate estimated prompt tokens (rough: ~4 chars per token)
+            const estimatedTokens = Math.ceil(finalImagePrompt.length / 4);
+            console.log(`[ImageGen] 📊 Stats: Provider=${promptProvider}, EstTokens=${estimatedTokens}, Prompt=${finalImagePrompt.length} chars`);
+
             updateStateAndRecord(s => {
                 const duration = Date.now() - startTime;
                 const resolutionKey = (currentState.resolution || '1K') as '1K' | '2K' | '4K';
@@ -1031,6 +1035,10 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                     [resolutionKey]: newCount,
                     total: (currentStats.total || 0) + 1,
                     scenes: (currentStats.scenes || 0) + 1,
+                    // Provider breakdown
+                    geminiImages: (currentStats.geminiImages || 0) + (promptProvider === 'gemini' ? 1 : 0),
+                    gommoImages: (currentStats.gommoImages || 0) + (promptProvider === 'gommo' ? 1 : 0),
+                    estimatedPromptTokens: (currentStats.estimatedPromptTokens || 0) + estimatedTokens,
                     lastGeneratedAt: new Date().toISOString()
                 };
 
