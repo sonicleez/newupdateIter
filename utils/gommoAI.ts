@@ -18,11 +18,12 @@ export interface GommoImageParams {
 /**
  * Subject reference for Gommo API
  * Used to pass character Face ID or object references
+ * Matches actual Gommo API format
  */
 export interface GommoSubject {
-    name: string;           // Character/object name
-    base64Image: string;    // Full base64 with prefix: data:image/jpeg;base64,xxxxx
-    description?: string;   // Optional description
+    id_base?: string;       // Optional: existing image id_base if available
+    url?: string;           // Optional: URL to reference image
+    data?: string;          // Base64 data WITHOUT prefix (no data:image/...,)
 }
 
 export interface GommoImageResult {

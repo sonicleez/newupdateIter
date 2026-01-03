@@ -158,29 +158,15 @@ export function useImageGeneration(
             console.log('[ImageGen] 🟡 Using GOMMO provider');
 
             // Convert Gemini parts to Gommo subjects format
-            // Look for parts with inlineData (images) that have associated text labels
-            const subjects: Array<{ name: string; base64Image: string; description?: string }> = [];
+            // Gommo expects: { id_base?, url?, data? } where data is base64 WITHOUT prefix
+            const subjects: Array<{ id_base?: string; url?: string; data?: string }> = [];
 
             for (let i = 0; i < parts.length; i++) {
                 const part = parts[i];
                 if (part.inlineData?.data && part.inlineData?.mimeType) {
-                    // Find the associated text label (usually the previous part)
-                    const prevPart = parts[i - 1];
-                    let name = 'Character';
-                    let description = '';
-
-                    if (prevPart?.text) {
-                        // Extract character name from text like "[IDENTITY_JOHN]: MANDATORY..."
-                        const nameMatch = prevPart.text.match(/\[IDENTITY_([^\]]+)\]/);
-                        if (nameMatch) {
-                            name = nameMatch[1].replace(/_/g, ' ');
-                        }
-                        description = prevPart.text.substring(0, 200);
-                    }
-
-                    // Convert to Gommo subject format (full base64 with prefix)
-                    const base64WithPrefix = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-                    subjects.push({ name, base64Image: base64WithPrefix, description });
+                    // Gommo expects base64 WITHOUT the data:image/...;base64, prefix
+                    const base64Data = part.inlineData.data;
+                    subjects.push({ data: base64Data });
                 }
             }
 
