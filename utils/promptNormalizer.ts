@@ -177,16 +177,17 @@ export interface NormalizedPrompt {
     truncated: boolean;
     translated: boolean;
 }
-
 /**
  * Translate and optimize prompt using Gemini
  * CRITICAL: Preserves the user's core subject/intent
+ * @param mode - 'character' for character sheets (sharp, white bg, posing) or 'scene' for normal scenes
  */
 async function translateAndOptimize(
     prompt: string,
     modelType: ModelType,
     apiKey: string,
-    aspectRatio: string
+    aspectRatio: string,
+    mode: 'character' | 'scene' = 'scene'
 ): Promise<{ optimized: string; wasTranslated: boolean }> {
     const config = MODEL_CONFIG[modelType];
 
@@ -206,12 +207,23 @@ async function translateAndOptimize(
         stylePreset = styleMatch[1].trim();
     }
 
+    // Character-specific requirements
+    const characterRequirements = mode === 'character' ? `
+MANDATORY FOR CHARACTER REFERENCE:
+- BACKGROUND: Pure solid white studio background (#FFFFFF)
+- CLARITY: Ultra-sharp, 8K quality, hyper-detailed
+- POSE: Standard A-pose or neutral standing pose, full body visible
+- LIGHTING: Professional studio softbox lighting
+- FRAMING: Full body from head to toe, clear silhouette
+- SINGLE SUBJECT ONLY: No duplicates, no multiple views` : '';
+
     const systemPrompt = `You are an expert AI image generation prompt engineer.
 
 CRITICAL TASK:
-The user wants to generate an image. Their CORE DESCRIPTION is:
+The user wants to generate ${mode === 'character' ? 'a CHARACTER REFERENCE image' : 'an image'}. Their CORE DESCRIPTION is:
 "${userDescription}"
 ${stylePreset ? `Style preset: ${stylePreset}` : ''}
+${characterRequirements}
 
 YOUR JOB:
 1. If the description is in Vietnamese, translate it to English ACCURATELY
@@ -219,6 +231,7 @@ YOUR JOB:
 3. PRESERVE THE EXACT SUBJECT - if user says "dog", output must be about a dog, NOT a human
 4. Keep style and visual details from user's description
 5. Add quality keywords appropriate for the model
+${mode === 'character' ? '6. Include: pure white background, full body, sharp details, studio lighting' : ''}
 
 OUTPUT RULES:
 - Output ONLY the optimized prompt, no explanation
@@ -228,9 +241,11 @@ ${modelType === 'midjourney' ? `- End with: --ar ${aspectRatio} --v 7 --style ra
 ${modelType === 'seedream' ? '- Use comma-separated tags: masterpiece, best quality, [subject], [details]' : ''}
 ${modelType === 'imagen' ? '- Use natural English, style first, then subject details' : ''}
 
-EXAMPLE:
+EXAMPLE${mode === 'character' ? ' (Character)' : ''}:
 Input (Vietnamese): "Một chú chó đốm dễ thương, đeo vòng cổ đỏ"
-Output: "cute spotted dalmatian dog wearing red collar, adorable pet portrait, studio lighting"`;
+Output: "${mode === 'character'
+            ? 'cute spotted dalmatian dog wearing red collar, full body, pure white studio background, sharp details, professional lighting, 8K quality'
+            : 'cute spotted dalmatian dog wearing red collar, adorable pet portrait, studio lighting'}"`;
 
     try {
         const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
@@ -246,6 +261,7 @@ Output: "cute spotted dalmatian dog wearing red collar, adorable pet portrait, s
         const wasTranslated = containsVietnamese(userDescription);
 
         console.log('[PromptNormalizer] AI Optimized:', {
+            mode,
             modelType,
             userDesc: userDescription.substring(0, 100),
             inputLen: prompt.length,
@@ -420,12 +436,14 @@ export function normalizePrompt(
 
 /**
  * Normalize prompt with AI translation and optimization (async)
+ * @param mode - 'character' for character sheets or 'scene' for normal scenes
  */
 export async function normalizePromptAsync(
     rawPrompt: string,
     modelId: string,
     apiKey: string,
-    aspectRatio: string = '16:9'
+    aspectRatio: string = '16:9',
+    mode: 'character' | 'scene' = 'scene'
 ): Promise<NormalizedPrompt> {
     const modelType = detectModelType(modelId);
     const config = MODEL_CONFIG[modelType];
@@ -439,14 +457,14 @@ export async function normalizePromptAsync(
 
     // Use AI to translate and optimize for non-Gemini models
     if (modelType !== 'gemini' && apiKey) {
-        const result = await translateAndOptimize(rawPrompt, modelType, apiKey, aspectRatio);
+        const result = await translateAndOptimize(rawPrompt, modelType, apiKey, aspectRatio, mode);
         normalized = result.optimized;
         translated = result.wasTranslated;
 
         if (translated) {
             changes.push('🌐 Auto-translated from Vietnamese to English');
         }
-        changes.push(`🤖 AI-optimized for ${modelType.toUpperCase()}`);
+        changes.push(`🤖 AI-optimized for ${modelType.toUpperCase()}${mode === 'character' ? ' (Character Mode)' : ''}`);
     } else {
         // Gemini or no API key - use sync version
         const syncResult = normalizePrompt(rawPrompt, modelId, aspectRatio);

@@ -559,7 +559,8 @@ CRITICAL: ONE SINGLE FULL-BODY IMAGE on solid white background. Face must be rec
                 }
 
                 try {
-                    const normalized = await normalizePromptAsync(fullPrompt, model, apiKey, aspectRatio);
+                    // Use 'character' mode for proper white background, sharp details, posing
+                    const normalized = await normalizePromptAsync(fullPrompt, model, apiKey, aspectRatio, 'character');
                     promptToSend = normalized.normalized;
 
                     // DOP Status: Normalized
