@@ -6,7 +6,7 @@ import {
     UserCog, Eye, Edit, Crown, KeyRound, Plus
 } from 'lucide-react';
 import {
-    getAdminUsers, getAdminStats, getRecentActivity, getDOPModelStats,
+    getAdminUsers, getAdminStats, getRecentActivity, getDOPModelStats, getDOPLearningDetails,
     subscribeToActivity, subscribeToUserActivity, getActiveSessions,
     setUserRole, deleteUser, updateUser, getFullUserDetails, getAPIKeysOverview,
     setUserAPIKey, deleteUserAPIKey,
@@ -24,6 +24,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, isAdmin
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [activity, setActivity] = useState<any[]>([]);
     const [dopStats, setDopStats] = useState<any[]>([]);
+    const [rejectionStats, setRejectionStats] = useState<Record<string, number>>({});
+    const [learningPatterns, setLearningPatterns] = useState<Record<string, { count: number; avgScore: number }>>({});
     const [loading, setLoading] = useState(true);
     const [realtimeEvents, setRealtimeEvents] = useState<any[]>([]);
     const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
@@ -41,18 +43,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, isAdmin
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const [statsData, usersData, activityData, dopData, keysData] = await Promise.all([
+            const [statsData, usersData, activityData, dopData, keysData, dopDetails] = await Promise.all([
                 getAdminStats(),
                 getAdminUsers(),
                 getRecentActivity(50),
                 getDOPModelStats(),
-                getAPIKeysOverview()
+                getAPIKeysOverview(),
+                getDOPLearningDetails()
             ]);
             setStats(statsData);
             setUsers(usersData);
             setActivity(activityData);
             setDopStats(dopData);
             setApiKeys(keysData);
+            setRejectionStats(dopDetails.rejectionStats || {});
+            setLearningPatterns(dopDetails.learningPatterns || {});
         } catch (e) {
             console.error('Failed to load admin data:', e);
         }
@@ -573,22 +578,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, isAdmin
                                     Rejection Reasons (Top)
                                 </h3>
                                 <div className="space-y-3">
-                                    {dopStats.length > 0 && dopStats[0]?.rejection_counts ? (
-                                        Object.entries(dopStats[0].rejection_counts)
-                                            .sort((a: any, b: any) => b[1] - a[1])
+                                    {Object.keys(rejectionStats).length > 0 ? (
+                                        Object.entries(rejectionStats)
+                                            .sort((a, b) => (b[1] as number) - (a[1] as number))
                                             .slice(0, 8)
-                                            .map(([reason, count]: any) => (
+                                            .map(([reason, count]: [string, number]) => (
                                                 <div key={reason} className="flex items-center justify-between">
                                                     <span className="text-gray-300 text-sm">
                                                         {reason === 'raccord_error' ? '🔗 Sai Raccord' :
                                                             reason === 'character_mismatch' ? '👤 Nhân vật sai' :
                                                                 reason === 'wrong_outfit' ? '👔 Sai trang phục' :
-                                                                    reason === 'wrong_lighting' ? '💡 Sai ánh sáng' :
-                                                                        reason === 'wrong_background' ? '🏞️ Sai background' :
-                                                                            reason === 'quality_issue' ? '📉 Chất lượng' :
-                                                                                reason}
+                                                                    reason === 'wrong_pose' ? '🧍 Sai tư thế' :
+                                                                        reason === 'wrong_angle' ? '📷 Sai góc camera' :
+                                                                            reason === 'wrong_lighting' ? '💡 Sai ánh sáng' :
+                                                                                reason === 'wrong_background' ? '🏞️ Sai background' :
+                                                                                    reason === 'quality_issue' ? '📉 Chất lượng kém' :
+                                                                                        reason === 'prompt_ignored' ? '🚫 AI bỏ prompt' :
+                                                                                            reason === 'nsfw_content' ? '⚠️ NSFW' :
+                                                                                                reason === 'other' ? '❓ Khác' :
+                                                                                                    reason}
                                                     </span>
-                                                    <span className="px-2 py-0.5 bg-red-900/50 text-red-400 text-xs rounded font-mono">
+                                                    <span className="px-2 py-0.5 bg-red-900/50 text-red-400 text-xs rounded font-mono font-bold">
                                                         {count}
                                                     </span>
                                                 </div>
@@ -604,13 +614,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, isAdmin
                                     <CheckCircle2 className="w-5 h-5 text-green-400" />
                                     Successful Patterns (Top)
                                 </h3>
-                                <div className="space-y-2 max-h-48 overflow-y-auto">
-                                    {dopStats.length > 0 && dopStats[0]?.successful_patterns ? (
-                                        dopStats[0].successful_patterns.slice(0, 10).map((pattern: string, i: number) => (
-                                            <span key={i} className="inline-block px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded mr-2 mb-1">
-                                                {pattern}
-                                            </span>
-                                        ))
+                                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                                    {Object.keys(learningPatterns).length > 0 ? (
+                                        Object.entries(learningPatterns)
+                                            .sort((a, b) => (b[1] as any).count - (a[1] as any).count)
+                                            .slice(0, 15)
+                                            .map(([keyword, data]: [string, any]) => (
+                                                <span
+                                                    key={keyword}
+                                                    className="inline-flex items-center gap-1 px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded"
+                                                    title={`Xuất hiện ${data.count} lần, avg score: ${data.avgScore?.toFixed(2) || 'N/A'}`}
+                                                >
+                                                    {keyword}
+                                                    <span className="text-green-600 text-[10px]">({data.count})</span>
+                                                </span>
+                                            ))
                                     ) : (
                                         <p className="text-gray-500 text-sm">DOP sẽ học patterns từ approved prompts</p>
                                     )}
