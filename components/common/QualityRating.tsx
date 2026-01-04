@@ -159,74 +159,102 @@ export function QualityRating({
                 </button>
             </div>
 
-            {/* Portal Modal - renders at document.body to prevent layout issues */}
+            {/* Anchored Popup with Smart Positioning via Portal */}
             {showRejectMenu && createPortal(
                 <>
-                    {/* Backdrop */}
+                    {/* Transparent backdrop for click-outside */}
                     <div
-                        className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm"
+                        className="fixed inset-0 z-[9998]"
                         onClick={() => setShowRejectMenu(false)}
                     />
-                    {/* Modal */}
+                    {/* Popup positioned near the rating buttons */}
                     <div
-                        className="fixed z-[10000] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
-                            bg-gray-900 border border-gray-700 rounded-xl shadow-2xl
-                            w-[340px] overflow-hidden"
+                        className="fixed z-[9999] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-[320px] overflow-hidden"
+                        style={{
+                            // Position relative to containerRef
+                            ...(containerRef.current ? (() => {
+                                const rect = containerRef.current.getBoundingClientRect();
+                                const popupHeight = 380; // Approximate popup height
+                                const popupWidth = 320;
+
+                                // Prefer positioning ABOVE the button
+                                let top = rect.top - popupHeight - 8;
+                                let left = rect.left + (rect.width / 2) - (popupWidth / 2);
+
+                                // If not enough space above, position BELOW
+                                if (top < 10) {
+                                    top = rect.bottom + 8;
+                                }
+
+                                // Keep within horizontal viewport
+                                if (left < 10) left = 10;
+                                if (left + popupWidth > window.innerWidth - 10) {
+                                    left = window.innerWidth - popupWidth - 10;
+                                }
+
+                                // Keep within vertical viewport
+                                if (top + popupHeight > window.innerHeight - 10) {
+                                    top = window.innerHeight - popupHeight - 10;
+                                }
+
+                                return { top: `${top}px`, left: `${left}px` };
+                            })() : { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' })
+                        }}
                         onClick={e => e.stopPropagation()}
                     >
                         {/* Header */}
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gradient-to-r from-red-900/40 to-orange-900/30">
+                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-700 bg-gradient-to-r from-red-900/40 to-orange-900/30">
                             <span className="text-sm font-bold text-white flex items-center gap-2">
                                 <AlertTriangle size={16} className="text-red-400" />
                                 Chọn lý do lỗi
                             </span>
                             <button
                                 onClick={() => setShowRejectMenu(false)}
-                                className="p-1.5 hover:bg-gray-700/50 rounded transition-colors"
+                                className="p-1 hover:bg-gray-700/50 rounded transition-colors"
                             >
-                                <X size={16} className="text-gray-400" />
+                                <X size={14} className="text-gray-400" />
                             </button>
                         </div>
 
-                        {/* Options Grid */}
-                        <div className="p-3 grid grid-cols-2 gap-2">
+                        {/* Options Grid - Compact */}
+                        <div className="p-2 grid grid-cols-2 gap-1.5">
                             {REJECTION_OPTIONS.map(opt => {
                                 const isSelected = selectedReasons.includes(opt.value);
                                 return (
                                     <button
                                         key={opt.value}
                                         onClick={() => toggleReason(opt.value)}
-                                        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-left text-xs transition-all ${isSelected
-                                            ? 'bg-red-500/30 border border-red-500/60 text-red-200 shadow-lg shadow-red-500/20'
-                                            : 'bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 hover:border-gray-600'
+                                        className={`flex items-center gap-1.5 px-2 py-2 rounded-lg text-left text-xs transition-all ${isSelected
+                                            ? 'bg-red-500/30 border border-red-500/60 text-red-200'
+                                            : 'bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700'
                                             }`}
                                     >
-                                        <span className="text-base">{opt.emoji}</span>
+                                        <span>{opt.emoji}</span>
                                         <span className="truncate flex-1">{opt.label}</span>
-                                        {isSelected && <CheckCircle2 size={14} className="text-red-400 flex-shrink-0" />}
+                                        {isSelected && <CheckCircle2 size={12} className="text-red-400 flex-shrink-0" />}
                                     </button>
                                 );
                             })}
                         </div>
 
                         {/* Footer */}
-                        <div className="px-3 py-3 border-t border-gray-700 flex gap-2 bg-gray-800/50">
+                        <div className="px-2 py-2 border-t border-gray-700 flex gap-2 bg-gray-800/50">
                             <button
                                 onClick={handleReject}
                                 disabled={selectedReasons.length === 0 || isRating}
-                                className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${selectedReasons.length > 0
-                                    ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30'
+                                className={`flex-1 px-3 py-2 rounded-lg font-bold text-xs transition-all ${selectedReasons.length > 0
+                                    ? 'bg-red-600 hover:bg-red-500 text-white'
                                     : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                                     }`}
                             >
-                                {isRating ? '⏳ Đang gửi...' : `Báo lỗi (${selectedReasons.length})`}
+                                {isRating ? '⏳' : `Báo lỗi (${selectedReasons.length})`}
                             </button>
                             <button
                                 onClick={() => {
                                     setSelectedReasons([]);
                                     setShowRejectMenu(false);
                                 }}
-                                className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors"
+                                className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs transition-colors"
                             >
                                 Hủy
                             </button>
