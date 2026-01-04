@@ -359,33 +359,29 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <div className="flex items-center space-x-2">
                         <Zap className="text-yellow-400" size={18} />
                         <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wide">Gommo AI (Proxy)</h3>
+                        {gommoCredits !== null && (
+                            <span className="ml-auto text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">
+                                💰 {gommoCredits.toLocaleString()} credits
+                            </span>
+                        )}
                     </div>
-                    <p className="text-xs text-gray-500">Cung cấp Domain và Access Token từ Gommo để sử dụng API ảnh.</p>
+                    <p className="text-xs text-gray-500">Nhập Access Token từ Gommo để sử dụng API ảnh với giá rẻ hơn.</p>
 
-                    <div className="space-y-2">
+                    <div className="relative">
                         <input
-                            type="text"
-                            value={localGommoDomain}
-                            onChange={(e) => setLocalGommoDomain(e.target.value)}
-                            placeholder="Domain (mặc định: aivideoauto.com)"
-                            className="w-full px-3 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all text-sm text-gray-400"
+                            type="password"
+                            value={localGommoToken}
+                            onChange={(e) => setLocalGommoToken(e.target.value)}
+                            placeholder="Paste Access Token từ Gommo..."
+                            className="w-full px-3 py-2.5 bg-gray-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all text-sm"
                         />
-                        <div className="relative">
-                            <input
-                                type="password"
-                                value={localGommoToken}
-                                onChange={(e) => setLocalGommoToken(e.target.value)}
-                                placeholder="Access Token"
-                                className="w-full px-3 py-2.5 bg-gray-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all text-sm"
-                            />
-                            <button
-                                onClick={handleGommoVerify}
-                                disabled={gommoStatus === 'checking'}
-                                className={`absolute right-1.5 top-1.5 bottom-1.5 px-3 rounded-md font-bold text-[10px] uppercase tracking-wider transition-all ${gommoStatus === 'checking' ? 'bg-gray-700 text-gray-500' : 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white hover:shadow-lg shadow-yellow-500/20 active:scale-95'}`}
-                            >
-                                {gommoStatus === 'checking' ? '...' : 'Verify'}
-                            </button>
-                        </div>
+                        <button
+                            onClick={handleGommoVerify}
+                            disabled={gommoStatus === 'checking'}
+                            className={`absolute right-1.5 top-1.5 bottom-1.5 px-3 rounded-md font-bold text-[10px] uppercase tracking-wider transition-all ${gommoStatus === 'checking' ? 'bg-gray-700 text-gray-500' : 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white hover:shadow-lg shadow-yellow-500/20 active:scale-95'}`}
+                        >
+                            {gommoStatus === 'checking' ? '...' : 'Verify'}
+                        </button>
                     </div>
 
                     {gommoStatus !== 'idle' && (
@@ -394,13 +390,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                                 'bg-red-900/20 border-red-800/50 text-red-300'
                             }`}>
                             <span>{gommoMsg}</span>
-                        </div>
-                    )}
-
-                    {gommoCredits !== null && (
-                        <div className="flex items-center justify-between bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-2">
-                            <span className="text-xs text-yellow-300">💰 Credits Available:</span>
-                            <span className="font-bold text-yellow-400">{gommoCredits.toLocaleString()}</span>
                         </div>
                     )}
                 </div>
