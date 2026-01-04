@@ -26,6 +26,7 @@ import { ActivationScreen } from './components/ActivationScreen';
 import { AssetLibrary } from './components/sections/AssetLibrary';
 import { GommoLibraryModal } from './components/modals/GommoLibraryModal';
 import { KeyboardShortcuts } from './components/common/KeyboardShortcuts';
+import { LocationLibraryPanel } from './components/locations'; // NEW: Location Library
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { APP_NAME, PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from './constants/presets';
 import { handleDownloadAll } from './utils/zipUtils';
@@ -127,6 +128,7 @@ const App: React.FC = () => {
     const [isGommoLibraryOpen, setGommoLibraryOpen] = useState(false);
     const [isManualScriptModalOpen, setManualScriptModalOpen] = useState(false);
     const [isExcelImportModalOpen, setExcelImportModalOpen] = useState(false);
+    const [isLocationLibraryOpen, setLocationLibraryOpen] = useState(false); // NEW: Location Library modal
     const [cloudProjects, setCloudProjects] = useState<any[]>([]);
 
     const mainContentRef = useRef<HTMLDivElement>(null);
@@ -963,6 +965,8 @@ const App: React.FC = () => {
                                         isExpandingSequence={isSequenceExpanding}
                                         scriptLanguage={state.scriptLanguage}
                                         customScriptLanguage={state.customScriptLanguage}
+                                        onOpenLocationLibrary={() => setLocationLibraryOpen(true)}
+                                        locationCount={state.locations?.length || 0}
                                     />
                                 </div>
 
@@ -1304,6 +1308,43 @@ const App: React.FC = () => {
                         onSaveProject={handleSave}
                         onOpenProject={handleOpen}
                     />
+
+                    {/* Location Library Modal (NEW) */}
+                    {isLocationLibraryOpen && (
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 rounded-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden border border-zinc-700/50 shadow-2xl">
+                                <LocationLibraryPanel
+                                    locations={state.locations || []}
+                                    sceneGroups={state.sceneGroups || []}
+                                    onAddLocation={(location) => {
+                                        updateStateAndRecord(s => ({
+                                            ...s,
+                                            locations: [...(s.locations || []), location]
+                                        }));
+                                    }}
+                                    onUpdateLocation={(id, updates) => {
+                                        updateStateAndRecord(s => ({
+                                            ...s,
+                                            locations: (s.locations || []).map(loc =>
+                                                loc.id === id ? { ...loc, ...updates } : loc
+                                            )
+                                        }));
+                                    }}
+                                    onDeleteLocation={(id) => {
+                                        updateStateAndRecord(s => ({
+                                            ...s,
+                                            locations: (s.locations || []).filter(loc => loc.id !== id),
+                                            // Also unlink any groups using this location
+                                            sceneGroups: (s.sceneGroups || []).map(g =>
+                                                g.locationId === id ? { ...g, locationId: undefined } : g
+                                            )
+                                        }));
+                                    }}
+                                    onClose={() => setLocationLibraryOpen(false)}
+                                />
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
 
