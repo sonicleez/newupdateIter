@@ -1,5 +1,5 @@
 import React from 'react';
-import { Undo2, Redo2 } from 'lucide-react';
+import { Undo2, Redo2, Shield } from 'lucide-react';
 import { APP_NAME, PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from '../../constants/presets';
 
 export interface HeaderProps {
@@ -19,6 +19,7 @@ export interface HeaderProps {
     isLoggedIn: boolean;
     onCloudSave: () => void;
     onCloudOpen: () => void;
+    onAdminClick?: () => void;
     profile?: any;
     subscriptionExpired?: boolean;
 }
@@ -29,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
     toggleContinuityMode,
     onUndo, onRedo, canUndo, canRedo,
     isLoggedIn,
-    onCloudSave, onCloudOpen,
+    onCloudSave, onCloudOpen, onAdminClick,
     profile, subscriptionExpired
 }) => (
     <header className="fixed top-0 left-0 right-0 z-50 bg-gray-900 shadow-lg border-b border-gray-800">
@@ -84,6 +85,15 @@ export const Header: React.FC<HeaderProps> = ({
                     {isLoggedIn && (
                         <div className="flex items-center space-x-2 pl-2 border-l border-gray-700">
                             <button onClick={onProfileClick} className="px-3 py-2 text-xs md:text-sm font-semibold text-white bg-white/10 rounded-lg hover:bg-white/20 transition-colors border border-white/10">Tài khoản</button>
+                            {onAdminClick && (
+                                <button
+                                    onClick={onAdminClick}
+                                    className="p-2 text-purple-400 hover:bg-purple-500/20 rounded-lg transition-colors"
+                                    title="Admin Dashboard"
+                                >
+                                    <Shield size={18} />
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>

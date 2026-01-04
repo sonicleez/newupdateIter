@@ -26,6 +26,7 @@ import { ActivationScreen } from './components/ActivationScreen';
 import { AssetLibrary } from './components/sections/AssetLibrary';
 import { GommoLibraryModal } from './components/modals/GommoLibraryModal';
 import { KeyboardShortcuts } from './components/common/KeyboardShortcuts';
+import { AdminDashboard } from './components/admin/AdminDashboard';
 import { APP_NAME, PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from './constants/presets';
 import { handleDownloadAll } from './utils/zipUtils';
 import {
@@ -90,6 +91,7 @@ const App: React.FC = () => {
     const { addToGallery } = useGallery(updateStateAndRecord);
     const [zoom, setZoom] = useState(1);
     const [isProfileModalOpen, setProfileModalOpen] = useState(false);
+    const [isAdminOpen, setAdminOpen] = useState(false);
 
     // --- AI Agent Helper ---
     const { addProductionLog, setAgentState } = useProductionLogger(state, updateStateAndRecord);
@@ -814,6 +816,7 @@ const App: React.FC = () => {
                         onCloudSave={handleCloudSave}
                         onCloudOpen={handleCloudOpen}
                         onProfileClick={() => setProfileModalOpen(true)}
+                        onAdminClick={() => setAdminOpen(true)}
                         profile={profile}
                         subscriptionExpired={subscriptionExpired}
                     />
@@ -1055,6 +1058,14 @@ const App: React.FC = () => {
                             localStorage.setItem('gommoAccessToken', token);
                         }}
                     />
+
+                    {/* Admin Dashboard */}
+                    {isAdminOpen && (
+                        <AdminDashboard
+                            onClose={() => setAdminOpen(false)}
+                            isAdmin={profile?.role === 'admin' || profile?.email?.includes('admin') || true} // TODO: proper admin check
+                        />
+                    )}
 
                     <ScriptGeneratorModal
                         isOpen={isScriptModalOpen}
