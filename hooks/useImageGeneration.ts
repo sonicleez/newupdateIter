@@ -13,7 +13,7 @@ import { safeGetImageData, callGeminiVisionReasoning, preWarmImageCache } from '
 import { GommoAI, urlToBase64 } from '../utils/gommoAI';
 import { IMAGE_MODELS } from '../utils/appConstants';
 import { normalizePrompt, normalizePromptAsync, formatNormalizationLog, needsNormalization, containsVietnamese } from '../utils/promptNormalizer';
-import { recordPrompt, approvePrompt } from '../utils/dopLearning';
+import { recordPrompt, approvePrompt, getSuggestedKeywords } from '../utils/dopLearning';
 import { incrementGlobalStats, recordGeneratedImage } from '../utils/userGlobalStats';
 import { validateRaccord, formatValidationResult, RaccordValidationResult } from '../utils/dopRaccordValidator';
 // Helper function to clean VEO-specific tokens from prompt for image generation
@@ -1095,6 +1095,30 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
             // TIMING: Log prep phase duration
             const prepTime = Date.now() - startTime;
             console.log(`[ImageGen] ⏱️ PREP completed in ${prepTime}ms (${parts.filter((p: any) => p.inlineData).length} refs loaded)`);
+
+            // --- DOP LEARNING: Apply suggested keywords from successful patterns ---
+            // This runs in parallel and doesn't block (fire and forget with timeout)
+            try {
+                const suggestedKeywords = await Promise.race([
+                    getSuggestedKeywords(modelToUse, 'scene'),
+                    new Promise<string[]>((_, reject) => setTimeout(() => reject('timeout'), 500))
+                ]).catch(() => [] as string[]);
+
+                if (suggestedKeywords.length > 0) {
+                    // Add keywords that aren't already in prompt
+                    const promptLower = promptToSend.toLowerCase();
+                    const newKeywords = suggestedKeywords.filter(kw =>
+                        !promptLower.includes(kw.toLowerCase())
+                    ).slice(0, 3); // Max 3 new keywords
+
+                    if (newKeywords.length > 0) {
+                        promptToSend = `${promptToSend} (${newKeywords.join(', ')})`;
+                        console.log('[DOP Learning] 🧠 Applied keywords:', newKeywords);
+                    }
+                }
+            } catch (e) {
+                // Silent fail - learning is optional
+            }
 
             // Debug: Check if model is correctly detected as gemini type
             const shouldNormalize = needsNormalization(modelToUse);

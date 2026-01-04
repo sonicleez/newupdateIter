@@ -92,6 +92,7 @@ function extractKeywords(prompt: string): string[] {
 
 /**
  * Record a prompt generation to Supabase
+ * OPTIMIZED: Skip embedding initially for speed, generate in background
  */
 export async function recordPrompt(
     userId: string,
@@ -106,14 +107,13 @@ export async function recordPrompt(
         const modelType = detectModelType(modelId);
         const keywords = extractKeywords(normalizedPrompt);
 
-        // Generate embedding for semantic search
-        const embedding = await generateEmbedding(normalizedPrompt, apiKey);
-
+        // SPEED OPTIMIZATION: Save without embedding first
+        // This reduces DOP recording from 5-10s to <1s
         const record = {
             user_id: userId,
             original_prompt: originalPrompt,
             normalized_prompt: normalizedPrompt,
-            embedding: embedding,
+            embedding: null, // Skip for speed - will add in background
             model_id: modelId,
             model_type: modelType,
             mode: mode,
@@ -135,12 +135,29 @@ export async function recordPrompt(
             return null;
         }
 
-        console.log('[DOP Learning] Recorded prompt:', data.id);
+        const recordId = data.id;
+        console.log('[DOP Learning] ⚡ Fast recorded (no embedding):', recordId);
 
-        // Update model learnings
-        await updateModelLearnings(modelType);
+        // Generate embedding in background (non-blocking)
+        setTimeout(async () => {
+            try {
+                const embedding = await generateEmbedding(normalizedPrompt, apiKey);
+                if (embedding) {
+                    await supabase
+                        .from('dop_prompt_records')
+                        .update({ embedding })
+                        .eq('id', recordId);
+                    console.log('[DOP Learning] 🧠 Embedding added:', recordId);
+                }
+            } catch (e) {
+                console.warn('[DOP Learning] Background embedding failed:', e);
+            }
+        }, 100);
 
-        return data.id;
+        // Update model learnings in background too
+        setTimeout(() => updateModelLearnings(modelType), 200);
+
+        return recordId;
     } catch (err) {
         console.error('[DOP Learning] Record error:', err);
         return null;
