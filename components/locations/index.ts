@@ -2,3 +2,4 @@
 export { LocationLibraryPanel } from './LocationLibraryPanel';
 export { LocationSuggestPopup } from './LocationSuggestPopup';
 export { LocationSelector } from './LocationSelector';
+export { LocationReviewModal } from './LocationReviewModal';

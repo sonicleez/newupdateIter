@@ -49,11 +49,26 @@ export interface SceneAnalysis {
     }[];
 }
 
+// NEW: Location Detection for shared concept art
+export interface LocationAnalysis {
+    id: string;
+    name: string;                    // "Casino Interior"
+    description: string;             // "Dark luxurious gambling hall with roulette tables..."
+    keywords: string[];              // ["casino", "gambling", "luxury"]
+    chapterIds: string[];            // Which chapters use this location
+    sceneRanges: { start: number; end: number }[]; // Scene number ranges
+    conceptPrompt: string;           // Full prompt for generating concept art
+    isInterior: boolean;             // Interior vs Exterior
+    timeOfDay?: string;              // Suggested time
+    mood?: string;                   // Atmospheric mood
+}
+
 export interface ScriptAnalysisResult {
     totalWords: number;
     estimatedDuration: number; // total seconds
     chapters: ChapterAnalysis[];
     characters: CharacterAnalysis[];
+    locations: LocationAnalysis[]; // NEW: Detected unique locations
     suggestedSceneCount: number;
     scenes: SceneAnalysis[];
     globalContext?: string; // World setting, era, tone summary from AI
@@ -228,13 +243,38 @@ ${contextInstructions}
 RESPOND WITH JSON ONLY:
 {
   "globalContext": "Detailed summary of world, era, setting...",
+  "locations": [
+    {
+      "id": "loc_casino",
+      "name": "Casino Interior",
+      "description": "Dark luxurious 1940s gambling hall with crystal chandeliers, mahogany gaming tables, velvet curtains, Art Deco style architecture",
+      "keywords": ["casino", "gambling", "interior", "art deco"],
+      "chapterIds": ["chapter_1", "chapter_5", "chapter_8"],
+      "isInterior": true,
+      "timeOfDay": "night",
+      "mood": "tense, anticipation",
+      "conceptPrompt": "WIDE SHOT establishing interior. 1940s Monte Carlo casino, Art Deco style architecture. Crystal chandeliers cast warm amber light. Mahogany roulette tables, velvet curtains, marble floors. Empty of people, focus on environment. David Fincher cinematography, desaturated tones."
+    },
+    {
+      "id": "loc_mansion",
+      "name": "Grand Mansion Hall",
+      "description": "Ornate entrance hall with marble columns, grand staircase, high ceilings",
+      "keywords": ["mansion", "hall", "grand", "marble"],
+      "chapterIds": ["chapter_3"],
+      "isInterior": true,
+      "timeOfDay": "afternoon",
+      "mood": "opulent, mysterious",
+      "conceptPrompt": "WIDE SHOT establishing interior. Grand mansion entrance hall. Marble columns, sweeping staircase, crystal chandelier, checkered floor. Afternoon light through tall windows. Empty of people."
+    }
+  ],
   "chapters": [
     {
       "id": "chapter_1",
       "title": "Chapter Title",
       "suggestedTimeOfDay": "night",
       "suggestedWeather": "clear",
-      "locationAnchor": "Interior, 1940s Monte Carlo casino, Art Deco style, crystal chandeliers, mahogany gaming tables, warm amber lighting from wall sconces, velvet curtains, marble floors"
+      "locationAnchor": "Interior, 1940s Monte Carlo casino, Art Deco style, crystal chandeliers, mahogany gaming tables, warm amber lighting from wall sconces, velvet curtains, marble floors",
+      "locationId": "loc_casino"
     }
   ],
   "characters": [
@@ -321,14 +361,24 @@ RESPOND WITH JSON ONLY:
                     estimatedDuration: Math.ceil(estimatedTotalDuration / parsed.chapters.length)
                 })),
                 characters: parsed.characters || [],
+                locations: (parsed.locations || []).map((loc: any) => ({
+                    ...loc,
+                    sceneRanges: loc.sceneRanges || [] // Ensure array exists
+                })),
                 suggestedSceneCount: parsed.scenes.length +
                     parsed.scenes.reduce((sum: number, s: any) => sum + (s.expansionScenes?.length || 0), 0),
                 scenes: parsed.scenes.map((s: any) => ({
                     ...s,
-                    estimatedDuration: Math.ceil(((s.voiceOverText || '').split(/\s+/).length / wpm) * 60)
+                    estimatedDuration: Math.ceil(((s.voiceOverText || '').split(/\\s+/).length / wpm) * 60)
                 })),
-                globalContext: parsed.globalContext // NEW: Save AI's world setting summary
+                globalContext: parsed.globalContext
             };
+
+            // Log detected locations
+            if (result.locations.length > 0) {
+                console.log(`[ScriptAnalysis] 📍 Detected ${result.locations.length} unique locations:`,
+                    result.locations.map(l => l.name).join(', '));
+            }
 
             setAnalysisResult(result);
             console.log('[ScriptAnalysis] ✅ Analysis complete:', result);
