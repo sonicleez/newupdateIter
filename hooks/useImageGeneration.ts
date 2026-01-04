@@ -889,8 +889,12 @@ DO NOT invent new environments or change the location. This is NOT a different p
                     charRefs.push({ type: 'PRIMARY', img: char.masterImage });
                 }
 
-                for (const ref of charRefs) {
-                    const imgData = await safeGetImageData(ref.img);
+                // PARALLEL loading of all character reference images
+                const refDataArray = await Promise.all(
+                    charRefs.map(ref => safeGetImageData(ref.img).then(data => ({ ref, data })))
+                );
+
+                for (const { ref, data: imgData } of refDataArray) {
                     if (imgData) {
                         const refLabel = `MASTER VISUAL: ${char.name.toUpperCase()} ${ref.type}`;
 
@@ -926,8 +930,12 @@ DO NOT invent new environments or change the location. This is NOT a different p
                     prodRefs.push({ type: 'PRIMARY', img: prod.masterImage });
                 }
 
-                for (const ref of prodRefs) {
-                    const imgData = await safeGetImageData(ref.img);
+                // PARALLEL loading of all product reference images
+                const refDataArray = await Promise.all(
+                    prodRefs.map(ref => safeGetImageData(ref.img).then(data => ({ ref, data })))
+                );
+
+                for (const { ref, data: imgData } of refDataArray) {
                     if (imgData) {
                         const refLabel = `MASTER VISUAL: ${prod.name.toUpperCase()} ${ref.type}`;
                         // STRONGER RACCORD FOR PROPS
@@ -999,20 +1007,25 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
             // 5f. IDENTITY & OUTFIT REINFORCEMENT - Re-enabled (Sandwich Pattern)
             // Sending face/body TWICE (start + end) to reinforce identity
             // Now non-blocking DOP is fixed, we can afford this
+            // PARALLEL loading for speed
+            const sandwichRefs: { char: typeof selectedChars[0], type: 'face' | 'body', img: string }[] = [];
             for (const char of selectedChars) {
-                if (char.faceImage) {
-                    const imgData = await safeGetImageData(char.faceImage);
-                    if (imgData) {
+                if (char.faceImage) sandwichRefs.push({ char, type: 'face', img: char.faceImage });
+                if (char.bodyImage || char.masterImage) sandwichRefs.push({ char, type: 'body', img: char.bodyImage || char.masterImage || '' });
+            }
+
+            const sandwichData = await Promise.all(
+                sandwichRefs.map(ref => safeGetImageData(ref.img).then(data => ({ ...ref, data })))
+            );
+
+            for (const { char, type, data: imgData } of sandwichData) {
+                if (imgData) {
+                    if (type === 'face') {
                         const refLabel = `FINAL_IDENTITY_ANCHOR: ${char.name.toUpperCase()}`;
                         parts.push({ text: `[${refLabel}]: !!! FINAL IDENTITY CHECK !!! Match face structure 100%.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
                         console.log(`[ImageGen] 🔄 Sandwich: Reinforced FACE for ${char.name}`);
-                    }
-                }
-
-                if (char.bodyImage || char.masterImage) {
-                    const imgData = await safeGetImageData(char.bodyImage || char.masterImage || '');
-                    if (imgData) {
+                    } else {
                         const refLabel = `FINAL_OUTFIT_ANCHOR: ${char.name.toUpperCase()}`;
                         parts.push({ text: `[${refLabel}]: !!! FINAL OUTFIT CHECK !!! Character MUST BE CLOTHED. Match outfit exactly.` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
