@@ -257,7 +257,9 @@ export function useDOPLogic(state: ProjectState) {
    - Mannequin-style hands (hard plastic, no veins or wrinkles)
    If ANY human shows real skin texture, facial features, or non-plastic material, mark as ERROR.` : '';
 
-            const dopPrompt = `You are a professional Director of Photography (DOP) checking for RACCORD (continuity) errors between two consecutive shots.
+            const dopPrompt = `You are a STRICT Director of Photography (DOP) checking for RACCORD (continuity) errors between two consecutive shots.
+
+!!! CRITICAL: You must be VERY STRICT about character identity. Different face = ERROR, no exceptions !!!
 
 SCENE CONTEXT:
 - Previous Scene: "${prevScene.contextDescription || 'N/A'}"
@@ -271,27 +273,39 @@ SCENE CONTEXT:
 ${sameLocation ? 'SAME LOCATION: Background must be strictly consistent.' : 'DIFFERENT LOCATION: Transition allowed.'}
 ${isMannequinMode ? 'STYLE: MANNEQUIN MODE ENABLED - All humans must be smooth plastic mannequins.' : ''}
 
-CHECK FOR:
-1. PROP CONTINUITY: Are props that should appear actually visible? Check position consistency (same hand, same table position).
-2. CHARACTER IDENTITY: Do faces match between shots? Same costume? (CRITICAL)
-3. LIGHTING (Relaxed): Is the general lighting direction consistent? Ignore minor mood/exposure shifts. Only report CRITICAL failures (e.g. Day vs Night).
-4. SPATIAL: Are background elements consistent (furniture, walls, etc.)?
-5. LOGICAL SPATIAL SCALE (CRITICAL):
-   - Check if the Shot Type changed (e.g. Wide -> Close Up).
-   - If changed to Close Up/Interior, does the background logically zoom in or change?
-   - ERROR: If prompt says "Interior Shop" but image still shows "Wide City Street" background from previous shot.
-   - ERROR: Floating objects (counters, doors) in open space without walls.
-6. STATIC BACKGROUND (CRITICAL):
-   - Check if the background is EXACTLY the same as the previous shot (pixel-perfect match of clouds, trees, texture).
-   - If subjects are moving or time is passing, the background MUST shift slightly or change perspective.
-   - ERROR: If background looks like a static wallpaper behind different characters.${mannequinCheck}
+CHECK FOR (IN ORDER OF IMPORTANCE):
+
+1. ⚠️ CHARACTER IDENTITY (MOST CRITICAL - BE VERY STRICT):
+   - Compare FACIAL BONE STRUCTURE: forehead shape, cheekbone position, jaw line
+   - Compare FACIAL PROPORTIONS: eye spacing, nose length/width, mouth size
+   - Compare SPECIFIC FEATURES: eye shape, eyebrow arch, nose bridge, lip fullness
+   - Compare SKIN TONE and complexion
+   - If the person in the current shot looks like a DIFFERENT PERSON than the previous shot, mark as ERROR TYPE="character"
+   - DO NOT accept "similar looking" - it must be the EXACT SAME face
+   - Different actor/face = isValid: false, even if costume is the same
+
+2. COSTUME/OUTFIT CONTINUITY:
+   - Same clothing colors, patterns, armor details, accessories
+   - If outfit changed unexpectedly, mark as ERROR TYPE="character"
+
+3. PROP CONTINUITY: Are props that should appear actually visible? Check position consistency.
+
+4. LIGHTING (Relaxed): Only report CRITICAL failures (e.g. Day vs Night).
+
+5. SPATIAL: Are background elements consistent?
+
+6. STATIC BACKGROUND: If background is pixel-for-pixel identical, mark as warning.
+${mannequinCheck}
 
 RESPOND IN JSON ONLY:
 {
   "isValid": true/false,
-  "errors": [{"type": "prop|character|lighting|spatial|material", "description": "specific issue"}],
+  "errors": [{"type": "character|prop|lighting|spatial|material", "description": "specific issue"}],
   "correctionPrompt": "If errors found, provide the EXACT instruction to add to the prompt to fix it"
-}`;
+}
+
+IMPORTANT: If you see ANY difference in facial features between shots, set isValid=false and add a character error.
+Do NOT say "hoàn hảo" (perfect) unless faces are IDENTICAL.`;
 
             // Prepare image parts
             const getImageData = async (img: string) => {
