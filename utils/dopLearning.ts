@@ -203,6 +203,117 @@ export async function approvePrompt(
 }
 
 /**
+ * Reject types for DOP learning
+ */
+export type RejectReason =
+    | 'raccord_error'        // Continuity mismatch with previous scene
+    | 'character_mismatch'   // Character doesn't match reference
+    | 'wrong_outfit'         // Character wearing wrong clothes
+    | 'wrong_pose'           // Character in wrong pose
+    | 'wrong_angle'          // Camera angle doesn't match
+    | 'wrong_lighting'       // Lighting inconsistent
+    | 'wrong_background'     // Background doesn't match
+    | 'quality_issue'        // General quality problem
+    | 'prompt_ignored'       // AI ignored key parts of prompt
+    | 'nsfw_content'         // Inappropriate content
+    | 'other';               // Other issues
+
+/**
+ * Reject a prompt with specific reasons (DOP learns from mistakes)
+ */
+export async function rejectPrompt(
+    recordId: string,
+    reasons: RejectReason[],
+    notes?: string
+): Promise<boolean> {
+    try {
+        const updates: any = {
+            was_approved: false,
+            was_rejected: true,
+            rejection_reasons: reasons,
+            rejection_notes: notes,
+            rejected_at: new Date().toISOString()
+        };
+
+        const { error } = await supabase
+            .from('dop_prompt_records')
+            .update(updates)
+            .eq('id', recordId);
+
+        if (error) {
+            console.error('[DOP Learning] Failed to reject:', error);
+            return false;
+        }
+
+        // Get record to update model learnings with negative feedback
+        const { data: record } = await supabase
+            .from('dop_prompt_records')
+            .select('model_type, keywords, prompt_used')
+            .eq('id', recordId)
+            .single();
+
+        if (record) {
+            await updateModelLearnings(record.model_type);
+            // Also track failure patterns
+            await trackFailurePatterns(record.model_type, reasons, record.keywords || []);
+        }
+
+        console.log('[DOP Learning] Rejected:', recordId, 'Reasons:', reasons);
+        return true;
+    } catch (err) {
+        console.error('[DOP Learning] Reject error:', err);
+        return false;
+    }
+}
+
+/**
+ * Track failure patterns for learning what NOT to do
+ */
+async function trackFailurePatterns(
+    modelType: string,
+    reasons: RejectReason[],
+    keywords: string[]
+): Promise<void> {
+    try {
+        // Get existing failure patterns
+        const { data: existing } = await supabase
+            .from('dop_model_learnings')
+            .select('failure_patterns, rejection_counts')
+            .eq('model_type', modelType)
+            .single();
+
+        const failurePatterns = existing?.failure_patterns || {};
+        const rejectionCounts = existing?.rejection_counts || {};
+
+        // Increment rejection counts by reason
+        reasons.forEach(reason => {
+            rejectionCounts[reason] = (rejectionCounts[reason] || 0) + 1;
+        });
+
+        // Track keywords that led to failures
+        keywords.forEach(kw => {
+            if (reasons.includes('raccord_error') || reasons.includes('character_mismatch')) {
+                failurePatterns[kw] = (failurePatterns[kw] || 0) + 1;
+            }
+        });
+
+        // Update learnings with failure data
+        await supabase
+            .from('dop_model_learnings')
+            .update({
+                failure_patterns: failurePatterns,
+                rejection_counts: rejectionCounts,
+                updated_at: new Date().toISOString()
+            })
+            .eq('model_type', modelType);
+
+        console.log('[DOP Learning] Tracked failure patterns for:', modelType);
+    } catch (err) {
+        console.error('[DOP Learning] Track failure error:', err);
+    }
+}
+
+/**
  * Mark prompt as retried
  */
 export async function markRetried(recordId: string): Promise<void> {
