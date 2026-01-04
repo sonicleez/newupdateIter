@@ -214,27 +214,39 @@ export async function getAdminStats(): Promise<AdminStats> {
  */
 export async function getAPIKeysOverview(): Promise<APIKeyInfo[]> {
     try {
+        // Query user_api_keys with correct column names
         const { data, error } = await supabase
             .from('user_api_keys')
             .select(`
+                id,
                 user_id,
-                key_type,
-                key_preview,
-                created_at,
-                last_used,
-                profiles!inner(email)
+                provider,
+                encrypted_key,
+                is_active,
+                created_at
             `)
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            console.error('[Admin] user_api_keys query error:', error);
+            throw error;
+        }
+
+        // Get profiles separately to avoid join issues
+        const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, email');
+
+        const profileMap = new Map((profiles || []).map(p => [p.id, p.email]));
 
         return (data || []).map((k: any) => ({
+            id: k.id,
             user_id: k.user_id,
-            email: k.profiles?.email || 'unknown',
-            key_type: k.key_type,
-            key_preview: k.key_preview || '***',
-            created_at: k.created_at,
-            last_used: k.last_used
+            email: profileMap.get(k.user_id) || 'unknown',
+            key_type: k.provider, // Map provider to key_type for UI
+            key_preview: k.encrypted_key ? `${k.encrypted_key.slice(0, 8)}...${k.encrypted_key.slice(-4)}` : '***',
+            is_active: k.is_active,
+            created_at: k.created_at
         }));
     } catch (e) {
         console.error('[Admin] Failed to fetch API keys:', e);
@@ -479,18 +491,14 @@ export async function getUserAPIKeys(userId: string): Promise<any[]> {
  */
 export async function setUserAPIKey(userId: string, keyType: string, keyValue: string): Promise<boolean> {
     try {
-        // Encrypt/preview key
-        const keyPreview = keyValue.substring(0, 8) + '...' + keyValue.substring(keyValue.length - 4);
-
         const { error } = await supabase
             .from('user_api_keys')
             .upsert({
                 user_id: userId,
-                key_type: keyType,
-                key_value: keyValue, // In production, encrypt this!
-                key_preview: keyPreview,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id,key_type' });
+                provider: keyType, // Use 'provider' column
+                encrypted_key: keyValue, // Use 'encrypted_key' column
+                is_active: true
+            }, { onConflict: 'user_id,provider' });
 
         if (error) throw error;
         console.log(`[Admin] Set ${keyType} key for user ${userId}`);
@@ -510,7 +518,7 @@ export async function deleteUserAPIKey(userId: string, keyType: string): Promise
             .from('user_api_keys')
             .delete()
             .eq('user_id', userId)
-            .eq('key_type', keyType);
+            .eq('provider', keyType); // Use 'provider' column
 
         if (error) throw error;
         console.log(`[Admin] Deleted ${keyType} key for user ${userId}`);
