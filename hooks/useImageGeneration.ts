@@ -195,9 +195,14 @@ export function useImageGeneration(
                     console.log(`[ImageGen] ⚠️ Limiting subjects from ${subjects.length} to 3 for Gommo`);
                 }
 
+                // Map UI resolution to Gommo format
+                const gommoResolution = imageSize as '1K' | '2K' | '4K';
+                console.log(`[ImageGen] Gommo resolution setting: ${gommoResolution}`);
+
                 // Generate image via Gommo (async with polling)
                 const cdnUrl = await client.generateImage(gommoPrompt, {
                     ratio: gommoRatio,
+                    resolution: gommoResolution,
                     model: model,
                     subjects: limitedSubjects.length > 0 ? limitedSubjects : undefined,
                     onProgress: (status, attempt) => {

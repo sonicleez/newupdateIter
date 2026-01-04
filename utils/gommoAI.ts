@@ -9,6 +9,7 @@ export interface GommoImageParams {
     prompt: string;
     model?: string;
     ratio?: '16_9' | '9_16' | '1_1';
+    resolution?: '1K' | '2K' | '4K'; // Resolution: 1K (default), 2K, 4K
     project_id?: string;
     editImage?: boolean;
     base64Image?: string;
@@ -294,13 +295,20 @@ export class GommoAI {
      * Returns job info - use checkImageStatus or waitForImage for result
      */
     async createImage(params: GommoImageParams): Promise<GommoImageResult> {
+        // Map resolution: 1K = default, 2K = '2K', 4K = '4K'
+        // Gommo expects lowercase: '1k', '2k', '4k' OR '1K', '2K', '4K'
+        const resolutionValue = params.resolution || '1K';
+
         const payload: Record<string, any> = {
             action_type: 'create',
             model: params.model || 'google_nano_banana_pro',
             prompt: params.prompt,
             ratio: params.ratio || '16_9',
+            resolution: resolutionValue.toLowerCase(), // Gommo expects lowercase
             project_id: params.project_id || 'default',
         };
+
+        console.log(`[Gommo AI] Request params - model: ${payload.model}, ratio: ${payload.ratio}, resolution: ${payload.resolution}`);
 
         // Add edit image mode if specified
         if (params.editImage) {
@@ -403,6 +411,7 @@ export class GommoAI {
         prompt: string,
         options: {
             ratio?: '16_9' | '9_16' | '1_1';
+            resolution?: '1K' | '2K' | '4K';
             model?: string;
             subjects?: GommoSubject[];
             onProgress?: (status: string, attempt: number) => void;
@@ -412,6 +421,7 @@ export class GommoAI {
         const job = await this.createImage({
             prompt,
             ratio: options.ratio,
+            resolution: options.resolution || '1K', // Default to 1K
             model: options.model,
             subjects: options.subjects,
         });
