@@ -1465,7 +1465,7 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                             } : sc)
                         }));
 
-                        let MAX_DOP_RETRIES = 2;
+                        let MAX_DOP_RETRIES = 0; // Disabled for speed - user can rate manually
                         let retryCount = 0;
                         let lastValidation = await validateRaccordWithVision(
                             currentImage,
