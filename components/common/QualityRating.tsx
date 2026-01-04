@@ -57,17 +57,20 @@ export function QualityRating({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [showRejectMenu]);
 
+    // Use prop or fallback to global (for async DOP recording)
+    const effectiveDopRecordId = dopRecordId || (window as any).__lastDopRecordId;
+
     const handleApprove = async () => {
         if (rated || isRating) return;
         setIsRating(true);
 
         try {
-            if (dopRecordId) {
-                await approvePrompt(dopRecordId, {
+            if (effectiveDopRecordId) {
+                await approvePrompt(effectiveDopRecordId, {
                     overall: 0.95,
                     match: 0.95
                 });
-                console.log('[QualityRating] Approved:', dopRecordId);
+                console.log('[QualityRating] Approved:', effectiveDopRecordId);
             }
             setRated('good');
             onRate?.('good');
@@ -85,9 +88,9 @@ export function QualityRating({
 
         setIsRating(true);
         try {
-            if (dopRecordId) {
-                await rejectPrompt(dopRecordId, selectedReasons);
-                console.log('[QualityRating] Rejected:', dopRecordId, selectedReasons);
+            if (effectiveDopRecordId) {
+                await rejectPrompt(effectiveDopRecordId, selectedReasons);
+                console.log('[QualityRating] Rejected:', effectiveDopRecordId, selectedReasons);
             }
             setRated('bad');
             setShowRejectMenu(false);
@@ -127,13 +130,13 @@ export function QualityRating({
         );
     }
 
-    const isDisabled = isRating || !dopRecordId;
+    const isDisabled = isRating || !effectiveDopRecordId;
 
     return (
         <div className={`relative ${className}`} ref={containerRef}>
             <div className="flex items-center gap-1">
                 <span className="text-gray-500 text-xs mr-0.5">
-                    {dopRecordId ? '📊' : '⏳'}
+                    {effectiveDopRecordId ? '📊' : '⏳'}
                 </span>
 
                 {/* Approve button */}

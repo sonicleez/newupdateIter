@@ -159,6 +159,7 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
             };
 
             loadImage();
+            setIsCreateMode(false); // Ensure we're in edit mode when image loads
             setCurrentResolution('1k');
             setAnalysisTags(null);
             setLayerImage(null);
