@@ -151,7 +151,26 @@ export async function fetchUserStatsFromCloud(userId: string) {
 
         if (!globalError && globalStats?.stats) {
             console.log('[Storage] ✅ Loaded stats from user_global_stats');
-            return globalStats.stats;
+            // Map from globalStats format to usageStats format
+            const gs = globalStats.stats;
+            return {
+                total: gs.totalImages || 0,
+                scenes: gs.scenesGenerated || 0,
+                characters: gs.charactersGenerated || 0,
+                products: gs.productsGenerated || 0,
+                concepts: gs.conceptsGenerated || 0,
+                geminiImages: gs.geminiImages || 0,
+                gommoImages: gs.gommoImages || 0,
+                '1K': gs.resolution1K || 0,
+                '2K': gs.resolution2K || 0,
+                '4K': gs.resolution4K || 0,
+                textTokens: gs.textTokens || 0,
+                promptTokens: gs.promptTokens || 0,
+                candidateTokens: gs.candidateTokens || 0,
+                textCalls: gs.textCalls || 0,
+                estimatedPromptTokens: gs.estimatedImagePromptTokens || 0,
+                lastGeneratedAt: gs.lastGenerationAt
+            };
         }
 
         // Fallback to profiles.usage_stats (old schema)

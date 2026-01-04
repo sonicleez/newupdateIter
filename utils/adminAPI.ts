@@ -312,27 +312,42 @@ export async function getDOPLearningDetails(): Promise<{
     recentRejections: any[];
 }> {
     try {
-        // Get model learnings
+        // Get model learnings (includes rejection_counts JSONB)
         const { data: models } = await supabase
             .from('dop_model_learnings')
             .select('*')
             .order('total_generations', { ascending: false });
 
-        // Get recent rejections
+        // Get recent rejections (increase limit for better coverage)
         const { data: recentRejections } = await supabase
             .from('dop_prompt_records')
             .select('id, model_type, rejection_reasons, rejection_notes, rejected_at, keywords, prompt_used')
             .eq('was_rejected', true)
+            .not('rejection_reasons', 'is', null)
             .order('rejected_at', { ascending: false })
-            .limit(50);
+            .limit(200);
 
-        // Calculate rejection stats per reason
+        // Calculate rejection stats from BOTH sources:
+        // 1. From dop_model_learnings.rejection_counts (accumulated)
+        // 2. From recent dop_prompt_records.rejection_reasons (detailed)
         const rejectionStats: Record<string, number> = {};
-        (recentRejections || []).forEach(r => {
-            (r.rejection_reasons || []).forEach((reason: string) => {
-                rejectionStats[reason] = (rejectionStats[reason] || 0) + 1;
+
+        // Source 1: Aggregate from models' rejection_counts (most reliable)
+        (models || []).forEach(m => {
+            const counts = m.rejection_counts || {};
+            Object.entries(counts).forEach(([reason, count]) => {
+                rejectionStats[reason] = (rejectionStats[reason] || 0) + (count as number);
             });
         });
+
+        // Source 2: If no stats from models, fall back to aggregating from records
+        if (Object.keys(rejectionStats).length === 0) {
+            (recentRejections || []).forEach(r => {
+                (r.rejection_reasons || []).forEach((reason: string) => {
+                    rejectionStats[reason] = (rejectionStats[reason] || 0) + 1;
+                });
+            });
+        }
 
         // Get learning patterns from approved prompts
         const { data: approvedRecords } = await supabase
@@ -341,7 +356,7 @@ export async function getDOPLearningDetails(): Promise<{
             .eq('was_approved', true)
             .not('quality_score', 'is', null)
             .order('quality_score', { ascending: false })
-            .limit(100);
+            .limit(200);
 
         // Aggregate learning patterns
         const learningPatterns: Record<string, { count: number; avgScore: number }> = {};
@@ -357,7 +372,7 @@ export async function getDOPLearningDetails(): Promise<{
             });
         });
 
-        console.log('[Admin] Loaded DOP learning details');
+        console.log('[Admin] Loaded DOP learning details, rejectionStats:', Object.keys(rejectionStats).length);
         return {
             models: models || [],
             rejectionStats,
