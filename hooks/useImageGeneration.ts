@@ -977,8 +977,11 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
             }
 
 
-            // 5f. IDENTITY & OUTFIT REINFORCEMENT (SANDWICH PATTERN - Face & Body again at END)
-            // This reinforces character identity and costume after scene references to prevent drift
+            // 5f. IDENTITY & OUTFIT REINFORCEMENT - DISABLED for token savings
+            // Sandwich pattern was sending face/body TWICE (start + end) to reinforce identity
+            // But this doubles token cost. The first pass with IDENTITY_ANCHOR is sufficient.
+            // Uncomment below if character drift becomes an issue.
+            /*
             for (const char of selectedChars) {
                 if (char.faceImage) {
                     const imgData = await safeGetImageData(char.faceImage);
@@ -998,6 +1001,7 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                     }
                 }
             }
+            */
 
             // (Base Image moved to start)
             if (continuityInstruction) {
