@@ -675,8 +675,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, isAdmin
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <span className={`px-2 py-1 rounded text-xs font-mono ${key.key_type === 'gemini' ? 'bg-blue-900/50 text-blue-400' :
-                                                            key.key_type === 'gommo' ? 'bg-yellow-900/50 text-yellow-400' :
-                                                                'bg-gray-700 text-gray-300'
+                                                        key.key_type === 'gommo' ? 'bg-yellow-900/50 text-yellow-400' :
+                                                            'bg-gray-700 text-gray-300'
                                                         }`}>
                                                         {key.key_type}
                                                     </span>
@@ -710,19 +710,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, isAdmin
                                 <Plus className="w-5 h-5 text-green-400" />
                                 Assign API Key to User
                             </h3>
+                            <p className="text-sm text-gray-500 mb-4">
+                                Users with existing keys can have them updated. Users without keys are highlighted.
+                            </p>
                             <div className="grid grid-cols-4 gap-4">
-                                {users.slice(0, 8).map(user => (
-                                    <button
-                                        key={user.id}
-                                        onClick={() => openKeyModal(user)}
-                                        className="p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors text-left"
-                                    >
-                                        <p className="text-white text-sm font-medium truncate">{user.email}</p>
-                                        <p className="text-gray-500 text-xs mt-1">
-                                            Click to add key
-                                        </p>
-                                    </button>
-                                ))}
+                                {users
+                                    .filter(u => u.role !== 'deleted')
+                                    .slice(0, 12)
+                                    .map(user => {
+                                        const userKeys = apiKeys.filter(k => k.user_id === user.id);
+                                        const hasKey = userKeys.length > 0;
+                                        return (
+                                            <button
+                                                key={user.id}
+                                                onClick={() => openKeyModal(user)}
+                                                className={`p-4 rounded-lg transition-colors text-left ${hasKey
+                                                        ? 'bg-gray-800 hover:bg-gray-700 border border-gray-700'
+                                                        : 'bg-yellow-900/20 hover:bg-yellow-900/40 border border-yellow-500/30'
+                                                    }`}
+                                            >
+                                                <p className="text-white text-sm font-medium truncate">{user.email}</p>
+                                                <p className={`text-xs mt-1 ${hasKey ? 'text-green-400' : 'text-yellow-400'}`}>
+                                                    {hasKey
+                                                        ? `✅ ${userKeys.map(k => k.key_type).join(', ')}`
+                                                        : '⚠️ No API key'}
+                                                </p>
+                                            </button>
+                                        );
+                                    })}
                             </div>
                         </div>
                     </div>

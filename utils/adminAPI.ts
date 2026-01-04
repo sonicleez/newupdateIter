@@ -423,20 +423,34 @@ export async function setUserRole(userId: string, role: 'admin' | 'user'): Promi
 }
 
 /**
- * Delete user (soft delete - just marks as deleted)
+ * Delete user (soft delete - marks as inactive)
  */
 export async function deleteUser(userId: string): Promise<boolean> {
     try {
-        // Soft delete - update status
+        // First, delete user's API keys
+        const { error: keyError } = await supabase
+            .from('user_api_keys')
+            .delete()
+            .eq('user_id', userId);
+
+        if (keyError) {
+            console.warn('[Admin] Failed to delete user keys:', keyError);
+        }
+
+        // Soft delete - set role to 'deleted' and clear sensitive data
         const { error } = await supabase
             .from('profiles')
             .update({
-                deleted_at: new Date().toISOString(),
-                email: null // Remove email for privacy
+                role: 'deleted',
+                display_name: '[Deleted User]'
             })
             .eq('id', userId);
 
-        if (error) throw error;
+        if (error) {
+            console.error('[Admin] Delete profile error:', error);
+            throw error;
+        }
+
         console.log(`[Admin] Deleted user ${userId}`);
         return true;
     } catch (e) {
