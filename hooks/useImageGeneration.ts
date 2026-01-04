@@ -1076,53 +1076,20 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
             }
 
             if (shouldNormalize) {
-                // Check if Vietnamese is present - use async version for translation
-                const hasVietnamese = containsVietnamese(finalImagePrompt);
+                // SPEED OPTIMIZATION: Always use sync normalization (no AI translation)
+                // Original code didn't have async translation, and it adds 20-40s per image
+                // Skip Vietnamese detection - just normalize the prompt structure
+                const normalized = normalizePrompt(finalImagePrompt, modelToUse, currentState.aspectRatio);
+                promptToSend = normalized.normalized;
 
-                if (hasVietnamese && userApiKey) {
-                    // Use AI-powered translation and optimization
-                    if (addProductionLog) {
-                        addProductionLog('dop', `🌐 Detecting Vietnamese... Translating and optimizing for ${modelToUse.toUpperCase()}`, 'info', 'translating');
-                    }
-
-                    const normalized = await normalizePromptAsync(finalImagePrompt, modelToUse, userApiKey, currentState.aspectRatio);
-                    promptToSend = normalized.normalized;
-
-                    // Log normalization to production chat
-                    if (addProductionLog) {
-                        const logMsg = formatNormalizationLog(normalized);
-                        addProductionLog('dop', logMsg, 'prompt_optimization', 'prompt_normalized');
-                    }
-
-                    console.log('[ImageGen] 🌐 DOP Translated & Normalized:', {
-                        model: normalized.modelType,
-                        translated: normalized.translated,
-                        originalLen: normalized.original.length,
-                        normalizedLen: normalized.normalized.length,
-                        changes: normalized.changes
-                    });
-                } else {
-                    // No Vietnamese - use sync version (faster)
-                    const normalized = normalizePrompt(finalImagePrompt, modelToUse, currentState.aspectRatio);
-                    promptToSend = normalized.normalized;
-
-                    if (addProductionLog) {
-                        const logMsg = formatNormalizationLog(normalized);
-                        addProductionLog('dop', logMsg, 'prompt_optimization', 'prompt_normalized');
-                    }
-
-                    console.log('[ImageGen] 🔧 DOP Normalized:', {
-                        model: normalized.modelType,
-                        originalLen: normalized.original.length,
-                        normalizedLen: normalized.normalized.length,
-                        changes: normalized.changes
-                    });
-                }
+                console.log('[ImageGen] 🔧 Fast normalize (sync):', {
+                    model: normalized.modelType,
+                    originalLen: normalized.original.length,
+                    normalizedLen: normalized.normalized.length
+                });
             } else {
-                // Gemini - log that we're using full prompt
-                if (addProductionLog) {
-                    addProductionLog('dop', `🔵 Using full Gemini prompt (${finalImagePrompt.length} chars) - Vietnamese supported natively`, 'info', 'prompt_ready');
-                }
+                // Gemini native - Vietnamese supported, use full prompt
+                console.log('[ImageGen] 🔵 Gemini prompt ready:', finalImagePrompt.length, 'chars');
             }
 
             // Record prompt in DOP Learning System - NON-BLOCKING (fire and forget)
