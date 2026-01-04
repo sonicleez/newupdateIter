@@ -75,7 +75,7 @@ async function generateEmbedding(text: string, apiKey: string): Promise<number[]
             contents: [{ parts: [{ text }] }]
         });
 
-        return response.embedding?.values || null;
+        return (response as any).embedding?.values || null;
     } catch (err) {
         console.error('[DOP Learning] Embedding generation failed:', err);
         return null;
@@ -271,8 +271,6 @@ export async function rejectPrompt(
 
         if (record) {
             await updateModelLearnings(record.model_type);
-            // Also track failure patterns
-            await trackFailurePatterns(record.model_type, reasons, record.keywords || []);
         }
 
         console.log('[DOP Learning] Rejected:', recordId, 'Reasons:', reasons);
@@ -334,11 +332,13 @@ async function trackFailurePatterns(
  * Mark prompt as retried
  */
 export async function markRetried(recordId: string): Promise<void> {
+    const { data } = await supabase.from('dop_prompt_records').select('retry_count').eq('id', recordId).single();
+    const current = data?.retry_count || 0;
     await supabase
         .from('dop_prompt_records')
         .update({
             was_retried: true,
-            retry_count: supabase.sql`retry_count + 1`
+            retry_count: current + 1
         })
         .eq('id', recordId);
 }
@@ -381,6 +381,23 @@ async function updateModelLearnings(modelType: string): Promise<void> {
             });
         });
 
+        // Recalculate rejection counts and failure patterns from ALL records
+        const rejectionCounts: { [reason: string]: number } = {};
+        const failurePatterns: { [kw: string]: number } = {};
+
+        records.filter(r => r.was_rejected).forEach(r => {
+            (r.rejection_reasons || []).forEach((reason: string) => {
+                rejectionCounts[reason] = (rejectionCounts[reason] || 0) + 1;
+
+                // Track keywords that led to significant failures
+                if (reason === 'raccord_error' || reason === 'character_mismatch' || reason === 'wrong_angle') {
+                    (r.keywords || []).forEach((kw: string) => {
+                        failurePatterns[kw] = (failurePatterns[kw] || 0) + 1;
+                    });
+                }
+            });
+        });
+
         // Top 50 patterns
         const successfulPatterns = Object.entries(commonKeywords)
             .sort((a, b) => b[1] - a[1])
@@ -399,10 +416,12 @@ async function updateModelLearnings(modelType: string): Promise<void> {
                 best_aspect_ratios: bestAspectRatios,
                 common_keywords: commonKeywords,
                 successful_patterns: successfulPatterns,
+                rejection_counts: rejectionCounts, // NOW INCLUDED
+                failure_patterns: failurePatterns, // NOW INCLUDED
                 updated_at: new Date().toISOString()
             }, { onConflict: 'model_type' });
 
-        console.log('[DOP Learning] Updated learnings for:', modelType);
+        console.log('[DOP Learning] Updated learnings for:', modelType, 'Rejections:', Object.keys(rejectionCounts).length);
     } catch (err) {
         console.error('[DOP Learning] Update learnings error:', err);
     }
