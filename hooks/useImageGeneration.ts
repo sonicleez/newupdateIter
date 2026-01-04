@@ -1282,7 +1282,8 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                         mediaId: fromManual ? sc.mediaId : (mediaId || sc.mediaId),
                         isGenerating: false,
                         error: null,
-                        dopRecordId: dopRecordId // Store for later quality rating
+                        // Use local dopRecordId or fallback to global (async DOP recording updates global)
+                        dopRecordId: dopRecordId || (window as any).__lastDopRecordId || sc.dopRecordId
                     } : sc),
                     usageStats: updatedStats
                 };
