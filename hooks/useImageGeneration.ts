@@ -867,51 +867,73 @@ DO NOT invent new environments or change the location. This is NOT a different p
             }
 
 
-            // 5c. CHARACTER BODY/VIEWS & PRODUCT REFERENCES (Advanced Mapping for Gemini 3 Pro)
+            // 5c. CHARACTER REFERENCES - FACE ID FIRST (Gemini weights early references more)
             let referencePreamble = '';
 
             // Track characters from the previous scene for re-entry logic
             const prevScene = currentSceneIndex > 0 ? currentState.scenes[currentSceneIndex - 1] : null;
             const prevSceneCharIds = prevScene?.characterIds || [];
 
+            // STEP 1: Inject ALL Face IDs FIRST (highest priority for identity)
             for (const char of selectedChars) {
-                const charRefs: { type: string, img: string }[] = [];
-                if (char.faceImage) charRefs.push({ type: 'FACE ID', img: char.faceImage });
+                if (char.faceImage) {
+                    const faceData = await safeGetImageData(char.faceImage);
+                    if (faceData) {
+                        const isReentry = !prevSceneCharIds.includes(char.id);
+
+                        // STRONGEST possible Face ID instruction
+                        parts.push({
+                            text: `🔒 [FACE ID LOCK - ${char.name.toUpperCase()}]: 
+!!! CRITICAL IDENTITY REQUIREMENT !!! 
+This is the ONLY acceptable face for character "${char.name}".
+COPY EXACTLY:
+- Facial bone structure (forehead, cheekbones, jaw)
+- Eye shape and spacing
+- Nose bridge and tip shape  
+- Mouth shape and lip fullness
+- Skin tone and texture
+${isReentry ? '⚠️ CHARACTER RE-ENTERING - Reset to this exact face!' : ''}
+DO NOT generate a different face. DO NOT create a "similar" face. This EXACT face only.`
+                        });
+                        parts.push({ inlineData: { data: faceData.data, mimeType: faceData.mimeType } });
+                        console.log(`[ImageGen] 🔒 FACE ID injected FIRST for ${char.name}`);
+                    }
+                }
+            }
+
+            // STEP 2: Then add body/outfit references
+            for (const char of selectedChars) {
+                const bodyRefs: { type: string, img: string }[] = [];
+
                 // Only add bodyImage if it's different from masterImage (avoid duplicate)
                 if (char.bodyImage && char.bodyImage !== char.masterImage) {
-                    charRefs.push({ type: 'FULL BODY', img: char.bodyImage });
+                    bodyRefs.push({ type: 'FULL BODY', img: char.bodyImage });
                 }
 
                 // Add more views if using Pro
                 if (isPro) {
-                    if (char.sideImage) charRefs.push({ type: 'SIDE VIEW', img: char.sideImage });
-                    if (char.backImage) charRefs.push({ type: 'BACK VIEW', img: char.backImage });
+                    if (char.sideImage) bodyRefs.push({ type: 'SIDE VIEW', img: char.sideImage });
+                    if (char.backImage) bodyRefs.push({ type: 'BACK VIEW', img: char.backImage });
                 }
 
-                // Fallback to master if no specific views exist (or if bodyImage was skipped)
-                if (charRefs.length === 0 && char.masterImage) {
-                    charRefs.push({ type: 'PRIMARY', img: char.masterImage });
-                } else if (!charRefs.some(r => r.type === 'FULL BODY') && char.masterImage) {
-                    // Add masterImage as primary body reference
-                    charRefs.push({ type: 'FULL BODY', img: char.masterImage });
+                // Fallback to master if no body views (and no faceImage was added)
+                if (bodyRefs.length === 0 && char.masterImage && !char.faceImage) {
+                    bodyRefs.push({ type: 'PRIMARY', img: char.masterImage });
+                } else if (bodyRefs.length === 0 && char.masterImage) {
+                    // Add masterImage as body/outfit reference
+                    bodyRefs.push({ type: 'OUTFIT', img: char.masterImage });
                 }
 
-                // PARALLEL loading of all character reference images
+                // PARALLEL loading of body reference images
                 const refDataArray = await Promise.all(
-                    charRefs.map(ref => safeGetImageData(ref.img).then(data => ({ ref, data })))
+                    bodyRefs.map(ref => safeGetImageData(ref.img).then(data => ({ ref, data })))
                 );
 
                 for (const { ref, data: imgData } of refDataArray) {
                     if (imgData) {
-                        const refLabel = `MASTER VISUAL: ${char.name.toUpperCase()} ${ref.type}`;
-
-                        // IDENTITY RE-ENTRY LOGIC: If character wasn't in previous shot, force a reset
-                        const isReentry = !prevSceneCharIds.includes(char.id);
-                        const reentryInstruction = isReentry ? `!!! IDENTITY RESET !!! Character ${char.name} is re-entering the sequence. Strictly reset facial features to this Face ID. Do NOT be influenced by surroundings.` : "";
-
-                        parts.push({ text: `[${refLabel}]: AUTHORITATIVE identity anchor for ${char.name}. ${reentryInstruction} Match these exact face features. For clothing and pose, defer to SCENE_LOCK_REFERENCE if present. Description: ${char.description}` });
+                        parts.push({ text: `[${char.name.toUpperCase()} ${ref.type}]: Use for OUTFIT and POSE only. Face from FACE ID LOCK above. Description: ${char.description}` });
                         parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        referencePreamble += `(IDENTITY CONTINUITY: Match ${refLabel}) `;
+                        referencePreamble += `(${char.name} ${ref.type}) `;
                     }
                 }
             }
