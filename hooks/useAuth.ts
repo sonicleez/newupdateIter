@@ -39,7 +39,7 @@ export const useAuth = () => {
 
     const signOut = () => supabase.auth.signOut();
 
-    const isPro = profile?.subscription_tier === 'pro' && (
+    const isPro = profile?.subscription_tier?.toLowerCase() === 'pro' && (
         !profile?.subscription_expires_at ||
         new Date(profile.subscription_expires_at) > new Date()
     );
@@ -48,8 +48,9 @@ export const useAuth = () => {
         profile?.subscription_expires_at &&
         new Date(profile.subscription_expires_at) <= new Date();
 
-    const isAdmin = (profile?.role === 'admin') ||
-        (['admin@example.com', 'dangle@renoschuyler.com', 'xvirion@gmail.com'].includes(session?.user?.email || ''));
+    const userEmail = session?.user?.email?.toLowerCase() || '';
+    const isAdmin = (profile?.role?.toLowerCase() === 'admin') ||
+        (['admin@example.com', 'dangle@renoschuyler.com', 'xvirion@gmail.com'].includes(userEmail));
 
     return { session, profile, isPro, isAdmin, subscriptionExpired, loading, signOut };
 };

@@ -60,9 +60,10 @@ export async function isUserAdmin(): Promise<boolean> {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return false;
 
+        const userEmail = user.email?.toLowerCase() || '';
         // Check if user email is in admin list or has admin role
         const adminEmails = ['admin@example.com', 'dangle@renoschuyler.com', 'xvirion@gmail.com']; // Admin emails
-        if (adminEmails.includes(user.email || '')) return true;
+        if (adminEmails.includes(userEmail)) return true;
 
         // Or check profiles table for role
         const { data: profile } = await supabase
