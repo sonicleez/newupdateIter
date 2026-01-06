@@ -79,7 +79,7 @@ const WPM_SLOW = 120;
 const WPM_MEDIUM = 150;
 const WPM_FAST = 180;
 
-export type AnalysisStage = 'idle' | 'preparing' | 'connecting' | 'thinking' | 'post-processing' | 'finalizing';
+export type AnalysisStage = 'idle' | 'preparing' | 'connecting' | 'clustering' | 'thinking' | 'post-processing' | 'finalizing';
 
 export function useScriptAnalysis(userApiKey: string | null) {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -165,23 +165,9 @@ export function useScriptAnalysis(userApiKey: string | null) {
                 contextInstructions += `\n[USER DOP NOTES - MANDATORY CAMERA/LIGHTING CONTEXT]:\n${researchNotes.dop}\n- Apply these cinematography guidelines to visual prompts.\n`;
             }
 
-            // Calculate expected scene count based on word count and reading speed
-            // Formula: Each scene should be 3-5s of VO. At 150 WPM, that's ~7.5-12.5 words per scene.
-            // We use ~10 words per scene as the target (4s at 150 WPM).
+            // Expected Scene Count (Soft Target)
             const wordsPerScene = readingSpeed === 'slow' ? 8 : readingSpeed === 'fast' ? 12 : 10;
             const expectedSceneCount = Math.ceil(wordCount / wordsPerScene);
-            const minSceneCount = Math.max(20, Math.floor(expectedSceneCount * 0.8)); // At least 80% of expected
-            const maxSceneCount = Math.ceil(expectedSceneCount * 1.2); // At most 120% of expected
-
-            // PHASE 1: Pre-split script into sentences for consistent scene splitting
-            const sentenceSplitRegex = /(?<=[.!?])\s+(?=[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ"])/g;
-            const sentences = scriptText.split(sentenceSplitRegex).filter(s => s.trim().length > 0);
-            const sentenceCount = sentences.length;
-
-            console.log('[ScriptAnalysis] Pre-split:', { wordCount, sentenceCount, expectedSceneCount, minSceneCount, maxSceneCount });
-
-            // Build sentences array for AI with indices
-            const sentencesForAI = sentences.map((text, idx) => `[${idx}] ${text.trim()}`).join('\n');
 
             // [New] Existing Character Library - Inject to avoid duplicates
             if (activeCharacters && activeCharacters.length > 0) {
@@ -189,68 +175,94 @@ export function useScriptAnalysis(userApiKey: string | null) {
                 contextInstructions += `\n[EXISTING CHARACTER LIBRARY - MANDATORY REUSE]:\n${charList}\n- CRITICAL: If the script refers to any of these characters (by name or context), you MUST reuse their exact name. Do NOT create new entries for them in the "characters" JSON array unless they are truly new characters not found in this list.\n`;
             }
 
-            const prompt = `Analyze this voice-over script for a documentary video. Return JSON only.
+            // ═══════════════════════════════════════════════════════════════
+            // STEP 1: VISUAL CLUSTERING (The "Director's Thinking" Phase)
+            // ═══════════════════════════════════════════════════════════════
+            setAnalysisStage('clustering'); // New Stage
 
-=== FULL SCRIPT (read this FIRST for character context) ===
+            const clusteringSystemPrompt = `
+*** CRITICAL ROLE: VISUAL DIRECTOR ***
+You are NOT a text splitter. You are a CINEMATIC ADAPTER.
+Your job is to read the raw input and restructure it into merged VISUAL BLOCKS (Shots).
+
+*** ALGORITHM (THE GOLDEN RULES) ***
+1. **SCAN**: Read the input text.
+2. **MERGE**: If Sentence A is "Subject Action" and Sentence B is "Subject Adjective" or "Micro-Action", MERGE THEM into one block.
+   - Example Input: "He sees a mask. It is white. It has a beak."
+   - BAD Output: Scene 1: He sees mask. Scene 2: It is white.
+   - GOOD Output: Shot 1: Close-up of him looking at a WHITE MASK with a LONG BEAK.
+3. **NO FRAGMENTATION**: DO NOT create separate blocks for adjectives, colors, or materials.
+4. **NARRATIVE FLOW**: Only create a new block when there is a significant CHANGE in Action, Location, or Time.
+5. **VO TRACKING**: You MUST keep track of which part of the text corresponds to which visual.
+            `;
+
+            const clusteringUserPrompt = `
+Analyze and REWRITE the following voice-over script into a list of "VISUAL SHOTS".
+Don't worry about JSON format yet. Just simple text blocks.
+
+INPUT SCRIPT:
 """
 ${scriptText}
 """
 
-=== PRE-SPLIT SENTENCES (use for scene generation) ===
-"""
-${sentencesForAI}
-"""
-TOTAL: ${sentenceCount} sentences. Generate EXACTLY ${sentenceCount} scenes.
+OUTPUT FORMAT:
+- Shot 1: [Visual Description] (Covers text: "...")
+- Shot 2: [Visual Description] (Covers text: "...")
+...
+            `;
 
-TASK ORDER (follow strictly):
-1. Read FULL SCRIPT above to understand story, characters, and flow
-2. Extract GLOBAL CONTEXT (World setting, Time period, Tone)
-3. Identify CHAPTERS with LOCATION ANCHORS
-4. Extract ALL CHARACTER NAMES from full script (merge aliases)
-5. CHARACTER SCANNING: For each sentence [index], identify which characters are:
-   - MENTIONED by name
-   - PERFORMING actions
-   - PRESENT in the scene context
-6. Create ONE scene per sentence with visual prompt + characterNames array
+            // Call Step 1 (Clustering)
+            // Use gemini-2.5-flash for speed if not generating JSON
+            const clusteringResponse = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [{ text: clusteringSystemPrompt + "\n\n" + clusteringUserPrompt }] }]
+            });
+            const visualPlan = clusteringResponse.text || '';
+            console.log('[ScriptAnalysis] 🧠 Visual Plan:', visualPlan);
 
-CRITICAL - CHARACTER SCANNING RULES:
-- Read the FULL SCRIPT to understand when characters enter/exit narrative
-- If a character was mentioned in sentence [N], they may still be present in [N+1] even if not named
-- Use context: "He said..." refers to the last male character mentioned
-- "The man/woman" = previously introduced character, NOT a new one
-- ONLY list characters who should be VISIBLE in the image
-- If a sentence is pure narration with no visible characters, leave characterNames: []
+
+            // ═══════════════════════════════════════════════════════════════
+            // STEP 2: JSON GENERATION (The "DOP's Execution" Phase)
+            // ═══════════════════════════════════════════════════════════════
+            setAnalysisStage('thinking'); // Transition to JSON generation
+
+            const prompt = `Analyze this voice-over script and the Director's Visual Plan to generate the final Production Script JSON.
+
+=== ORIGINAL SCRIPT ===
+"""
+${scriptText}
+"""
+
+=== DIRECTOR'S VISUAL PLAN (Follow this segmentation) ===
+"""
+${visualPlan}
+"""
+
+TASK:
+1. Use the "Director's Visual Plan" as the SOURCE TRUTH for scene segmentation.
+2. Map the original script text (Voice Over) to these visual scenes.
+3. Extract Characters, Locations, and Chapters as usual.
 
 CRITICAL - LOCATION ANCHOR RULE:
 - Each chapter MUST define a "locationAnchor" - a DETAILED, FIXED environment description
 - ALL scenes in that chapter MUST visually exist in this EXACT location
 - Format: "Interior/Exterior, [specific place], [decade], [architectural style], [lighting], [key props]"
-- Example: "Interior, 1940s Monte Carlo casino, Art Deco style, crystal chandeliers, mahogany tables, warm amber lighting"
 
 VISUAL PROMPT FORMAT:
 "[SHOT TYPE]. [Cinematic Purpose]. [Spatial View/Axis]. [Location from locationAnchor]. [Subject/Characters]. [Action]. [Mood]."
 - SHOT TYPES: WIDE SHOT, MEDIUM SHOT, CLOSE-UP, EXTREME CLOSE-UP, POV
-- CRITICAL: DO NOT use the same SHOT TYPE twice in a row. Force cinematic variation (e.g., Wide -> Medium -> Close).
-- SPATIAL ROTATION: For every scene, describe the view from a DIFFERENT AXIS or angle (e.g., "Camera looking from ceiling", "Side profile view", "Low angle looking up", "Looking from behind the desk"). DO NOT repeat the same background view twice.
-- Include locationAnchor elements in every scene.
+- SPATIAL ROTATION: For every scene, describe the view from a DIFFERENT AXIS or angle.
 
-CRITICAL - VOICE OVER vs DIALOGUE DETECTION:
-- VOICE OVER (voiceOverText): Narration text read by off-screen narrator. Third-person descriptions.
-- DIALOGUE (dialogueText): Direct speech by a character on-screen. Usually in quotes or preceded by speaker name.
-  
-DETECTION RULES:
-- If sentence is quoted speech like "Badge. Monegasque police." → This is DIALOGUE
-- If sentence has format "Name said: ..." or "...," he/she said → Extract as DIALOGUE
-- If sentence starts with name + colon like "John: Hello" → This is DIALOGUE  
-- Pure narration without quotes = VOICE OVER only
-- A sentence CAN have BOTH (narration + embedded dialogue)
+CRITICAL - DURATION & COVERAGE (B-ROLL LOGIC):
+- Merged scenes may have long Voice-Over text. A single generated video clip is typically short (4s).
+- IF a scene's \`voiceOverText\` is > 15 words (~6 seconds), you MUST generate \`expansionScenes\` (B-Roll / Cutaways).
+- B-Roll visual prompts should focus on:
+  1. Specific DETAILS mentioned in the text (e.g., "The white ceramic texture", "The curved beak").
+  2. REACTION shots of characters.
+  3. ATMOSPHERE shots (rain hitting the roof, shadows).
+- B-Rolls do NOT have dialogue. They are purely visual filler for the audio duration.
 
-RULES:
-- One sentence = one scene. DO NOT merge sentences.
 ${contextInstructions}
-- If sentence needs B-roll, mark needsExpansion: true
-- B-roll uses SAME locationAnchor as parent
-- CONSISTENCY CHECK: Same character must have same name throughout
 
 RESPOND WITH JSON ONLY:
 {
@@ -259,24 +271,13 @@ RESPOND WITH JSON ONLY:
     {
       "id": "loc_casino",
       "name": "Casino Interior",
-      "description": "Dark luxurious 1940s gambling hall with crystal chandeliers, mahogany gaming tables, velvet curtains, Art Deco style architecture",
-      "keywords": ["casino", "gambling", "interior", "art deco"],
-      "chapterIds": ["chapter_1", "chapter_5", "chapter_8"],
+      "description": "Dark luxurious 1940s gambling hall...",
+      "keywords": ["casino", "gambling"],
+      "chapterIds": ["chapter_1"],
       "isInterior": true,
       "timeOfDay": "night",
-      "mood": "tense, anticipation",
-      "conceptPrompt": "WIDE SHOT establishing interior. 1940s Monte Carlo casino, Art Deco style architecture. Crystal chandeliers cast warm amber light. Mahogany roulette tables, velvet curtains, marble floors. Empty of people, focus on environment. David Fincher cinematography, desaturated tones."
-    },
-    {
-      "id": "loc_mansion",
-      "name": "Grand Mansion Hall",
-      "description": "Ornate entrance hall with marble columns, grand staircase, high ceilings",
-      "keywords": ["mansion", "hall", "grand", "marble"],
-      "chapterIds": ["chapter_3"],
-      "isInterior": true,
-      "timeOfDay": "afternoon",
-      "mood": "opulent, mysterious",
-      "conceptPrompt": "WIDE SHOT establishing interior. Grand mansion entrance hall. Marble columns, sweeping staircase, crystal chandelier, checkered floor. Afternoon light through tall windows. Empty of people."
+      "mood": "tense",
+      "conceptPrompt": "WIDE SHOT establishing..."
     }
   ],
   "chapters": [
@@ -285,7 +286,7 @@ RESPOND WITH JSON ONLY:
       "title": "Chapter Title",
       "suggestedTimeOfDay": "night",
       "suggestedWeather": "clear",
-      "locationAnchor": "Interior, 1940s Monte Carlo casino, Art Deco style, crystal chandeliers, mahogany gaming tables, warm amber lighting from wall sconces, velvet curtains, marble floors",
+      "locationAnchor": "Interior, 1940s Monte Carlo casino...",
       "locationId": "loc_casino"
     }
   ],
@@ -293,46 +294,20 @@ RESPOND WITH JSON ONLY:
     {
       "name": "Étienne Marchand",
       "mentions": 5,
-      "suggestedDescription": "Faceless white mannequin, egg-shaped head. WEARING: A tailored charcoal grey 1940s wool suit with wide lapels, crisp white shirt, silk tie, gold pocket watch chain. SHOES: Polished black leather oxfords.",
-      "outfitByChapter": {
-        "chapter_1": "charcoal grey 1940s wool suit"
-      },
+      "suggestedDescription": "Faceless white mannequin...",
+      "outfitByChapter": { "chapter_1": "suit..." },
       "isMain": true
     }
   ],
   "scenes": [
     {
-      "sentenceIndex": 0,
-      "voiceOverText": "Monte Carlo, March 2019. 11:47 p.m. A man in a charcoal suit stands at the edge of a roulette table.",
-      "dialogueText": null,
-      "dialogueSpeaker": null,
-      "visualPrompt": "WIDE SHOT. 1940s Monte Carlo casino interior, Art Deco, crystal chandeliers. Étienne Marchand stands at the roulette table, chips in hand. Warm amber lighting, anticipation.",
+      "voiceOverText": "Segment of original text for this shot...",
+      "dialogueText": "Any dialogue...",
+      "dialogueSpeaker": "Speaker Name",
+      "visualPrompt": "WIDE SHOT. Casino. Étienne stands...",
       "chapterId": "chapter_1",
       "characterNames": ["Étienne Marchand"],
       "needsExpansion": false
-    },
-    {
-      "sentenceIndex": 5,
-      "voiceOverText": "Two plainclothes officers intercept him near the coat check.",
-      "dialogueText": "Badge. Monegasque police. Monsieur, we need to speak with you regarding your activities this evening.",
-      "dialogueSpeaker": "Police Officer",
-      "visualPrompt": "MEDIUM SHOT. Casino lobby. Two officers in suits approach Étienne, one showing badge. Tense atmosphere.",
-      "chapterId": "chapter_1",
-      "characterNames": ["Étienne Marchand", "Police Officer"],
-      "needsExpansion": false
-    },
-    {
-      "sentenceIndex": 10,
-      "voiceOverText": "Next narration sentence without dialogue...",
-      "dialogueText": null,
-      "dialogueSpeaker": null,
-      "visualPrompt": "CLOSE-UP. Casino interior. Roulette wheel spinning, ball bouncing.",
-      "chapterId": "chapter_1",
-      "characterNames": [],
-      "needsExpansion": true,
-      "expansionScenes": [
-        { "visualPrompt": "EXTREME CLOSE-UP. Same casino. Étienne's hands placing chips.", "isBRoll": true }
-      ]
     }
   ]
 }`;
@@ -340,51 +315,43 @@ RESPOND WITH JSON ONLY:
             setAnalysisStage('connecting');
             const response = await ai.models.generateContent({
                 model: modelName,
-                contents: prompt,
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 config: {
                     temperature: 0.3,
                     responseMimeType: 'application/json',
-                    maxOutputTokens: 65536, // Allow large output for many scenes
+                    maxOutputTokens: 65536,
                     ...(thinkingBudget && {
                         thinkingConfig: { thinkingBudget }
                     })
                 }
             });
 
-            setAnalysisStage('thinking');
+            setAnalysisStage('post-processing');
             const text = response.text || '';
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             if (!jsonMatch) throw new Error('No JSON in response');
 
-            setAnalysisStage('post-processing');
             const parsed = JSON.parse(jsonMatch[0]);
 
-            // Validate scene count - warn if too low
-            const actualSceneCount = parsed.scenes?.length || 0;
-            if (actualSceneCount < minSceneCount) {
-                console.warn(`[ScriptAnalysis] ⚠️ AI returned only ${actualSceneCount} scenes but expected ${minSceneCount}-${maxSceneCount}. AI may have ignored scene count constraint.`);
-            }
-
-            // Calculate durations
+            // Calculate durations and finalize
             const result: ScriptAnalysisResult = {
                 totalWords: wordCount,
                 estimatedDuration: estimatedTotalDuration,
-                chapters: parsed.chapters.map((ch: any, i: number) => ({
+                chapters: (parsed.chapters || []).map((ch: any) => ({
                     ...ch,
                     startIndex: 0,
                     endIndex: 0,
-                    estimatedDuration: Math.ceil(estimatedTotalDuration / parsed.chapters.length)
+                    estimatedDuration: Math.ceil(estimatedTotalDuration / (parsed.chapters?.length || 1))
                 })),
                 characters: parsed.characters || [],
                 locations: (parsed.locations || []).map((loc: any) => ({
                     ...loc,
-                    sceneRanges: loc.sceneRanges || [] // Ensure array exists
+                    sceneRanges: loc.sceneRanges || []
                 })),
-                suggestedSceneCount: parsed.scenes.length +
-                    parsed.scenes.reduce((sum: number, s: any) => sum + (s.expansionScenes?.length || 0), 0),
+                suggestedSceneCount: parsed.scenes.length,
                 scenes: parsed.scenes.map((s: any) => ({
                     ...s,
-                    estimatedDuration: Math.ceil(((s.voiceOverText || '').split(/\\s+/).length / wpm) * 60)
+                    estimatedDuration: Math.ceil(((s.voiceOverText || '').split(/\s+/).length / wpm) * 60)
                 })),
                 globalContext: parsed.globalContext
             };
