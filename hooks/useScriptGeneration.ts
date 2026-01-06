@@ -126,6 +126,14 @@ export function useScriptGeneration(
                 }
             };
 
+            // FORCE AI to generate voiceover if explicitly requested by preset
+            if (activePreset.outputFormat.hasNarration) {
+                const requiredFields = generationConfig.responseSchema.properties.scenes.items.required as string[];
+                if (!requiredFields.includes("voiceover")) {
+                    requiredFields.push("voiceover");
+                }
+            }
+
             if (thinkingLevel && thinkingLevel !== 'none') {
                 (generationConfig as any).thinkingConfig = { thinkingLevel };
             }
@@ -169,10 +177,18 @@ export function useScriptGeneration(
                 const auditedTexts = JSON.parse(auditedTextsRaw);
 
                 if (Array.isArray(auditedTexts) && auditedTexts.length === finalScript.scenes.length) {
-                    finalScript.scenes = finalScript.scenes.map((s: any, idx: number) => ({
-                        ...s,
-                        visual_context: auditedTexts[idx]
-                    }));
+                    finalScript.scenes = finalScript.scenes.map((s: any, idx: number) => {
+                        let newVisual = s.visual_context;
+                        // Safety check: Ensure we have a valid string update
+                        if (auditedTexts[idx]) {
+                            if (typeof auditedTexts[idx] === 'string') {
+                                newVisual = auditedTexts[idx];
+                            } else if (typeof auditedTexts[idx] === 'object' && auditedTexts[idx].visual_context) {
+                                newVisual = auditedTexts[idx].visual_context;
+                            }
+                        }
+                        return { ...s, visual_context: newVisual };
+                    });
                     setAgentState('director', 'success', 'Style Audit hoàn tất! Visual DNA đã được đồng bộ.');
 
                     // --- Extract Material Kit for future reference ---
