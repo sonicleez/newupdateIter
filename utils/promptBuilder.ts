@@ -153,6 +153,14 @@ ${directorInstructions}
 **LANGUAGE REQUIREMENT:**
 Write all dialogues, voiceovers, and narration in ${language}.
 
+**SCENE SEGMENTATION STRATEGY (GOLDEN RULES):**
+1. **OBJECT-ORIENTED CLUSTERING**: NEVER split a single object's description into multiple scenes. If a sentence says "He holds a mask. It is white. It has a beak.", you MUST combine all these details into ONE single scene (e.g., "Close-up of him holding a WHITE MASK with a BEAK").
+2. **THE 5-SHOT RULE**: Every sequence must follow a cinematic logic. Use:
+   - **Establishing Shot**: To set the location.
+   - **Medium Shot**: For main actions.
+   - **Insert/Close-up**: To show specific details (e.g., the mask's texture). Do NOT create a separate scene just for a texture adjective unless it's an Insert Shot.
+3. **SELF-CONTAINED VISUALS**: Every scene MUST be a complete picture (Subject + Action + Environment). A scene described as just "White ceramic" is INVALID. It must be "Close-up of the white ceramic mask surface".
+
 **SCENE STRUCTURE GUIDELINES:**
 ${preset.sceneGuidelines}
 
