@@ -241,6 +241,9 @@ ${visualPlan}
 TASK:
 1. Use the "Director's Visual Plan" as the SOURCE TRUTH for scene segmentation.
 2. Map the original script text (Voice Over) to these visual scenes.
+   - CRITICAL: Every Main Scene MUST have \`voiceOverText\`.
+   - The \`voiceOverText\` must be the EXACT segment of the original script that corresponds to this visual.
+   - DO NOT LEAVE \`voiceOverText\` EMPTY.
 3. Extract Characters, Locations, and Chapters as usual.
 
 CRITICAL - LOCATION ANCHOR RULE:
@@ -254,13 +257,23 @@ VISUAL PROMPT FORMAT:
 - SPATIAL ROTATION: For every scene, describe the view from a DIFFERENT AXIS or angle.
 
 CRITICAL - DURATION & COVERAGE (B-ROLL LOGIC):
-- Merged scenes may have long Voice-Over text. A single generated video clip is typically short (4s).
-- IF a scene's \`voiceOverText\` is > 15 words (~6 seconds), you MUST generate \`expansionScenes\` (B-Roll / Cutaways).
-- B-Roll visual prompts should focus on:
-  1. Specific DETAILS mentioned in the text (e.g., "The white ceramic texture", "The curved beak").
-  2. REACTION shots of characters.
-  3. ATMOSPHERE shots (rain hitting the roof, shadows).
-- B-Rolls do NOT have dialogue. They are purely visual filler for the audio duration.
+- Merged scenes may have long Voice-Over text.
+- IF a scene's \`voiceOverText\` is > 15 words, you MUST generate \`expansionScenes\` (1-3 shots depending on length).
+
+CRITICAL - VISUAL VARIETY (THE BBC 5-SHOT RULE):
+When creating B-Rolls, you MUST strictly follow the "5-Shot Coverage" principle to ensure editable footage.
+For every Main Shot, generate B-Rolls that are **DIFFERENT** types from this list:
+  1. **CU HANDS/ACTION:** Close-up of what is being done (hands, mechanism, details).
+  2. **CU FACE:** Close-up of the character's eyes/reaction.
+  3. **WIDE SHOT:** Establishing where they are (Context).
+  4. **OTS (Over The Shoulder):** Looking at what they see (Relational).
+  5. **CREATIVE ANGLE:** Low angle, high angle, or unusual perspective.
+
+ALGORITHM for B-Rolls:
+- If Main Scene is a **WIDE SHOT**, B-Roll MUST be **CU FACE** or **CU HANDS**.
+- If Main Scene is **CLOSE-UP**, B-Roll MUST be **WIDE SHOT** or **OTS**.
+- NEVER repeat the same shot type (e.g., Main Scene = Close-Up -> B-Roll CANNOT be Close-Up).
+- Use this logic to breaking up long monologues.
 
 ${contextInstructions}
 
