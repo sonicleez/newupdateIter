@@ -485,13 +485,11 @@ OUTPUT ONLY THE PROMPT. DO NOT OUTPUT MARKDOWN OR EXPLANATION.`;
                 // MANNEQUIN MATERIAL ENFORCEMENT (Critical for style consistency)
                 const isMannequinMode = currentState.globalCharacterStyleId?.includes('mannequin');
                 const mannequinMaterialConstraint = (isMannequinMode && !hasAnimal)
-                    ? `!!! ABSOLUTE MANNEQUIN MATERIAL LOCK !!!
-ALL human figures in this scene (main characters, supporting characters, background crowds, extras, hands, body parts) MUST have:
-- HEAD: Smooth cast resin material, pristine white mannequin finish, egg-shaped featureless head, NO facial features (NO eyes, NO nose, NO mouth, NO ears, NO hair)
-- HANDS: White/grey mannequin hands, hard plastic surface, smooth finish, NO skin texture, NO veins, NO wrinkles
-- BODY: Consistent matte white/grey plastic material throughout. NO skin tones, NO flesh texture, NO human skin whatsoever.
-- MATERIAL KEYWORDS: "smooth cast resin", "pristine white mannequin finish", "hard plastic surface", "store display mannequin"
-This applies to EVERY human figure in the scene without ANY exception. If a hand appears, it must be a mannequin hand. If a face appears, it must be a featureless mannequin head.`
+                    ? `[STYLE TRIGGER]: !!! STRICT FACELESS MANNEQUIN PROTOCOL ACTIVE !!!
+- HEAD: Humanoid shape, smooth MATTE WHITE RESIN material. ABSOLUTELY NO EYES, NO NOSE, NO MOUTH, NO EARS.
+- HANDS: Matching white hard plastic articulation. NO skin texture, NO veins.
+- BODY: Fully clothed. Any exposed parts MUST be white plastic.
+- MATERIAL: "High-end store mannequin", "Clean minimal resin", "Abstract white figure".`
                     : '';
 
                 charPrompt = `${mannequinMaterialConstraint} Appearing Characters: ${charDesc}${outfitConstraint}${facelessConstraint}`;
