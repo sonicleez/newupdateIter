@@ -467,6 +467,7 @@ RESPOND WITH JSON ONLY:
                 // VO fields - narration text
                 voiceOverText: sceneAnalysis.voiceOverText,
                 isVOScene: Boolean(sceneAnalysis.voiceOverText),
+                isDialogueScene: Boolean(sceneAnalysis.dialogueText && sceneAnalysis.dialogueSpeaker),
                 voSecondsEstimate: sceneAnalysis.estimatedDuration,
 
                 // PHASE 2: Visual prompt with LOCATION ANCHOR injection

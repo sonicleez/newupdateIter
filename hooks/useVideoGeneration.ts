@@ -109,8 +109,17 @@ export function useVideoGeneration(
             const voiceOverText = scene.voiceOverText || scene.voiceover || '';
 
             // Dialogue (spoken by characters in scene)
+            // CRITICAL FIX: Only use dialogueText if this is ACTUALLY a dialogue scene
+            // Previously, Voice-Over was being incorrectly treated as dialogue
             const dialoguesFromArray = scene.dialogues?.map(d => `${d.characterName}: "${d.line}"`).join('; ') || '';
-            const finalDialogue = dialoguesFromArray || dialogueText || '';
+
+            // Only consider dialogueText as real dialogue if:
+            // 1. Scene is explicitly marked as dialogue scene, OR
+            // 2. dialogueText contains speaker prefix (e.g., "John: Hello")
+            const isActualDialogue = scene.isDialogueScene ||
+                (dialogueText && dialogueText.includes(':') && !dialogueText.startsWith('Scene'));
+
+            const finalDialogue = dialoguesFromArray || (isActualDialogue ? dialogueText : '');
 
             const context = scene.contextDescription || '';
             const promptName = scene.promptName || '';
@@ -134,8 +143,8 @@ You are generating a prompt to ANIMATE the provided keyframe image. The image is
 **SOURCE IMAGE CONTEXT (from user):**
 - Scene Description: "${context}"
 - Scene Intent: "${promptName}"
-${voiceOverText ? `- Voice Over/Narration: "${voiceOverText}"` : ''}
-${finalDialogue ? `- Character Dialogue (${effectiveLanguage}): "${finalDialogue}"` : ''}
+${voiceOverText ? `- Voice Over/Narration (OFF-SCREEN narrator, NOT character speech): "${voiceOverText}"` : ''}
+${finalDialogue ? `- Character Dialogue (ON-SCREEN character speaking, ${effectiveLanguage}): "${finalDialogue}"` : ''}
 - Products visible: "${productContext}"
 - Camera Angle: "${scene.cameraAngleOverride === 'custom' ? scene.customCameraAngle : (CAMERA_ANGLES.find(a => a.value === scene.cameraAngleOverride)?.label || 'Auto')}"
 - Lens Style: "${scene.lensOverride === 'custom' ? scene.customLensOverride : (LENS_OPTIONS.find(l => l.value === scene.lensOverride)?.label || 'Auto')}"

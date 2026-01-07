@@ -168,6 +168,7 @@ export interface Scene {
   // Manual Script Import - Voice Over (NEW)
   voiceOverText?: string; // Original VO script text (READONLY after import)
   isVOScene?: boolean; // True if this scene has voice-over attached
+  isDialogueScene?: boolean; // True if this scene has actual character dialogue (not narration)
   voSecondsEstimate?: number; // Estimated VO duration in seconds
   referenceSceneId?: string; // For B-roll: ID of the VO scene this expands
 
