@@ -291,10 +291,12 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
                                 {(() => {
                                     switch (analysisStage) {
                                         case 'preparing': return 'Đang chuẩn bị bối cảnh và phân tích độ dài kịch bản...';
+                                        case 'dialogue-detection': return '🔍 Đang phát hiện thoại nhân vật (Dialogue Detection)...';
                                         case 'connecting': return 'Đang kết nối với hệ thống Gemini 3 Deep Thinking...';
                                         case 'clustering': return 'AI Director đang gom cụm chi tiết hình ảnh (Visual Clustering)...';
                                         case 'thinking': return 'AI Director đang chuyển giao scene list cho DOP để đóng gói JSON...';
                                         case 'post-processing': return 'Đang xử lý dữ liệu AI và xây dựng cấu trúc Storyboard...';
+                                        case 'validating': return '✅ Đang kiểm tra phân tách Voice-Over / Dialogue...';
                                         case 'finalizing': return 'Đang hoàn tất các bước cuối cùng...';
                                         default: return 'Đang xử lý...';
                                     }
@@ -306,12 +308,14 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
                                 <div
                                     className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-500"
                                     style={{
-                                        width: analysisStage === 'preparing' ? '10%' :
-                                            analysisStage === 'connecting' ? '20%' :
-                                                analysisStage === 'clustering' ? '50%' :
-                                                    analysisStage === 'thinking' ? '75%' :
-                                                        analysisStage === 'post-processing' ? '90%' :
-                                                            analysisStage === 'finalizing' ? '98%' : '0%'
+                                        width: analysisStage === 'preparing' ? '5%' :
+                                            analysisStage === 'dialogue-detection' ? '15%' :
+                                                analysisStage === 'connecting' ? '25%' :
+                                                    analysisStage === 'clustering' ? '45%' :
+                                                        analysisStage === 'thinking' ? '65%' :
+                                                            analysisStage === 'post-processing' ? '80%' :
+                                                                analysisStage === 'validating' ? '92%' :
+                                                                    analysisStage === 'finalizing' ? '98%' : '0%'
                                     }}
                                 />
                             </div>

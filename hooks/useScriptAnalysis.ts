@@ -79,7 +79,95 @@ const WPM_SLOW = 120;
 const WPM_MEDIUM = 150;
 const WPM_FAST = 180;
 
-export type AnalysisStage = 'idle' | 'preparing' | 'connecting' | 'clustering' | 'thinking' | 'post-processing' | 'finalizing';
+/**
+ * Pre-process script to detect and mark dialogue patterns
+ * Returns both the marked script and extracted dialogue hints
+ */
+interface DialogueHint {
+    speaker: string;
+    text: string;
+    originalLine: string;
+}
+
+function preProcessDialogue(script: string): { markedScript: string; dialogueHints: DialogueHint[]; stats: { totalDialogues: number; totalVOLines: number } } {
+    const hints: DialogueHint[] = [];
+    let markedScript = script;
+
+    // Pattern 1: "Dialogue in quotes" with optional speaker before
+    // E.g., John said: "Hello world"
+    const quotePattern = /(?:([A-Za-zÀ-ỹ\s]+)(?:said|says|shouted|whispered|asked|replied|nói|hét|hỏi|trả lời|thì thầm)?[:\s]*)?[""]([^""]+)[""]/gi;
+
+    // Pattern 2: SPEAKER: dialogue (screenplay format)
+    const speakerPattern = /^([A-ZÀ-Ỹ][A-Za-zÀ-ỹ\s]*):[\s]*(.+)$/gm;
+
+    // Pattern 3: 'Single quotes dialogue'
+    const singleQuotePattern = /['']([^'']+)['']/gi;
+
+    // Extract Pattern 2 first (most reliable)
+    let match;
+    while ((match = speakerPattern.exec(script)) !== null) {
+        hints.push({
+            speaker: match[1].trim(),
+            text: match[2].trim(),
+            originalLine: match[0]
+        });
+    }
+
+    // Extract Pattern 1 (quotes with optional speaker)
+    const quoteRegex = /(?:([A-Za-zÀ-ỹ\s]+)(?:said|says|shouted|whispered|asked|replied|nói|hét|hỏi|trả lời|thì thầm)?[:\s]*)?[""]([^""]+)[""]/gi;
+    while ((match = quoteRegex.exec(script)) !== null) {
+        const speaker = match[1]?.trim() || 'Unknown';
+        const text = match[2]?.trim() || '';
+        if (text && text.length > 2) {
+            // Avoid duplicates
+            const exists = hints.some(h => h.text === text);
+            if (!exists) {
+                hints.push({ speaker, text, originalLine: match[0] });
+            }
+        }
+    }
+
+    // Mark script with dialogue indicators for AI
+    markedScript = script.replace(/[""]([^""]+)[""]/g, '[DIALOGUE]"$1"[/DIALOGUE]');
+
+    // Count stats
+    const lines = script.split('\n').filter(l => l.trim());
+    const dialogueLines = hints.length;
+    const voLines = lines.length - dialogueLines;
+
+    return {
+        markedScript,
+        dialogueHints: hints,
+        stats: { totalDialogues: dialogueLines, totalVOLines: Math.max(0, voLines) }
+    };
+}
+
+/**
+ * Post-process to validate dialogue/VO separation was done correctly
+ */
+function validateDialogueSeparation(scenes: SceneAnalysis[]): { warnings: string[]; autoFixes: number } {
+    const warnings: string[] = [];
+    let autoFixes = 0;
+
+    for (const scene of scenes) {
+        // Check if VO contains quotes (possible missed dialogue)
+        if (scene.voiceOverText && (scene.voiceOverText.includes('"') || scene.voiceOverText.includes('"'))) {
+            if (!scene.dialogueText) {
+                warnings.push(`Scene may have missed dialogue: "${scene.voiceOverText.substring(0, 50)}..."`);
+            }
+        }
+
+        // Check if dialogue exists but no speaker
+        if (scene.dialogueText && !scene.dialogueSpeaker) {
+            scene.dialogueSpeaker = 'Unknown';
+            autoFixes++;
+        }
+    }
+
+    return { warnings, autoFixes };
+}
+
+export type AnalysisStage = 'idle' | 'preparing' | 'dialogue-detection' | 'connecting' | 'clustering' | 'thinking' | 'post-processing' | 'validating' | 'finalizing';
 
 export function useScriptAnalysis(userApiKey: string | null) {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -113,6 +201,18 @@ export function useScriptAnalysis(userApiKey: string | null) {
             const wpm = readingSpeed === 'slow' ? WPM_SLOW : readingSpeed === 'fast' ? WPM_FAST : WPM_MEDIUM;
             const wordCount = scriptText.split(/\s+/).length;
             const estimatedTotalDuration = Math.ceil((wordCount / wpm) * 60);
+
+            // ═══════════════════════════════════════════════════════════════
+            // PRE-PROCESSING: Dialogue Detection with Regex
+            // ═══════════════════════════════════════════════════════════════
+            setAnalysisStage('dialogue-detection');
+            const { markedScript, dialogueHints, stats } = preProcessDialogue(scriptText);
+            console.log(`[Dialogue Detection] Found ${stats.totalDialogues} dialogues, ${stats.totalVOLines} VO lines`);
+
+            // Build dialogue hints for AI
+            const dialogueHintsForAI = dialogueHints.length > 0
+                ? `\n[PRE-DETECTED DIALOGUES - USE THESE AS HINTS]:\n${dialogueHints.map(h => `- Speaker: "${h.speaker}" | Dialogue: "${h.text}"`).join('\n')}\n`
+                : '';
 
             // Parse model selector format: "model-name|thinking-level"
             const [modelName, thinkingLevel] = modelSelector.split('|');
@@ -173,6 +273,12 @@ export function useScriptAnalysis(userApiKey: string | null) {
             if (activeCharacters && activeCharacters.length > 0) {
                 const charList = activeCharacters.map(c => `- ${c.name}: ${c.description || 'No description'}`).join('\n');
                 contextInstructions += `\n[EXISTING CHARACTER LIBRARY - MANDATORY REUSE]:\n${charList}\n- CRITICAL: If the script refers to any of these characters (by name or context), you MUST reuse their exact name. Do NOT create new entries for them in the "characters" JSON array unless they are truly new characters not found in this list.\n`;
+            }
+
+            // [New] Inject pre-detected dialogue hints
+            if (dialogueHintsForAI) {
+                contextInstructions += dialogueHintsForAI;
+                contextInstructions += `- IMPORTANT: These dialogues were pre-detected by regex. Use them as HINTS for your dialogueText/dialogueSpeaker fields.\n`;
             }
 
             // ═══════════════════════════════════════════════════════════════
