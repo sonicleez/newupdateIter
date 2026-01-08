@@ -229,8 +229,13 @@ export function useScriptAnalysis(userApiKey: string | null) {
             const lines = scriptText.split('\n');
 
             // Regex patterns for chapter headers:
-            // COMPREHENSIVE patterns to catch ALL chapter header formats
+            // PRIORITY 1: Explicit bracket format [Chapter Title] - 100% reliable
+            // FALLBACK: Other patterns for non-bracketed scripts
             const chapterPatterns = [
+                // PRIORITY: Bracket format [Chapter Title] - MOST RELIABLE
+                // Matches: [Marseille, November 2019], [The Mask], [Casino de Monte-Carlo, May 2019]
+                /^\[(.+)\]$/,
+
                 // Pattern 1: "Place, Month Year" (e.g., "Marseille, November 2019", "Casino de Monte-Carlo, May 2019")
                 /^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s\-']+),?\s*(January|February|March|April|May|June|July|August|September|October|November|December)\s*(\d{4}s?)$/i,
 
@@ -252,7 +257,28 @@ export function useScriptAnalysis(userApiKey: string | null) {
 
             lines.forEach((line, index) => {
                 const trimmedLine = line.trim();
-                // Skip empty lines, lines > 50 chars, or lines that look like sentences (have periods mid-line)
+
+                // PRIORITY: Check for bracket format first - no length/word restrictions
+                if (/^\[.+\]$/.test(trimmedLine)) {
+                    // Extract text between brackets for chapterId
+                    const headerText = trimmedLine.slice(1, -1).trim();
+                    const chapterId = headerText
+                        .toLowerCase()
+                        .replace(/[^a-z0-9\s]/g, '')
+                        .replace(/\s+/g, '_')
+                        .substring(0, 30);
+
+                    chapterMarkers.push({
+                        lineNumber: index + 1,
+                        header: headerText, // Store without brackets for display
+                        chapterId: chapterId
+                    });
+                    console.log(`[Chapter Detection] 📍 Found chapter (bracket): "${headerText}" → ${chapterId}`);
+                    return; // Skip other patterns for this line
+                }
+
+                // FALLBACK: Non-bracketed patterns
+                // Skip empty lines, lines > 50 chars, or lines that look like sentences
                 if (!trimmedLine || trimmedLine.length > 50 || /[.!?]\s+[A-Z]/.test(trimmedLine)) return;
 
                 // Also skip lines that are clearly not headers (too many words = likely a sentence)
