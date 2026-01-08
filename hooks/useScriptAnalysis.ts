@@ -320,6 +320,15 @@ Each of these patterns MUST become its OWN separate shot:
    - ALL subsequent scenes belong to this chapter until the NEXT header
    - Do NOT merge scenes from different chapters into same group!
 
+   *** EXPLICIT EXAMPLE ***:
+   "Marseille, November 2019" → chapter: marseille_2019
+   "An abandoned warehouse..." → chapter: marseille_2019
+   "The man lies face down..." → chapter: marseille_2019
+   "He kneels down. Grips the edge of the mask." → chapter: marseille_2019 (STILL SAME!)
+   "A gunshot echoes through the warehouse." → chapter: marseille_2019 (STILL SAME!)
+   "Rouen, France 1820s" → chapter: rouen_1820s (NEW CHAPTER STARTS HERE!)
+   "Pierre Dugal..." → chapter: rouen_1820s
+
 *** ALGORITHM (THE GOLDEN RULES) ***
 1. **SCAN**: Read the input text.
 2. **DETECT BEATS**: Identify each distinct visual moment using rules above.
