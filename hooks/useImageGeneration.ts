@@ -18,18 +18,6 @@ import { analyzeSceneContinuity, extractCharacterState } from '../utils/dopIntel
 import { incrementGlobalStats, recordGeneratedImage } from '../utils/userGlobalStats';
 import { validateRaccord, formatValidationResult, RaccordValidationResult } from '../utils/dopRaccordValidator';
 import { isGridModel, splitImageGrid } from '../utils/imageUtils';
-// Scene Continuity Agent (ReAct pattern)
-import {
-    planSceneState,
-    stateToPromptRequirements,
-    sceneStateTracker,
-    SceneStateSnapshot
-} from '../utils/sceneStateAgent';
-import {
-    verifyGeneratedImage,
-    generateCorrectionPrompt,
-    quickVerifyCriticalElements
-} from '../utils/verificationAgent';
 // Helper function to clean VEO-specific tokens from prompt for image generation
 const cleanPromptForImageGen = (prompt: string): string => {
     return prompt
@@ -536,7 +524,59 @@ OUTPUT ONLY THE PROMPT. DO NOT OUTPUT MARKDOWN OR EXPLANATION.`;
             }
             const coreActionPrompt = `CORE ACTION: ${coreAction.toUpperCase()}. (Ensure high dynamic energy, motion blur if applicable, realistic physics).`;
 
-            // --- 4. FINAL PROMPT CONSTRUCTION (Priority Order) ---
+            // --- 4. OPTION C: SCENE-BY-SCENE POSE OVERRIDE (CRITICAL FOR CONTINUITY) ---
+            // Extract SPECIFIC poses from VO text and enforce them at TOP of prompt
+            const extractPoseFromVO = (voText: string): string[] => {
+                if (!voText) return [];
+                const poses: string[] = [];
+                const vo = voText.toLowerCase();
+
+                // Character position patterns
+                if (vo.includes('lies face down') || vo.includes('face down')) {
+                    poses.push('Character MUST be LYING FACE DOWN on the ground (NOT standing!)');
+                }
+                if (vo.includes('lying') || vo.includes('lies on')) {
+                    poses.push('Character MUST be LYING DOWN (NOT standing or sitting!)');
+                }
+                if (vo.includes('kneels') || vo.includes('kneeling')) {
+                    poses.push('Character MUST be KNEELING (on knees, NOT standing!)');
+                }
+                if (vo.includes('hands cuffed') || vo.includes('cuffed behind')) {
+                    poses.push('Hands MUST be CUFFED BEHIND the back (restrained, not free)');
+                }
+                if (vo.includes('hands tremble') || vo.includes('trembling')) {
+                    poses.push('Show TREMBLING/SHAKING hands (motion blur, nervous energy)');
+                }
+
+                // Prop positioning patterns
+                if (vo.includes('on his face') || vo.includes('on her face') || vo.includes('wearing')) {
+                    if (vo.includes('mask')) {
+                        poses.push('Mask MUST be ON THE CHARACTER\'S FACE (worn, NOT on floor/table!)');
+                    }
+                }
+                if (vo.includes('empty eye sockets')) {
+                    poses.push('Focus on EMPTY EYE SOCKETS of the mask (dark voids, no eyes visible)');
+                }
+                if (vo.includes('radio crackles')) {
+                    poses.push('Show RADIO device with visible static/activity indicators');
+                }
+
+                return poses;
+            };
+
+            const voText = sceneToUpdate.voiceOverText || cleanedContext;
+            const poseOverrides = extractPoseFromVO(voText);
+            let mandatoryPosePrompt = '';
+            if (poseOverrides.length > 0) {
+                mandatoryPosePrompt = `
+!!! MANDATORY POSE/POSITION - DO NOT IGNORE !!!
+${poseOverrides.map((p, i) => `${i + 1}. ${p}`).join('\n')}
+!!! FAILURE TO FOLLOW THESE POSES = GENERATION FAILURE !!!
+`;
+                console.log('[ImageGen] 🎭 POSE OVERRIDE:', poseOverrides);
+            }
+
+            // --- 5. FINAL PROMPT CONSTRUCTION (Priority Order) ---
             // STYLE & NEGATIVE CONSTRAINTS (Authoritative)
             const isRealistic = effectiveStylePrompt === 'cinematic-realistic' || effectiveStylePrompt === 'vintage-film';
             const negativeStyle = isRealistic ? '!!! STRICT NEGATIVE: NO ANIME, NO CARTOON, NO 2D, NO DRAWING, NO ILLUSTRATION, NO PAINTING, NO CGI-LOOK !!!' : '';
@@ -678,12 +718,7 @@ OUTPUT ONLY THE PROMPT. DO NOT OUTPUT MARKDOWN OR EXPLANATION.`;
             if (currentSceneIndex > 0) {
                 const prevScene = currentState.scenes[currentSceneIndex - 1];
                 if (prevScene?.generatedImage && prevScene.groupId === sceneToUpdate.groupId) {
-                    environmentLockPrompt = `[ENVIRONMENT CONTINUITY LOCK - CRITICAL]:
-⚠️ This scene takes place in the EXACT SAME physical location as the previous shot.
-MAINTAIN EXACTLY: wall textures, floor material, lighting direction, color temperature, shadows, atmospheric elements (dust, fog, debris).
-ONLY CHANGE: camera position/angle and subject focus.
-DO NOT introduce new environment elements not visible in previous frame.
-Think of this as: "same moment, different camera angle in a 3D space"`;
+                    environmentLockPrompt = `[ENV LOCK]: SAME location as previous shot. Keep walls/floor/lighting IDENTICAL. Only change camera angle.`;
                     console.log('[ImageGen] 🏠 Environment Lock enabled for same-group scene');
                 }
             }
@@ -736,11 +771,7 @@ Think of this as: "same moment, different camera angle in a 3D space"`;
                     const transitionKey = `${prevCat}_${currCat}`;
                     const transitionDesc = cameraTransitions[transitionKey] || cameraTransitions['neutral_neutral'];
 
-                    cameraProgressionPrompt = `[3D CAMERA PROGRESSION]:
-Previous shot: ${prevShot.toUpperCase()}
-Current shot: ${currentShot.toUpperCase()}
-Camera movement: ${transitionDesc}
-IMPORTANT: Subject/character position in 3D space remains FIXED. Only the CAMERA ANGLE changes around them.`;
+                    cameraProgressionPrompt = `[CAMERA]: ${transitionDesc} Character position FIXED, only angle changes.`;
                     console.log('[ImageGen] 🎥 Camera Progression:', `${prevCat} → ${currCat}`);
                 }
             }
@@ -818,6 +849,7 @@ IMPORTANT: Subject/character position in 3D space remains FIXED. Only the CAMERA
                 // Fixes "Logic not correct" by prioritizing Action/Context over Style headers.
                 // ═══════════════════════════════════════════════════════════════
                 finalImagePrompt = `
+${mandatoryPosePrompt}
 ${antiCollagePromptFull}
 ${anatomyNegativePrompt}
 
