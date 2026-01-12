@@ -17,7 +17,9 @@ import { recordPrompt, approvePrompt, getSuggestedKeywords } from '../utils/dopL
 import { analyzeSceneContinuity, extractCharacterState } from '../utils/dopIntelligence';
 import { incrementGlobalStats, recordGeneratedImage } from '../utils/userGlobalStats';
 import { validateRaccord, formatValidationResult, RaccordValidationResult } from '../utils/dopRaccordValidator';
+import { validateRaccord, formatValidationResult, RaccordValidationResult } from '../utils/dopRaccordValidator';
 import { isGridModel, splitImageGrid } from '../utils/imageUtils';
+import { RetryContext, getCorrectionPrompt } from '../utils/dopCorrections';
 // Helper function to clean VEO-specific tokens from prompt for image generation
 const cleanPromptForImageGen = (prompt: string): string => {
     return prompt
@@ -291,7 +293,8 @@ export function useImageGeneration(
         fromManual: boolean = false,
         referenceImage?: string,
         baseImage?: string, // NEW: Optional base image for Img2Img editing
-        negativePrompt?: string // NEW: Negative constraints for DOP retries
+        negativePrompt?: string, // NEW: Negative constraints for DOP retries
+        retryContext?: RetryContext // NEW: Smart Retry Context
     ) => {
         const currentState = stateRef.current;
         const currentSceneIndex = currentState.scenes.findIndex(s => s.id === sceneId);
@@ -793,77 +796,111 @@ ${poseOverrides.map((p, i) => `${i + 1}. ${p}`).join('\n')}
 
             // --- DIRECTOR DNA INJECTION ---
             let directorDNAPrompt = '';
-            if (currentState.activeDirectorId) {
-                // Search across all categories for the director
-                const allDirectors = Object.values(DIRECTOR_PRESETS).flat();
-                const customDirectors = currentState.customDirectors || [];
-                const activeDirector = [...allDirectors, ...customDirectors].find(d => d.id === currentState.activeDirectorId);
 
-                if (activeDirector) {
-                    // Auto-detect Camera Only mode:
-                    // 1. If explicitly enabled via directorCameraOnlyMode
-                    // 2. OR if user has custom Meta Tokens (they want their own color grading)
-                    const hasCustomMetaTokens = currentState.customMetaTokens && currentState.customMetaTokens.trim().length > 0;
-                    const useCameraOnlyMode = currentState.directorCameraOnlyMode || hasCustomMetaTokens;
+            // --- 6. DIRECTOR FILTERING (Allow Director to modify base prompt) ---
+            // Director Presets can enforce their own negative prompts
+            const directorNegative = activeDirector?.negativePrompt || '';
 
-                    if (useCameraOnlyMode) {
-                        // Camera Only Mode: Only inject camera techniques, skip color DNA
-                        if (activeDirector.signatureCameraStyle) {
-                            directorDNAPrompt = `[DIRECTOR CAMERA - ${activeDirector.name.toUpperCase()}]: Apply this director's CAMERA TECHNIQUES and FRAMING STYLE: ${activeDirector.signatureCameraStyle}. COLOR GRADING follows user's Meta Tokens/Style settings, NOT this director's color palette.`;
-                            console.log('[ImageGen] 🎬 Director CAMERA ONLY injected (auto-detect: customMetaTokens=' + hasCustomMetaTokens + '):', activeDirector.name, '| Camera:', activeDirector.signatureCameraStyle);
-                        }
-                    } else {
-                        // Full DNA Mode (default): Inject both color and camera
-                        const cameraStyle = activeDirector.signatureCameraStyle
-                            ? `SIGNATURE CAMERA: ${activeDirector.signatureCameraStyle}.`
-                            : '';
-                        directorDNAPrompt = `[DIRECTORIAL VISION - ${activeDirector.name.toUpperCase()}]: MANDATORY CINEMATIC STYLE. Visual DNA: ${activeDirector.dna}. ${cameraStyle} ${activeDirector.description}. ALL visual elements and camera work must reflect this director's signature style.`;
-                        console.log('[ImageGen] 🎬 Director FULL DNA injected:', activeDirector.name, '| DNA:', activeDirector.dna, '| Camera:', activeDirector.signatureCameraStyle);
-                    }
+            // --- 7. DOP SMART RETRY INJECTION (Highest Priority) ---
+            let dopCorrectionPrompt = '';
+            if (retryContext) {
+                dopCorrectionPrompt = getCorrectionPrompt(retryContext);
+                console.log(`[ImageGen] 🔧 DOP Correction Injected: ${dopCorrectionPrompt}`);
+                if (addProductionLog) {
+                    addProductionLog('dop', `🔧 Applying Correction: ${retryContext.reason}`, 'info', 'retry_correction');
                 }
             }
 
+            // --- 8. FINAL ASSEMBLY ---
+            // DOP Logic: Correction > Director > Character > Action > Environment > Style
+            let finalImagePrompt = `
+${dopCorrectionPrompt ? `!!! DOP CORRECTION: ${dopCorrectionPrompt} !!!` : ''}
+${directorDNAPrompt}
+${videoFormatPrefix}
+${authoritativeStyle}
+${scaleCmd}
+${scaleLockInstruction}
+${mandatoryPosePrompt}
+${groupEnvAnchor}
+${environmentLockPrompt}
+${continuityLinkInstruction}
+${characterStateContinuity}
+${cameraProgressionPrompt}
+${charPrompt}
+${coreActionPrompt}
+${cleanedContext}
+${timeWeatherLock}
+${noDriftGuard}
+${anatomyNegativePrompt}
+${negativeStyle}
+${directorNegative}
+`.trim().replace(/\s+/g, ' ');
+
+            if (activeDirector) {
+                // Auto-detect Camera Only mode:
+                // 1. If explicitly enabled via directorCameraOnlyMode
+                // 2. OR if user has custom Meta Tokens (they want their own color grading)
+                const hasCustomMetaTokens = currentState.customMetaTokens && currentState.customMetaTokens.trim().length > 0;
+                const useCameraOnlyMode = currentState.directorCameraOnlyMode || hasCustomMetaTokens;
+
+                if (useCameraOnlyMode) {
+                    // Camera Only Mode: Only inject camera techniques, skip color DNA
+                    if (activeDirector.signatureCameraStyle) {
+                        directorDNAPrompt = `[DIRECTOR CAMERA - ${activeDirector.name.toUpperCase()}]: Apply this director's CAMERA TECHNIQUES and FRAMING STYLE: ${activeDirector.signatureCameraStyle}. COLOR GRADING follows user's Meta Tokens/Style settings, NOT this director's color palette.`;
+                        console.log('[ImageGen] 🎬 Director CAMERA ONLY injected (auto-detect: customMetaTokens=' + hasCustomMetaTokens + '):', activeDirector.name, '| Camera:', activeDirector.signatureCameraStyle);
+                    }
+                } else {
+                    // Full DNA Mode (default): Inject both color and camera
+                    const cameraStyle = activeDirector.signatureCameraStyle
+                        ? `SIGNATURE CAMERA: ${activeDirector.signatureCameraStyle}.`
+                        : '';
+                    directorDNAPrompt = `[DIRECTORIAL VISION - ${activeDirector.name.toUpperCase()}]: MANDATORY CINEMATIC STYLE. Visual DNA: ${activeDirector.dna}. ${cameraStyle} ${activeDirector.description}. ALL visual elements and camera work must reflect this director's signature style.`;
+                    console.log('[ImageGen] 🎬 Director FULL DNA injected:', activeDirector.name, '| DNA:', activeDirector.dna, '| Camera:', activeDirector.signatureCameraStyle);
+                }
+            }
+        }
+
             // --- DOP RESEARCH NOTES INJECTION (Session Memory) ---
             let dopResearchPrompt = '';
-            if (currentState.researchNotes?.dop) {
-                dopResearchPrompt = `[USER DOP NOTES - MANDATORY CINEMATOGRAPHY GUIDE]: ${currentState.researchNotes.dop}. Apply these lighting, camera angle, and transition guidelines to this scene.`;
-                console.log('[ImageGen] 📹 DOP Research Notes injected:', currentState.researchNotes.dop.substring(0, 50) + '...');
-            }
+        if (currentState.researchNotes?.dop) {
+            dopResearchPrompt = `[USER DOP NOTES - MANDATORY CINEMATOGRAPHY GUIDE]: ${currentState.researchNotes.dop}. Apply these lighting, camera angle, and transition guidelines to this scene.`;
+            console.log('[ImageGen] 📹 DOP Research Notes injected:', currentState.researchNotes.dop.substring(0, 50) + '...');
+        }
 
-            // --- GLOBAL STORY CONTEXT INJECTION (World Building) ---
-            let globalStoryPrompt = '';
-            if (currentState.researchNotes?.story) {
-                globalStoryPrompt = `[GLOBAL STORY CONTEXT - MANDATORY WORLD SETTING]: ${currentState.researchNotes.story}. The scene must strictly exist within this specific world/universe. Align all architecture, technology, and atmosphere with this context.`;
-                console.log('[ImageGen] 🌍 Global Story Context injected:', currentState.researchNotes.story.substring(0, 50) + '...');
-            }
+        // --- GLOBAL STORY CONTEXT INJECTION (World Building) ---
+        let globalStoryPrompt = '';
+        if (currentState.researchNotes?.story) {
+            globalStoryPrompt = `[GLOBAL STORY CONTEXT - MANDATORY WORLD SETTING]: ${currentState.researchNotes.story}. The scene must strictly exist within this specific world/universe. Align all architecture, technology, and atmosphere with this context.`;
+            console.log('[ImageGen] 🌍 Global Story Context injected:', currentState.researchNotes.story.substring(0, 50) + '...');
+        }
 
-            // --- ANTI-COLLAGE INSTRUCTION ---
-            const antiCollagePromptFull = `!!! CRITICAL OUTPUT CONSTRAINT !!! Generate EXACTLY ONE single continuous scene/frame. ABSOLUTELY NO: split frames, collages, storyboards, multiple panels, side-by-side images, grid layouts, before/after comparisons, or any form of image division. The output MUST be ONE unified visual with ONE continuous composition. If the prompt implies multiple moments, choose the MOST IMPORTANT SINGLE MOMENT and render only that.`;
-            const antiCollagePromptShort = `!!! SINGLE IMAGE ONLY - NO COLLAGES/GRIDS !!!`;
+        // --- ANTI-COLLAGE INSTRUCTION ---
+        const antiCollagePromptFull = `!!! CRITICAL OUTPUT CONSTRAINT !!! Generate EXACTLY ONE single continuous scene/frame. ABSOLUTELY NO: split frames, collages, storyboards, multiple panels, side-by-side images, grid layouts, before/after comparisons, or any form of image division. The output MUST be ONE unified visual with ONE continuous composition. If the prompt implies multiple moments, choose the MOST IMPORTANT SINGLE MOMENT and render only that.`;
+        const antiCollagePromptShort = `!!! SINGLE IMAGE ONLY - NO COLLAGES/GRIDS !!!`;
 
-            // === DETERMINE PROVIDER FOR PROMPT OPTIMIZATION ===
-            const selectedModel = IMAGE_MODELS.find(m => m.value === currentState.imageModel);
-            const promptProvider = selectedModel?.provider || 'gemini';
+        // === DETERMINE PROVIDER FOR PROMPT OPTIMIZATION ===
+        const selectedModel = IMAGE_MODELS.find(m => m.value === currentState.imageModel);
+        const promptProvider = selectedModel?.provider || 'gemini';
 
-            let finalImagePrompt: string;
+        let finalImagePrompt: string;
 
-            if (promptProvider === 'gommo') {
-                // ═══════════════════════════════════════════════════════════════
-                // GOMMO PROMPT: Style-first, concise, prioritize early tokens
-                // Many Gommo models truncate or prioritize beginning of prompt
-                // ═══════════════════════════════════════════════════════════════
-                // GOMMO PROMPT: Subject-first, prioritize Visual Content
-                // Re-ordered to put Action and Characters before Style to fix logic/consistency
-                // ═══════════════════════════════════════════════════════════════
-                finalImagePrompt = `${antiCollagePromptShort} SUBJECT & ACTION: ${coreActionPrompt} ${cleanedContext}. CHARACTERS: ${charPrompt}. ENVIRONMENT: ${groupEnvAnchor} ${timeWeatherLock}. STYLE: ${authoritativeStyle} ${directorDNAPrompt} ${metaTokens}. CAMERA: ${cinematographyPrompt || 'Auto'}.`.trim();
-                console.log('[ImageGen] 🟡 GOMMO prompt (subject-first optimized)');
-            } else {
-                // ═══════════════════════════════════════════════════════════════
-                // GEMINI PROMPT: Context-First Architecture
-                // Structure: [Rules] -> [Visual Core (Who/What/Action)] -> [Where] -> [How (Style/Cam)]
-                // Fixes "Logic not correct" by prioritizing Action/Context over Style headers.
-                // ═══════════════════════════════════════════════════════════════
-                finalImagePrompt = `
+        if (promptProvider === 'gommo') {
+            // ═══════════════════════════════════════════════════════════════
+            // GOMMO PROMPT: Style-first, concise, prioritize early tokens
+            // Many Gommo models truncate or prioritize beginning of prompt
+            // ═══════════════════════════════════════════════════════════════
+            // GOMMO PROMPT: Subject-first, prioritize Visual Content
+            // Re-ordered to put Action and Characters before Style to fix logic/consistency
+            // ═══════════════════════════════════════════════════════════════
+            finalImagePrompt = `${antiCollagePromptShort} SUBJECT & ACTION: ${coreActionPrompt} ${cleanedContext}. CHARACTERS: ${charPrompt}. ENVIRONMENT: ${groupEnvAnchor} ${timeWeatherLock}. STYLE: ${authoritativeStyle} ${directorDNAPrompt} ${metaTokens}. CAMERA: ${cinematographyPrompt || 'Auto'}.`.trim();
+            console.log('[ImageGen] 🟡 GOMMO prompt (subject-first optimized)');
+        } else {
+            // ═══════════════════════════════════════════════════════════════
+            // GEMINI PROMPT: Context-First Architecture
+            // Structure: [Rules] -> [Visual Core (Who/What/Action)] -> [Where] -> [How (Style/Cam)]
+            // Fixes "Logic not correct" by prioritizing Action/Context over Style headers.
+            // ═══════════════════════════════════════════════════════════════
+            finalImagePrompt = `
 ${mandatoryPosePrompt}
 ${antiCollagePromptFull}
 ${anatomyNegativePrompt}
@@ -891,77 +928,77 @@ ${authoritativeStyle}
 ${scaleCmd} ${scaleLockInstruction} ${noDriftGuard}
 STYLE DETAILS: ${metaTokens}
 TECHNICAL CAMERA: ${cinematographyPrompt ? cinematographyPrompt : 'High Quality'}`.trim().replace(/\n+/g, ' '); // Flatten to single line for API stability
-                console.log('[ImageGen] 🔵 GEMINI prompt (Context-First Re-ordered)');
-            }
+            console.log('[ImageGen] 🔵 GEMINI prompt (Context-First Re-ordered)');
+        }
 
-            console.log('[ImageGen] 📝 Prompt Preview (first 300 chars):', finalImagePrompt.substring(0, 300));
+        console.log('[ImageGen] 📝 Prompt Preview (first 300 chars):', finalImagePrompt.substring(0, 300));
 
-            // PROP ANCHOR TEXT INJECTION (High Priority)
-            if (sceneToUpdate.referenceImage && sceneToUpdate.referenceImageDescription) {
-                finalImagePrompt = `!!! MANDATORY OBJECT LOCK: ${sceneToUpdate.referenceImageDescription.toUpperCase()} !!! Draw the following objects EXACTLY as shown in the [AUTHORITATIVE_VISUAL_REFERENCE] image: ${sceneToUpdate.referenceImageDescription.toUpperCase()}. Match design, material, and color. ${finalImagePrompt}`;
-            }
+        // PROP ANCHOR TEXT INJECTION (High Priority)
+        if (sceneToUpdate.referenceImage && sceneToUpdate.referenceImageDescription) {
+            finalImagePrompt = `!!! MANDATORY OBJECT LOCK: ${sceneToUpdate.referenceImageDescription.toUpperCase()} !!! Draw the following objects EXACTLY as shown in the [AUTHORITATIVE_VISUAL_REFERENCE] image: ${sceneToUpdate.referenceImageDescription.toUpperCase()}. Match design, material, and color. ${finalImagePrompt}`;
+        }
 
-            // AUTO-DETECT OBJECT INSERTION FROM CONTEXT
-            const objectInsertionMatch = cleanedContext.match(/(?:sits|placed|lying|resting)\s+(?:a|the)\s+([a-zA-Z\s]+?)\s+(?:on|in|at)\s+(?:the|a)\s+([a-zA-Z\s]+)/i);
-            if (objectInsertionMatch) {
-                const [_, objName, locName] = objectInsertionMatch;
-                finalImagePrompt = `!!! PRIORITY EDIT: COMPOSITE A ${objName.toUpperCase()} ONTOP OF THE EXISTING ${locName.toUpperCase()} !!! 
+        // AUTO-DETECT OBJECT INSERTION FROM CONTEXT
+        const objectInsertionMatch = cleanedContext.match(/(?:sits|placed|lying|resting)\s+(?:a|the)\s+([a-zA-Z\s]+?)\s+(?:on|in|at)\s+(?:the|a)\s+([a-zA-Z\s]+)/i);
+        if (objectInsertionMatch) {
+            const [_, objName, locName] = objectInsertionMatch;
+            finalImagePrompt = `!!! PRIORITY EDIT: COMPOSITE A ${objName.toUpperCase()} ONTOP OF THE EXISTING ${locName.toUpperCase()} !!! 
                 1. RENDER the ${objName} clearly.
                 2. KEEP the ${locName} VISIBLE underneath the ${objName}.
                 3. DO NOT REMOVE or REPLACE the ${locName}. 
                 ${finalImagePrompt}`;
+        }
+
+        if (refinementPrompt) {
+            finalImagePrompt = `REFINEMENT: ${refinementPrompt}. BASE PROMPT: ${finalImagePrompt}`;
+        }
+
+        if (negativePrompt) {
+            finalImagePrompt = `${finalImagePrompt} NEGATIVE CONSTRAINTS (AVOID THESE): ${negativePrompt}`;
+        }
+
+        // --- 5. CONTINUITY & MULTI-IMAGE REFERENCES ---
+        const parts: any[] = [];
+
+        // 5.0.0 BASE IMAGE (CANVAS) - MUST BE FIRST FOR EDITING
+        // Placing the base image first tells the model this is the "Subject" to modify.
+        if (baseImage) {
+            const baseImgData = await safeGetImageData(baseImage);
+            if (baseImgData) {
+                console.log('[ImageGen] 🖼️ Base Image Editing Mode: Injecting as PRIMARY input.');
+                parts.push({ inlineData: { data: baseImgData.data, mimeType: baseImgData.mimeType } });
+                parts.push({ text: `Using the provided image as the base scene, please EDIT it according to the instructions. Retain the original composition, lighting, and subject pose unless explicitly asked to change them.` });
             }
+        }
+        let continuityInstruction = '';
+        const isPro = currentState.imageModel === 'gemini-3-pro-image-preview';
 
-            if (refinementPrompt) {
-                finalImagePrompt = `REFINEMENT: ${refinementPrompt}. BASE PROMPT: ${finalImagePrompt}`;
-            }
+        // 5.0 DNA REFERENCE IMAGE INJECTION (From Director Chat - SYNC/REGENERATE)
+        // This is a VERY HIGH PRIORITY reference - the user explicitly asked to match this scene
+        if (referenceImage) {
+            const dnaImgData = await safeGetImageData(referenceImage);
+            if (dnaImgData) {
+                // Check if this is COMPOSITE mode (has object description) or STYLE mode
+                const objectToExtract = sceneToUpdate.referenceImageDescription;
 
-            if (negativePrompt) {
-                finalImagePrompt = `${finalImagePrompt} NEGATIVE CONSTRAINTS (AVOID THESE): ${negativePrompt}`;
-            }
-
-            // --- 5. CONTINUITY & MULTI-IMAGE REFERENCES ---
-            const parts: any[] = [];
-
-            // 5.0.0 BASE IMAGE (CANVAS) - MUST BE FIRST FOR EDITING
-            // Placing the base image first tells the model this is the "Subject" to modify.
-            if (baseImage) {
-                const baseImgData = await safeGetImageData(baseImage);
-                if (baseImgData) {
-                    console.log('[ImageGen] 🖼️ Base Image Editing Mode: Injecting as PRIMARY input.');
-                    parts.push({ inlineData: { data: baseImgData.data, mimeType: baseImgData.mimeType } });
-                    parts.push({ text: `Using the provided image as the base scene, please EDIT it according to the instructions. Retain the original composition, lighting, and subject pose unless explicitly asked to change them.` });
-                }
-            }
-            let continuityInstruction = '';
-            const isPro = currentState.imageModel === 'gemini-3-pro-image-preview';
-
-            // 5.0 DNA REFERENCE IMAGE INJECTION (From Director Chat - SYNC/REGENERATE)
-            // This is a VERY HIGH PRIORITY reference - the user explicitly asked to match this scene
-            if (referenceImage) {
-                const dnaImgData = await safeGetImageData(referenceImage);
-                if (dnaImgData) {
-                    // Check if this is COMPOSITE mode (has object description) or STYLE mode
-                    const objectToExtract = sceneToUpdate.referenceImageDescription;
-
-                    if (objectToExtract) {
-                        // COMPOSITE MODE: Extract specific object from reference
-                        const refLabel = 'OBJECT_SOURCE_IMAGE';
-                        parts.push({
-                            text: `[${refLabel}]: !!! EXTRACT OBJECT FROM THIS IMAGE !!!
+                if (objectToExtract) {
+                    // COMPOSITE MODE: Extract specific object from reference
+                    const refLabel = 'OBJECT_SOURCE_IMAGE';
+                    parts.push({
+                        text: `[${refLabel}]: !!! EXTRACT OBJECT FROM THIS IMAGE !!!
 Look at this reference image and FIND the object: "${objectToExtract}".
 COPY the EXACT appearance of "${objectToExtract}" (color, texture, shape, details) from THIS image.
 ADD this object to the BASE scene (the first image) in a natural position.
 DO NOT copy the background or other elements from this reference - ONLY the specified object.`
-                        });
-                        parts.push({ inlineData: { data: dnaImgData.data, mimeType: dnaImgData.mimeType } });
-                        continuityInstruction += `(COMPOSITE: Add "${objectToExtract}" from reference) `;
-                        console.log('[ImageGen] 🎯 COMPOSITE Mode: Extracting object:', objectToExtract);
-                    } else {
-                        // STYLE MODE: Match visual DNA/style
-                        const refLabel = 'DNA_VISUAL_REFERENCE';
-                        parts.push({
-                            text: `[${refLabel}]: !!! CRITICAL VISUAL DNA ANCHOR !!!
+                    });
+                    parts.push({ inlineData: { data: dnaImgData.data, mimeType: dnaImgData.mimeType } });
+                    continuityInstruction += `(COMPOSITE: Add "${objectToExtract}" from reference) `;
+                    console.log('[ImageGen] 🎯 COMPOSITE Mode: Extracting object:', objectToExtract);
+                } else {
+                    // STYLE MODE: Match visual DNA/style
+                    const refLabel = 'DNA_VISUAL_REFERENCE';
+                    parts.push({
+                        text: `[${refLabel}]: !!! CRITICAL VISUAL DNA ANCHOR !!!
 This is the MANDATORY reference image that defines the EXACT visual style for this scene.
 MATCH PRECISELY:
 - Color grading, palette, and lighting atmosphere
@@ -974,110 +1011,110 @@ IMPORTANT EXCEPTIONS - DEFER TO PROMPT FOR:
 - COMPOSITION (If text prompt changes camera angle, FOLLOW THE TEXT)
 
 Use this image strictly as a "Style & Material" reference, NOT a pixel-perfect layout content constraint.` });
-                        parts.push({ inlineData: { data: dnaImgData.data, mimeType: dnaImgData.mimeType } });
-                        continuityInstruction += '(DNA REFERENCE ENFORCED) ';
-                        console.log('[ImageGen] 🧬 DNA Reference Image injected for visual consistency');
-                    }
+                    parts.push({ inlineData: { data: dnaImgData.data, mimeType: dnaImgData.mimeType } });
+                    continuityInstruction += '(DNA REFERENCE ENFORCED) ';
+                    console.log('[ImageGen] 🧬 DNA Reference Image injected for visual consistency');
                 }
             }
+        }
 
-            // 5.0.1 BASE IMAGE INJECTION (For Img2Img / Editing)
-            // If baseImage is provided, this is an EDIT operation, not a generation from scratch.
+        // 5.0.1 BASE IMAGE INJECTION (For Img2Img / Editing)
+        // If baseImage is provided, this is an EDIT operation, not a generation from scratch.
 
 
 
-            // 5a. CHARACTER FACE ID ANCHOR (ABSOLUTE FIRST - Before Style!)
-            // Using Google's recommended pattern: "Use supplied image as reference for how [name] should look"
-            for (const char of selectedChars) {
-                // PRIMARY ANCHOR: Face ID (most important)
-                const isAnimal = /horse|snake|dog|cat|wolf|bird|lion|tiger|dragon|animal|creature|bear|eagle|fish|shark|whale/i.test(char.name) ||
-                    /horse|snake|dog|cat|wolf|bird|lion|tiger|dragon|animal|creature|bear|eagle|fish|shark|whale/i.test(char.description);
+        // 5a. CHARACTER FACE ID ANCHOR (ABSOLUTE FIRST - Before Style!)
+        // Using Google's recommended pattern: "Use supplied image as reference for how [name] should look"
+        for (const char of selectedChars) {
+            // PRIMARY ANCHOR: Face ID (most important)
+            const isAnimal = /horse|snake|dog|cat|wolf|bird|lion|tiger|dragon|animal|creature|bear|eagle|fish|shark|whale/i.test(char.name) ||
+                /horse|snake|dog|cat|wolf|bird|lion|tiger|dragon|animal|creature|bear|eagle|fish|shark|whale/i.test(char.description);
 
-                if (char.faceImage) {
-                    const imgData = await safeGetImageData(char.faceImage);
-                    if (imgData) {
-                        const refLabel = `IDENTITY_${char.name.toUpperCase().replace(/\s+/g, '_')}`;
-
-                        if (isAnimal) {
-                            // ANIMAL/CREATURE LOGIC: Softer lock, focus on species/texture, NO face structure mapping
-                            parts.push({ text: `[${refLabel}]: VISUAL REFERENCE for ${char.name}. Use this image as a guide for the creature's appearance (species, color, pattern, size). Do NOT treat this as a human face. Blend it naturally into the scene.` });
-                            console.log(`[ImageGen] 🐾 Injected CREATURE reference for ${char.name}`);
-                        } else {
-                            // HUMAN LOGIC: Strict Face Lock
-                            parts.push({ text: `[${refLabel}]: !!! MANDATORY IDENTITY LOCK !!! Use this supplied image as the ONLY AUTHORITATIVE reference for how ${char.name} should look. Match face structure, features, and identity 100%. ABSOLUTELY NO VARIATION in facial structure allowed. ${char.description}` });
-                            console.log(`[ImageGen] 👤 Injected FACE reference for ${char.name}`);
-                        }
-
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        continuityInstruction += `(STRICT IDENTITY LOCK: ${char.name}) `;
-                    } else {
-                        console.warn(`[ImageGen] ⚠️ Failed to load FACE image for ${char.name}`);
-                    }
-                } else if (char.masterImage) {
-                    // Fallback to Master Image if Face Image is missing
-                    const imgData = await safeGetImageData(char.masterImage);
-                    if (imgData) {
-                        const refLabel = `IDENTITY_${char.name.toUpperCase().replace(/\s+/g, '_')}`;
-                        parts.push({ text: `[${refLabel}]: !!! MANDATORY IDENTITY LOCK (MASTER) !!! Use this supplied image as the ONLY AUTHORITATIVE reference for ${char.name}. Focus on the face and identity from this image. ${char.description}` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        continuityInstruction += `(STRICT IDENTITY LOCK (MASTER): ${char.name}) `;
-                        console.log(`[ImageGen] 👤 Injected MASTER reference (as Face fallback) for ${char.name}`);
-                    }
-                }
-
-                // SECONDARY ANCHOR: Master Image (full body reference)
-                if (char.masterImage && char.masterImage !== char.faceImage) {
-                    const imgData = await safeGetImageData(char.masterImage);
-                    if (imgData) {
-                        const refLabel = `FULLBODY_${char.name.toUpperCase()}`;
-                        // STRONGER COSTUME LOCK
-                        parts.push({ text: `[${refLabel}]: MANDATORY COSTUME REFERENCE for ${char.name}. Match clothing, colors, uniform, and textures 100%. If character has clothes in this image, they MUST HAVE CLOTHES in the output.` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                    }
-                }
-            }
-            // 5b. STYLE REFERENCE IMAGE
-            // Google pattern: "Apply style of [ref2] to subject in [ref1] while maintaining facial features"
-            // FIX: Use effectiveStylePrompt for consistency with earlier logic
-            console.log('[ImageGen] 🖼️ Style Image Check:', {
-                effectiveStylePrompt,
-                hasCustomStyleImage: !!currentState.customStyleImage,
-                customStyleImagePreview: currentState.customStyleImage?.substring(0, 50) + '...'
-            });
-            if (effectiveStylePrompt === 'custom' && currentState.customStyleImage) {
-                const imgData = await safeGetImageData(currentState.customStyleImage);
-                const charNames = selectedChars.map(c => c.name).join(', ');
+            if (char.faceImage) {
+                const imgData = await safeGetImageData(char.faceImage);
                 if (imgData) {
-                    parts.push({ text: `[STYLE_REFERENCE]: Apply ONLY the artistic rendering style of this image (shading, colors, texture) while RIGIDLY MAINTAINING the facial identity from ${charNames ? `IDENTITY references for ${charNames}` : 'above'}. DO NOT let this image influence the person's face structure or identity.` });
-                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                    continuityInstruction += `(STYLE ISOLATION: APPLY STYLE TO ENVIRONMENT/RENDER ONLY) `;
-                    console.log('[ImageGen] ✅ Style Image INJECTED into prompt');
-                } else {
-                    console.warn('[ImageGen] ⚠️ Style Image could not be loaded');
-                }
-            }
+                    const refLabel = `IDENTITY_${char.name.toUpperCase().replace(/\s+/g, '_')}`;
 
-            // 5c. FACE OVERRIDE (Immediately after style to prevent face contamination)
-            // This re-establishes character identity after AI has seen the style image
-            for (const char of selectedChars) {
-                if (char.faceImage) {
-                    const imgData = await safeGetImageData(char.faceImage);
-                    if (imgData) {
-                        const refLabel = `FACE_OVERRIDE: ${char.name.toUpperCase()}`;
-                        parts.push({ text: `[${refLabel}]: !!! IDENTITY GUARD !!! ABSOLUTELY REJECT any facial variations introduced by style. RE-ESTABLISH this exact person. This face is the ONLY valid person for ${char.name}.` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    if (isAnimal) {
+                        // ANIMAL/CREATURE LOGIC: Softer lock, focus on species/texture, NO face structure mapping
+                        parts.push({ text: `[${refLabel}]: VISUAL REFERENCE for ${char.name}. Use this image as a guide for the creature's appearance (species, color, pattern, size). Do NOT treat this as a human face. Blend it naturally into the scene.` });
+                        console.log(`[ImageGen] 🐾 Injected CREATURE reference for ${char.name}`);
+                    } else {
+                        // HUMAN LOGIC: Strict Face Lock
+                        parts.push({ text: `[${refLabel}]: !!! MANDATORY IDENTITY LOCK !!! Use this supplied image as the ONLY AUTHORITATIVE reference for how ${char.name} should look. Match face structure, features, and identity 100%. ABSOLUTELY NO VARIATION in facial structure allowed. ${char.description}` });
+                        console.log(`[ImageGen] 👤 Injected FACE reference for ${char.name}`);
                     }
+
+                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    continuityInstruction += `(STRICT IDENTITY LOCK: ${char.name}) `;
+                } else {
+                    console.warn(`[ImageGen] ⚠️ Failed to load FACE image for ${char.name}`);
+                }
+            } else if (char.masterImage) {
+                // Fallback to Master Image if Face Image is missing
+                const imgData = await safeGetImageData(char.masterImage);
+                if (imgData) {
+                    const refLabel = `IDENTITY_${char.name.toUpperCase().replace(/\s+/g, '_')}`;
+                    parts.push({ text: `[${refLabel}]: !!! MANDATORY IDENTITY LOCK (MASTER) !!! Use this supplied image as the ONLY AUTHORITATIVE reference for ${char.name}. Focus on the face and identity from this image. ${char.description}` });
+                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    continuityInstruction += `(STRICT IDENTITY LOCK (MASTER): ${char.name}) `;
+                    console.log(`[ImageGen] 👤 Injected MASTER reference (as Face fallback) for ${char.name}`);
                 }
             }
 
+            // SECONDARY ANCHOR: Master Image (full body reference)
+            if (char.masterImage && char.masterImage !== char.faceImage) {
+                const imgData = await safeGetImageData(char.masterImage);
+                if (imgData) {
+                    const refLabel = `FULLBODY_${char.name.toUpperCase()}`;
+                    // STRONGER COSTUME LOCK
+                    parts.push({ text: `[${refLabel}]: MANDATORY COSTUME REFERENCE for ${char.name}. Match clothing, colors, uniform, and textures 100%. If character has clothes in this image, they MUST HAVE CLOTHES in the output.` });
+                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                }
+            }
+        }
+        // 5b. STYLE REFERENCE IMAGE
+        // Google pattern: "Apply style of [ref2] to subject in [ref1] while maintaining facial features"
+        // FIX: Use effectiveStylePrompt for consistency with earlier logic
+        console.log('[ImageGen] 🖼️ Style Image Check:', {
+            effectiveStylePrompt,
+            hasCustomStyleImage: !!currentState.customStyleImage,
+            customStyleImagePreview: currentState.customStyleImage?.substring(0, 50) + '...'
+        });
+        if (effectiveStylePrompt === 'custom' && currentState.customStyleImage) {
+            const imgData = await safeGetImageData(currentState.customStyleImage);
+            const charNames = selectedChars.map(c => c.name).join(', ');
+            if (imgData) {
+                parts.push({ text: `[STYLE_REFERENCE]: Apply ONLY the artistic rendering style of this image (shading, colors, texture) while RIGIDLY MAINTAINING the facial identity from ${charNames ? `IDENTITY references for ${charNames}` : 'above'}. DO NOT let this image influence the person's face structure or identity.` });
+                parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                continuityInstruction += `(STYLE ISOLATION: APPLY STYLE TO ENVIRONMENT/RENDER ONLY) `;
+                console.log('[ImageGen] ✅ Style Image INJECTED into prompt');
+            } else {
+                console.warn('[ImageGen] ⚠️ Style Image could not be loaded');
+            }
+        }
 
-            // 5d. ABSOLUTE SET LOCK (Master Anchor + Continuity Anchor)
-            if (sceneToUpdate.groupId) {
-                const groupObj = currentState.sceneGroups?.find(g => g.id === sceneToUpdate.groupId);
+        // 5c. FACE OVERRIDE (Immediately after style to prevent face contamination)
+        // This re-establishes character identity after AI has seen the style image
+        for (const char of selectedChars) {
+            if (char.faceImage) {
+                const imgData = await safeGetImageData(char.faceImage);
+                if (imgData) {
+                    const refLabel = `FACE_OVERRIDE: ${char.name.toUpperCase()}`;
+                    parts.push({ text: `[${refLabel}]: !!! IDENTITY GUARD !!! ABSOLUTELY REJECT any facial variations introduced by style. RE-ESTABLISH this exact person. This face is the ONLY valid person for ${char.name}.` });
+                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                }
+            }
+        }
 
-                // SAME LOCATION LOCK: All scenes in this group share the same physical environment
-                if (groupObj) {
-                    const sameLocationLock = `!!! SAME LOCATION LOCK !!! This scene is part of location group "${groupObj.name}". 
+
+        // 5d. ABSOLUTE SET LOCK (Master Anchor + Continuity Anchor)
+        if (sceneToUpdate.groupId) {
+            const groupObj = currentState.sceneGroups?.find(g => g.id === sceneToUpdate.groupId);
+
+            // SAME LOCATION LOCK: All scenes in this group share the same physical environment
+            if (groupObj) {
+                const sameLocationLock = `!!! SAME LOCATION LOCK !!! This scene is part of location group "${groupObj.name}". 
 ALL SCENES IN THIS GROUP SHARE THE SAME PHYSICAL ENVIRONMENT: ${groupObj.description}.
 YOU MUST MAINTAIN:
 - Same architectural style, room layout, wall colors, and ceiling height
@@ -1086,76 +1123,76 @@ YOU MUST MAINTAIN:
 - Same lighting sources and color temperature
 - Same time of day: ${groupObj.timeOfDay || 'consistent with group'}
 DO NOT invent new environments or change the location. This is NOT a different place.`;
-                    continuityInstruction += sameLocationLock;
-                }
+                continuityInstruction += sameLocationLock;
+            }
 
-                // CONCEPT IMAGE ANCHOR: Use for ALL scenes in group (CRITICAL - not just after first)
-                // Priority: Location Library > Group's own conceptImage
-                const effectiveConceptImage = (() => {
-                    // Check Location Library first
-                    if (groupObj?.locationId && currentState.locations) {
-                        const location = currentState.locations.find(l => l.id === groupObj.locationId);
-                        if (location?.conceptImage) {
-                            console.log(`[ImageGen] 📍 Using shared Location concept: ${location.name}`);
-                            return location.conceptImage;
-                        }
-                    }
-                    // Fallback to group's own concept
-                    return groupObj?.conceptImage;
-                })();
-
-                if (effectiveConceptImage) {
-                    const imgData = await safeGetImageData(effectiveConceptImage);
-                    if (imgData) {
-                        const refLabel = `MANDATORY_LOCATION_TEMPLATE`;
-                        parts.push({ text: `[${refLabel}]: !!! CRITICAL ENVIRONMENT ANCHOR !!! This concept image defines the EXACT environment for ALL scenes in this location group. EVERY shot must exist within this space. Match: architectural style, layout, color palette, lighting, textures, and geometry. CHARACTER APPEARANCE comes from separate IDENTITY references - only use this for ENVIRONMENT. This location must be IDENTICAL across all scenes in the group.` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        continuityInstruction += `(CONCEPT ENVIRONMENT ENFORCED) `;
-                    }
-                } else if (groupObj) {
-                    // WARN: No concept image - add stronger text-based instruction
-                    console.warn(`[ImageGen] ⚠️ Group "${groupObj.name}" has no concept image. Environment may vary.`);
-                    continuityInstruction += `[NO CONCEPT IMAGE]: Strictly infer environment from "${groupObj.description}". Do NOT hallucinate different locations. `;
-                }
-
-                // FIRST SCENE BACKUP: If no concept image but first scene exists, use it as environment template
-                const firstSceneInGroup = currentState.scenes
-                    .filter(s => s.groupId === sceneToUpdate.groupId && s.generatedImage && s.id !== sceneToUpdate.id)
-                    .sort((a, b) => parseInt(a.scene_number) - parseInt(b.scene_number))[0];
-
-                if (firstSceneInGroup?.generatedImage && !groupObj?.conceptImage) {
-                    const imgData = await safeGetImageData(firstSceneInGroup.generatedImage);
-                    if (imgData) {
-                        const refLabel = `ENVIRONMENT_ONLY_LOCK`;
-                        parts.push({ text: `[${refLabel}]: Use this as the RIGID template for architecture and lighting ONLY. Match: layout, wall textures, room geometry, furniture placement, and lighting source. ABSOLUTELY IGNORE characters, clothing, and small props. This is a background-only consistency anchor.` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        continuityInstruction += `(BACKGROUND LOCK FROM MASTER SCENE) `;
+            // CONCEPT IMAGE ANCHOR: Use for ALL scenes in group (CRITICAL - not just after first)
+            // Priority: Location Library > Group's own conceptImage
+            const effectiveConceptImage = (() => {
+                // Check Location Library first
+                if (groupObj?.locationId && currentState.locations) {
+                    const location = currentState.locations.find(l => l.id === groupObj.locationId);
+                    if (location?.conceptImage) {
+                        console.log(`[ImageGen] 📍 Using shared Location concept: ${location.name}`);
+                        return location.conceptImage;
                     }
                 }
+                // Fallback to group's own concept
+                return groupObj?.conceptImage;
+            })();
 
-                if (continuityInstruction) {
-                    continuityInstruction = `ENVIRONMENT REFERENCE: Background elements only. Character appearance from IDENTITY references. ${continuityInstruction}`;
+            if (effectiveConceptImage) {
+                const imgData = await safeGetImageData(effectiveConceptImage);
+                if (imgData) {
+                    const refLabel = `MANDATORY_LOCATION_TEMPLATE`;
+                    parts.push({ text: `[${refLabel}]: !!! CRITICAL ENVIRONMENT ANCHOR !!! This concept image defines the EXACT environment for ALL scenes in this location group. EVERY shot must exist within this space. Match: architectural style, layout, color palette, lighting, textures, and geometry. CHARACTER APPEARANCE comes from separate IDENTITY references - only use this for ENVIRONMENT. This location must be IDENTICAL across all scenes in the group.` });
+                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    continuityInstruction += `(CONCEPT ENVIRONMENT ENFORCED) `;
+                }
+            } else if (groupObj) {
+                // WARN: No concept image - add stronger text-based instruction
+                console.warn(`[ImageGen] ⚠️ Group "${groupObj.name}" has no concept image. Environment may vary.`);
+                continuityInstruction += `[NO CONCEPT IMAGE]: Strictly infer environment from "${groupObj.description}". Do NOT hallucinate different locations. `;
+            }
+
+            // FIRST SCENE BACKUP: If no concept image but first scene exists, use it as environment template
+            const firstSceneInGroup = currentState.scenes
+                .filter(s => s.groupId === sceneToUpdate.groupId && s.generatedImage && s.id !== sceneToUpdate.id)
+                .sort((a, b) => parseInt(a.scene_number) - parseInt(b.scene_number))[0];
+
+            if (firstSceneInGroup?.generatedImage && !groupObj?.conceptImage) {
+                const imgData = await safeGetImageData(firstSceneInGroup.generatedImage);
+                if (imgData) {
+                    const refLabel = `ENVIRONMENT_ONLY_LOCK`;
+                    parts.push({ text: `[${refLabel}]: Use this as the RIGID template for architecture and lighting ONLY. Match: layout, wall textures, room geometry, furniture placement, and lighting source. ABSOLUTELY IGNORE characters, clothing, and small props. This is a background-only consistency anchor.` });
+                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    continuityInstruction += `(BACKGROUND LOCK FROM MASTER SCENE) `;
                 }
             }
 
+            if (continuityInstruction) {
+                continuityInstruction = `ENVIRONMENT REFERENCE: Background elements only. Character appearance from IDENTITY references. ${continuityInstruction}`;
+            }
+        }
 
-            // 5c. CHARACTER REFERENCES - FACE ID FIRST (Gemini weights early references more)
-            let referencePreamble = '';
 
-            // Track characters from the previous scene for re-entry logic
-            const prevScene = currentSceneIndex > 0 ? currentState.scenes[currentSceneIndex - 1] : null;
-            const prevSceneCharIds = prevScene?.characterIds || [];
+        // 5c. CHARACTER REFERENCES - FACE ID FIRST (Gemini weights early references more)
+        let referencePreamble = '';
 
-            // STEP 1: Inject ALL Face IDs FIRST (highest priority for identity)
-            for (const char of selectedChars) {
-                if (char.faceImage) {
-                    const faceData = await safeGetImageData(char.faceImage);
-                    if (faceData) {
-                        const isReentry = !prevSceneCharIds.includes(char.id);
+        // Track characters from the previous scene for re-entry logic
+        const prevScene = currentSceneIndex > 0 ? currentState.scenes[currentSceneIndex - 1] : null;
+        const prevSceneCharIds = prevScene?.characterIds || [];
 
-                        // STRONGEST possible Face ID instruction
-                        parts.push({
-                            text: `🔒 [FACE ID LOCK - ${char.name.toUpperCase()}]: 
+        // STEP 1: Inject ALL Face IDs FIRST (highest priority for identity)
+        for (const char of selectedChars) {
+            if (char.faceImage) {
+                const faceData = await safeGetImageData(char.faceImage);
+                if (faceData) {
+                    const isReentry = !prevSceneCharIds.includes(char.id);
+
+                    // STRONGEST possible Face ID instruction
+                    parts.push({
+                        text: `🔒 [FACE ID LOCK - ${char.name.toUpperCase()}]: 
 !!! CRITICAL IDENTITY REQUIREMENT !!! 
 This is the ONLY acceptable face for character "${char.name}".
 COPY EXACTLY:
@@ -1166,120 +1203,120 @@ COPY EXACTLY:
 - Skin tone and texture
 ${isReentry ? '⚠️ CHARACTER RE-ENTERING - Reset to this exact face!' : ''}
 DO NOT generate a different face. DO NOT create a "similar" face. This EXACT face only.`
-                        });
-                        parts.push({ inlineData: { data: faceData.data, mimeType: faceData.mimeType } });
-                        console.log(`[ImageGen] 🔒 FACE ID injected FIRST for ${char.name}`);
-                    }
+                    });
+                    parts.push({ inlineData: { data: faceData.data, mimeType: faceData.mimeType } });
+                    console.log(`[ImageGen] 🔒 FACE ID injected FIRST for ${char.name}`);
                 }
             }
+        }
 
-            // STEP 2: Then add body/outfit references
-            for (const char of selectedChars) {
-                const bodyRefs: { type: string, img: string }[] = [];
+        // STEP 2: Then add body/outfit references
+        for (const char of selectedChars) {
+            const bodyRefs: { type: string, img: string }[] = [];
 
-                // Only add bodyImage if it's different from masterImage (avoid duplicate)
-                if (char.bodyImage && char.bodyImage !== char.masterImage) {
-                    bodyRefs.push({ type: 'FULL BODY', img: char.bodyImage });
-                }
-
-                // Add more views if using Pro
-                if (isPro) {
-                    if (char.sideImage) bodyRefs.push({ type: 'SIDE VIEW', img: char.sideImage });
-                    if (char.backImage) bodyRefs.push({ type: 'BACK VIEW', img: char.backImage });
-                }
-
-                // Fallback to master if no body views (and no faceImage was added)
-                if (bodyRefs.length === 0 && char.masterImage && !char.faceImage) {
-                    bodyRefs.push({ type: 'PRIMARY', img: char.masterImage });
-                } else if (bodyRefs.length === 0 && char.masterImage) {
-                    // Add masterImage as body/outfit reference
-                    bodyRefs.push({ type: 'OUTFIT', img: char.masterImage });
-                }
-
-                // PARALLEL loading of body reference images
-                const refDataArray = await Promise.all(
-                    bodyRefs.map(ref => safeGetImageData(ref.img).then(data => ({ ref, data })))
-                );
-
-                for (const { ref, data: imgData } of refDataArray) {
-                    if (imgData) {
-                        parts.push({ text: `[${char.name.toUpperCase()} ${ref.type}]: Use for OUTFIT and POSE only. Face from FACE ID LOCK above. Description: ${char.description}` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        referencePreamble += `(${char.name} ${ref.type}) `;
-                    }
-                }
+            // Only add bodyImage if it's different from masterImage (avoid duplicate)
+            if (char.bodyImage && char.bodyImage !== char.masterImage) {
+                bodyRefs.push({ type: 'FULL BODY', img: char.bodyImage });
             }
 
-            const selectedProducts = currentState.products.filter(p => sceneToUpdate.productIds.includes(p.id));
-            for (const prod of selectedProducts) {
-                const prodRefs: { type: string, img: string }[] = [];
-                if (prod.views?.front) prodRefs.push({ type: 'FRONT VIEW', img: prod.views.front });
-
-                // Add more views if using Pro
-                if (isPro) {
-                    const sideImg = prod.views?.left || prod.views?.right;
-                    if (sideImg) prodRefs.push({ type: 'SIDE VIEW', img: sideImg });
-                    if (prod.views?.back) prodRefs.push({ type: 'BACK VIEW', img: prod.views.back });
-                    if (prod.views?.top) prodRefs.push({ type: 'TOP VIEW', img: prod.views.top });
-                } else {
-                    const sideImg = prod.views?.left || prod.views?.right;
-                    if (sideImg) prodRefs.push({ type: 'SIDE VIEW', img: sideImg });
-                }
-
-                // Fallback to master if no specific views
-                if (prodRefs.length === 0 && prod.masterImage) {
-                    prodRefs.push({ type: 'PRIMARY', img: prod.masterImage });
-                }
-
-                // PARALLEL loading of all product reference images
-                const refDataArray = await Promise.all(
-                    prodRefs.map(ref => safeGetImageData(ref.img).then(data => ({ ref, data })))
-                );
-
-                for (const { ref, data: imgData } of refDataArray) {
-                    if (imgData) {
-                        const refLabel = `MASTER VISUAL: ${prod.name.toUpperCase()} ${ref.type}`;
-                        // STRONGER RACCORD FOR PROPS
-                        parts.push({ text: `[${refLabel}]: AUTHORITATIVE visual anchor for ${prod.name} (PROP RACCORD). Match the design, colors, material, and branding from this image EXACTLY. Maintain consistent scale relative to the character.` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                        referencePreamble += `(PROP CONTINUITY: Match ${refLabel}) `;
-                    }
-                }
+            // Add more views if using Pro
+            if (isPro) {
+                if (char.sideImage) bodyRefs.push({ type: 'SIDE VIEW', img: char.sideImage });
+                if (char.backImage) bodyRefs.push({ type: 'BACK VIEW', img: char.backImage });
             }
 
-            // 5e. CONTINUITY ANCHOR FROM PREVIOUS SHOT (Stronger Logic)
-            // Use if isContinuityMode is ON and we are in the same group (or no group but sequential)
-            // SKIP dopFailed scenes - use last GOOD scene as reference
-            if (isContinuityMode && currentSceneIndex > 0 && !sceneToUpdate.referenceImage) {
-                // Find previous scene that has image AND is not marked as dopFailed
-                const prevSceneWithImage = currentState.scenes
-                    .slice(0, currentSceneIndex)
-                    .reverse()
-                    .find(s => s.generatedImage && !(s as any).dopFailed);
+            // Fallback to master if no body views (and no faceImage was added)
+            if (bodyRefs.length === 0 && char.masterImage && !char.faceImage) {
+                bodyRefs.push({ type: 'PRIMARY', img: char.masterImage });
+            } else if (bodyRefs.length === 0 && char.masterImage) {
+                // Add masterImage as body/outfit reference
+                bodyRefs.push({ type: 'OUTFIT', img: char.masterImage });
+            }
 
-                // Only use as anchor if it belongs to the same Scene Group (strong continuity) or is the immediate predecessor
-                const isSameGroup = prevSceneWithImage && prevSceneWithImage.groupId === sceneToUpdate.groupId;
-                const isImmediate = prevSceneWithImage && (parseInt(sceneToUpdate.sceneNumber) - parseInt(prevSceneWithImage.sceneNumber) <= 2); // Allow gap of 1 (failed scene)
+            // PARALLEL loading of body reference images
+            const refDataArray = await Promise.all(
+                bodyRefs.map(ref => safeGetImageData(ref.img).then(data => ({ ref, data })))
+            );
 
-                if (prevSceneWithImage?.generatedImage && (isSameGroup || isImmediate)) {
-                    const imgData = await safeGetImageData(prevSceneWithImage.generatedImage);
-                    if (imgData) {
-                        // RE-ENTRY SAFE INSTRUCTION: If previous shot was empty, warn AI not to suppress characters
-                        const wasPrevShotEmpty = (prevSceneWithImage.characterIds?.length || 0) === 0;
-                        const charReturnWarning = wasPrevShotEmpty ? "!!! NOTICE !!! The previous shot was a background-only view. The current shot contains characters; do NOT let this reference suppress their appearance or identity." : "";
+            for (const { ref, data: imgData } of refDataArray) {
+                if (imgData) {
+                    parts.push({ text: `[${char.name.toUpperCase()} ${ref.type}]: Use for OUTFIT and POSE only. Face from FACE ID LOCK above. Description: ${char.description}` });
+                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    referencePreamble += `(${char.name} ${ref.type}) `;
+                }
+            }
+        }
 
-                        // Detect if we are zooming in (Wide -> Close Up)
-                        const isZoomingIn = (anglePrompt.includes('CLOSE') || anglePrompt.includes('CU')) && !prevSceneWithImage.cameraAngleOverride?.includes('CLOSE');
+        const selectedProducts = currentState.products.filter(p => sceneToUpdate.productIds.includes(p.id));
+        for (const prod of selectedProducts) {
+            const prodRefs: { type: string, img: string }[] = [];
+            if (prod.views?.front) prodRefs.push({ type: 'FRONT VIEW', img: prod.views.front });
 
-                        const anchorLabel = isZoomingIn ? "ZOOM_IN_ANCHOR" : "CONTINUITY_ANCHOR";
+            // Add more views if using Pro
+            if (isPro) {
+                const sideImg = prod.views?.left || prod.views?.right;
+                if (sideImg) prodRefs.push({ type: 'SIDE VIEW', img: sideImg });
+                if (prod.views?.back) prodRefs.push({ type: 'BACK VIEW', img: prod.views.back });
+                if (prod.views?.top) prodRefs.push({ type: 'TOP VIEW', img: prod.views.top });
+            } else {
+                const sideImg = prod.views?.left || prod.views?.right;
+                if (sideImg) prodRefs.push({ type: 'SIDE VIEW', img: sideImg });
+            }
 
-                        // Note if we skipped a failed scene
-                        const skippedFailedNote = currentSceneIndex - currentState.scenes.indexOf(prevSceneWithImage) > 1
-                            ? `(Skipped failed scene - using Scene ${prevSceneWithImage.sceneNumber} as reference instead)`
-                            : '';
+            // Fallback to master if no specific views
+            if (prodRefs.length === 0 && prod.masterImage) {
+                prodRefs.push({ type: 'PRIMARY', img: prod.masterImage });
+            }
 
-                        parts.push({
-                            text: `[${anchorLabel}]: CONTINUITY REFERENCE (SELECTIVE). ${skippedFailedNote} Use previous frame for consistency. ${charReturnWarning}
+            // PARALLEL loading of all product reference images
+            const refDataArray = await Promise.all(
+                prodRefs.map(ref => safeGetImageData(ref.img).then(data => ({ ref, data })))
+            );
+
+            for (const { ref, data: imgData } of refDataArray) {
+                if (imgData) {
+                    const refLabel = `MASTER VISUAL: ${prod.name.toUpperCase()} ${ref.type}`;
+                    // STRONGER RACCORD FOR PROPS
+                    parts.push({ text: `[${refLabel}]: AUTHORITATIVE visual anchor for ${prod.name} (PROP RACCORD). Match the design, colors, material, and branding from this image EXACTLY. Maintain consistent scale relative to the character.` });
+                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    referencePreamble += `(PROP CONTINUITY: Match ${refLabel}) `;
+                }
+            }
+        }
+
+        // 5e. CONTINUITY ANCHOR FROM PREVIOUS SHOT (Stronger Logic)
+        // Use if isContinuityMode is ON and we are in the same group (or no group but sequential)
+        // SKIP dopFailed scenes - use last GOOD scene as reference
+        if (isContinuityMode && currentSceneIndex > 0 && !sceneToUpdate.referenceImage) {
+            // Find previous scene that has image AND is not marked as dopFailed
+            const prevSceneWithImage = currentState.scenes
+                .slice(0, currentSceneIndex)
+                .reverse()
+                .find(s => s.generatedImage && !(s as any).dopFailed);
+
+            // Only use as anchor if it belongs to the same Scene Group (strong continuity) or is the immediate predecessor
+            const isSameGroup = prevSceneWithImage && prevSceneWithImage.groupId === sceneToUpdate.groupId;
+            const isImmediate = prevSceneWithImage && (parseInt(sceneToUpdate.sceneNumber) - parseInt(prevSceneWithImage.sceneNumber) <= 2); // Allow gap of 1 (failed scene)
+
+            if (prevSceneWithImage?.generatedImage && (isSameGroup || isImmediate)) {
+                const imgData = await safeGetImageData(prevSceneWithImage.generatedImage);
+                if (imgData) {
+                    // RE-ENTRY SAFE INSTRUCTION: If previous shot was empty, warn AI not to suppress characters
+                    const wasPrevShotEmpty = (prevSceneWithImage.characterIds?.length || 0) === 0;
+                    const charReturnWarning = wasPrevShotEmpty ? "!!! NOTICE !!! The previous shot was a background-only view. The current shot contains characters; do NOT let this reference suppress their appearance or identity." : "";
+
+                    // Detect if we are zooming in (Wide -> Close Up)
+                    const isZoomingIn = (anglePrompt.includes('CLOSE') || anglePrompt.includes('CU')) && !prevSceneWithImage.cameraAngleOverride?.includes('CLOSE');
+
+                    const anchorLabel = isZoomingIn ? "ZOOM_IN_ANCHOR" : "CONTINUITY_ANCHOR";
+
+                    // Note if we skipped a failed scene
+                    const skippedFailedNote = currentSceneIndex - currentState.scenes.indexOf(prevSceneWithImage) > 1
+                        ? `(Skipped failed scene - using Scene ${prevSceneWithImage.sceneNumber} as reference instead)`
+                        : '';
+
+                    parts.push({
+                        text: `[${anchorLabel}]: CONTINUITY REFERENCE (SELECTIVE). ${skippedFailedNote} Use previous frame for consistency. ${charReturnWarning}
 INHERIT THESE:
 1. PHYSICAL LIGHTING: Match actual light source direction and shadow placement
 2. ENVIRONMENT: Fixed positions of furniture, architecture, and landmarks
@@ -1294,921 +1331,921 @@ INHERIT THESE:
 
 The NEW scene has its OWN camera style as specified in the current prompt. DO NOT apply previous scene's camera treatment.` });
 
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
 
-                        if (skippedFailedNote) {
-                            console.log(`[ImageGen] ⚠️ Skipped failed scene, using Scene ${prevSceneWithImage.sceneNumber} as continuity ref`);
-                        }
+                    if (skippedFailedNote) {
+                        console.log(`[ImageGen] ⚠️ Skipped failed scene, using Scene ${prevSceneWithImage.sceneNumber} as continuity ref`);
                     }
-                } else if (!prevSceneWithImage) {
-                    // No good previous scene found - this is like a new group
-                    console.log('[ImageGen] 📍 No valid previous scene - generating as new group (character/environment refs only)');
                 }
+            } else if (!prevSceneWithImage) {
+                // No good previous scene found - this is like a new group
+                console.log('[ImageGen] 📍 No valid previous scene - generating as new group (character/environment refs only)');
             }
+        }
 
-            // 5e. EXPLICIT PRODUCT/PROP REFERENCE (User-defined Override)
-            if (sceneToUpdate.referenceImage) {
-                const imgData = await safeGetImageData(sceneToUpdate.referenceImage);
-                if (imgData) {
-                    const focus = sceneToUpdate.referenceImageDescription || 'props and environment';
-                    parts.push({
-                        text: `[AUTHORITATIVE_VISUAL_REFERENCE]: 
+        // 5e. EXPLICIT PRODUCT/PROP REFERENCE (User-defined Override)
+        if (sceneToUpdate.referenceImage) {
+            const imgData = await safeGetImageData(sceneToUpdate.referenceImage);
+            if (imgData) {
+                const focus = sceneToUpdate.referenceImageDescription || 'props and environment';
+                parts.push({
+                    text: `[AUTHORITATIVE_VISUAL_REFERENCE]: 
 STEP 1: ANALYZE this image deeply. Identify the key visual attributes of the ${focus} (Material, Texture, Color Palette, Lighting Style, Design details).
 STEP 2: GENERATE the new scene by strictly applying these identified attributes.
 Match the ${focus} EXACTLY as shown in this reference.
 IGNORE any prior text descriptions if they conflict with this visual DNA.` });
-                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
-                    // Add to top of parts if it's really important? No, index-wise handles it.
-                }
+                parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                // Add to top of parts if it's really important? No, index-wise handles it.
             }
+        }
 
-            // 5f. IDENTITY REINFORCEMENT - DISABLED (Was Sandwich Pattern)
-            // Sandwich was sending face/body TWICE which doubled reference count
-            // Research: Gemini weighs FIRST references most, duplicates waste tokens
-            // 2 chars: 8 refs → 4 refs (50% reduction)
-            // Speed improvement: ~10-15s per generation
-            console.log(`[ImageGen] ✅ Sandwich disabled - using single-pass references only`);
+        // 5f. IDENTITY REINFORCEMENT - DISABLED (Was Sandwich Pattern)
+        // Sandwich was sending face/body TWICE which doubled reference count
+        // Research: Gemini weighs FIRST references most, duplicates waste tokens
+        // 2 chars: 8 refs → 4 refs (50% reduction)
+        // Speed improvement: ~10-15s per generation
+        console.log(`[ImageGen] ✅ Sandwich disabled - using single-pass references only`);
 
-            // (Base Image moved to start)
-            if (continuityInstruction) {
-                finalImagePrompt = `${continuityInstruction.trim()} ${finalImagePrompt}`;
-            }
+        // (Base Image moved to start)
+        if (continuityInstruction) {
+            finalImagePrompt = `${continuityInstruction.trim()} ${finalImagePrompt}`;
+        }
 
-            // --- REFERENCE LIMIT VALIDATION (Gemini 3 Pro: Max 14 images) ---
-            const refImageCount = parts.filter((p: any) => p.inlineData).length;
-            if (refImageCount > 14) {
-                console.warn(`[ImageGen] ⚠️ WARNING: ${refImageCount} reference images detected. Gemini 3 Pro supports max 14. Performance may degrade.`);
-                if (addProductionLog) {
-                    addProductionLog('dop', `⚠️ ${refImageCount} reference images (max 14)`, 'warning', 'ref_warning');
-                }
-            } else if (refImageCount > 0) {
-                console.log(`[ImageGen] 📷 Using ${refImageCount} reference image(s)`);
-                if (addProductionLog) {
-                    addProductionLog('dop', `📷 Using ${refImageCount} reference image(s)`, 'info', 'ref_count');
-                }
-            }
-
-            // --- LOG REFERENCE DETAILS TO DOP CHAT ---
+        // --- REFERENCE LIMIT VALIDATION (Gemini 3 Pro: Max 14 images) ---
+        const refImageCount = parts.filter((p: any) => p.inlineData).length;
+        if (refImageCount > 14) {
+            console.warn(`[ImageGen] ⚠️ WARNING: ${refImageCount} reference images detected. Gemini 3 Pro supports max 14. Performance may degrade.`);
             if (addProductionLog) {
-                // Log previous scene reference
-                if (currentState.scenes && currentState.scenes.length > 0) {
-                    const prevSceneWithImage = currentState.scenes
-                        .filter((s: any) => s.id !== sceneToUpdate.id && s.generatedImage)
-                        .slice(-1)[0];
-                    if (prevSceneWithImage) {
-                        addProductionLog('dop', `🔗 Continuity from Scene ${prevSceneWithImage.sceneNumber || '?'}`, 'info', 'continuity_ref');
-                    }
-                }
+                addProductionLog('dop', `⚠️ ${refImageCount} reference images (max 14)`, 'warning', 'ref_warning');
+            }
+        } else if (refImageCount > 0) {
+            console.log(`[ImageGen] 📷 Using ${refImageCount} reference image(s)`);
+            if (addProductionLog) {
+                addProductionLog('dop', `📷 Using ${refImageCount} reference image(s)`, 'info', 'ref_count');
+            }
+        }
 
-                // Log character references
-                if (sceneToUpdate.characterIds && sceneToUpdate.characterIds.length > 0) {
-                    const charNames = sceneToUpdate.characterIds
-                        .map((cid: string) => currentState.characters.find((c: any) => c.id === cid)?.name || cid.slice(0, 6))
-                        .join(', ');
-                    addProductionLog('dop', `👤 Characters: ${charNames}`, 'info', 'char_ref');
-                }
-
-                // Log explicit reference image
-                if (sceneToUpdate.referenceImage) {
-                    addProductionLog('dop', `🖼️ Reference image attached`, 'info', 'explicit_ref');
+        // --- LOG REFERENCE DETAILS TO DOP CHAT ---
+        if (addProductionLog) {
+            // Log previous scene reference
+            if (currentState.scenes && currentState.scenes.length > 0) {
+                const prevSceneWithImage = currentState.scenes
+                    .filter((s: any) => s.id !== sceneToUpdate.id && s.generatedImage)
+                    .slice(-1)[0];
+                if (prevSceneWithImage) {
+                    addProductionLog('dop', `🔗 Continuity from Scene ${prevSceneWithImage.sceneNumber || '?'}`, 'info', 'continuity_ref');
                 }
             }
 
-            // --- 6. PROMPT NORMALIZATION (DOP Layer) ---
-            // Optimize prompt for the specific model being used
-            // Includes auto-translation from Vietnamese to English for non-Gemini models
-            const modelToUse = currentState.imageModel || 'gemini-3-pro-image-preview';
-            let promptToSend = finalImagePrompt;
+            // Log character references
+            if (sceneToUpdate.characterIds && sceneToUpdate.characterIds.length > 0) {
+                const charNames = sceneToUpdate.characterIds
+                    .map((cid: string) => currentState.characters.find((c: any) => c.id === cid)?.name || cid.slice(0, 6))
+                    .join(', ');
+                addProductionLog('dop', `👤 Characters: ${charNames}`, 'info', 'char_ref');
+            }
 
-            // TIMING: Log prep phase duration with breakdown
-            const prepTime = Date.now() - startTime;
-            const refCount = parts.filter((p: any) => p.inlineData).length;
-            console.log(`[ImageGen] ⏱️ PREP completed in ${prepTime}ms (${refCount} refs loaded)`);
-            console.log(`[ImageGen] ⏱️ Breakdown: If PREP > 5000ms, check console for '[ImageCache] 📥' fetches`);
+            // Log explicit reference image
+            if (sceneToUpdate.referenceImage) {
+                addProductionLog('dop', `🖼️ Reference image attached`, 'info', 'explicit_ref');
+            }
+        }
 
-            // --- DOP LEARNING: Apply suggested keywords from successful patterns ---
-            // This runs in parallel and doesn't block (fire and forget with timeout)
-            try {
-                const suggestedKeywords = await Promise.race([
-                    getSuggestedKeywords(modelToUse, 'scene'),
-                    new Promise<string[]>((_, reject) => setTimeout(() => reject('timeout'), 500))
-                ]).catch(() => [] as string[]);
+        // --- 6. PROMPT NORMALIZATION (DOP Layer) ---
+        // Optimize prompt for the specific model being used
+        // Includes auto-translation from Vietnamese to English for non-Gemini models
+        const modelToUse = currentState.imageModel || 'gemini-3-pro-image-preview';
+        let promptToSend = finalImagePrompt;
 
-                if (suggestedKeywords.length > 0) {
-                    // Add keywords that aren't already in prompt
-                    const promptLower = promptToSend.toLowerCase();
-                    const newKeywords = suggestedKeywords.filter(kw =>
-                        !promptLower.includes(kw.toLowerCase())
-                    ).slice(0, 3); // Max 3 new keywords
+        // TIMING: Log prep phase duration with breakdown
+        const prepTime = Date.now() - startTime;
+        const refCount = parts.filter((p: any) => p.inlineData).length;
+        console.log(`[ImageGen] ⏱️ PREP completed in ${prepTime}ms (${refCount} refs loaded)`);
+        console.log(`[ImageGen] ⏱️ Breakdown: If PREP > 5000ms, check console for '[ImageCache] 📥' fetches`);
 
-                    if (newKeywords.length > 0) {
-                        promptToSend = `${promptToSend} (${newKeywords.join(', ')})`;
-                        console.log('[DOP Learning] 🧠 Applied keywords:', newKeywords);
-                    }
+        // --- DOP LEARNING: Apply suggested keywords from successful patterns ---
+        // This runs in parallel and doesn't block (fire and forget with timeout)
+        try {
+            const suggestedKeywords = await Promise.race([
+                getSuggestedKeywords(modelToUse, 'scene'),
+                new Promise<string[]>((_, reject) => setTimeout(() => reject('timeout'), 500))
+            ]).catch(() => [] as string[]);
+
+            if (suggestedKeywords.length > 0) {
+                // Add keywords that aren't already in prompt
+                const promptLower = promptToSend.toLowerCase();
+                const newKeywords = suggestedKeywords.filter(kw =>
+                    !promptLower.includes(kw.toLowerCase())
+                ).slice(0, 3); // Max 3 new keywords
+
+                if (newKeywords.length > 0) {
+                    promptToSend = `${promptToSend} (${newKeywords.join(', ')})`;
+                    console.log('[DOP Learning] 🧠 Applied keywords:', newKeywords);
                 }
-            } catch (e) {
-                // Silent fail - learning is optional
             }
+        } catch (e) {
+            // Silent fail - learning is optional
+        }
 
-            // Debug: Check if model is correctly detected as gemini type
-            const shouldNormalize = needsNormalization(modelToUse);
-            console.log('[ImageGen] Model check:', modelToUse, '| Needs normalization:', shouldNormalize);
+        // Debug: Check if model is correctly detected as gemini type
+        const shouldNormalize = needsNormalization(modelToUse);
+        console.log('[ImageGen] Model check:', modelToUse, '| Needs normalization:', shouldNormalize);
 
-            if (!shouldNormalize && addProductionLog) {
-                addProductionLog('dop', `🟢 ${modelToUse} hỗ trợ tiếng Việt - không cần dịch`, 'info', 'skip_normalize');
-            }
+        if (!shouldNormalize && addProductionLog) {
+            addProductionLog('dop', `🟢 ${modelToUse} hỗ trợ tiếng Việt - không cần dịch`, 'info', 'skip_normalize');
+        }
 
-            if (shouldNormalize) {
-                // Check if Vietnamese is actually present
-                const hasVietnamese = containsVietnamese(finalImagePrompt);
+        if (shouldNormalize) {
+            // Check if Vietnamese is actually present
+            const hasVietnamese = containsVietnamese(finalImagePrompt);
 
-                if (hasVietnamese) {
-                    // Vietnamese detected + model doesn't support it → need translation
-                    // Use async AI translation for proper Vietnamese → English
-                    if (userApiKey) {
-                        console.log('[ImageGen] 🌐 Vietnamese detected, translating for', modelToUse);
-                        const normalized = await normalizePromptAsync(finalImagePrompt, modelToUse, userApiKey, currentState.aspectRatio);
-                        promptToSend = normalized.normalized;
-                        console.log('[ImageGen] ✅ Translated:', normalized.normalized.substring(0, 100) + '...');
-                    } else {
-                        // No API key, use sync fallback (basic, may not translate well)
-                        const normalized = normalizePrompt(finalImagePrompt, modelToUse, currentState.aspectRatio);
-                        promptToSend = normalized.normalized;
-                    }
+            if (hasVietnamese) {
+                // Vietnamese detected + model doesn't support it → need translation
+                // Use async AI translation for proper Vietnamese → English
+                if (userApiKey) {
+                    console.log('[ImageGen] 🌐 Vietnamese detected, translating for', modelToUse);
+                    const normalized = await normalizePromptAsync(finalImagePrompt, modelToUse, userApiKey, currentState.aspectRatio);
+                    promptToSend = normalized.normalized;
+                    console.log('[ImageGen] ✅ Translated:', normalized.normalized.substring(0, 100) + '...');
                 } else {
-                    // No Vietnamese - prompt is already English, skip translation
-                    console.log('[ImageGen] 🔵 Prompt already English, skip translation');
-                    // promptToSend is already set to finalImagePrompt
+                    // No API key, use sync fallback (basic, may not translate well)
+                    const normalized = normalizePrompt(finalImagePrompt, modelToUse, currentState.aspectRatio);
+                    promptToSend = normalized.normalized;
                 }
             } else {
-                // Gemini native - Vietnamese supported, use full prompt
-                console.log('[ImageGen] 🔵 Gemini prompt ready:', finalImagePrompt.length, 'chars');
+                // No Vietnamese - prompt is already English, skip translation
+                console.log('[ImageGen] 🔵 Prompt already English, skip translation');
+                // promptToSend is already set to finalImagePrompt
             }
+        } else {
+            // Gemini native - Vietnamese supported, use full prompt
+            console.log('[ImageGen] 🔵 Gemini prompt ready:', finalImagePrompt.length, 'chars');
+        }
 
-            // Record prompt in DOP Learning System - NON-BLOCKING (fire and forget)
-            // This was causing 10-20s delay because generateEmbedding calls Gemini API
-            let dopRecordId: string | null = null;
-            const capturedSceneId = sceneId; // Capture for async callback
-            if (userId && userApiKey) {
-                // Fire and forget - don't await, don't block image generation
-                recordPrompt(
-                    userId,
-                    finalImagePrompt,
-                    promptToSend,
-                    modelToUse,
-                    'scene',
-                    currentState.aspectRatio,
-                    userApiKey
-                ).then(id => {
-                    if (id) {
-                        console.log('[ImageGen] ✅ DOP recorded (async):', id);
-                        // Store globally for fallback
-                        (window as any).__lastDopRecordId = id;
-
-                        // Update scene with dopRecordId so rating buttons work
-                        updateStateAndRecord(s => ({
-                            ...s,
-                            scenes: s.scenes.map(sc => sc.id === capturedSceneId ? {
-                                ...sc,
-                                dopRecordId: id
-                            } : sc)
-                        }));
-                        console.log('[ImageGen] 📊 Scene updated with dopRecordId for rating');
-                    }
-                }).catch(e => {
-                    console.error('[ImageGen] ❌ DOP recording failed (async):', e);
-                });
-
-                console.log('[ImageGen] 🔄 DOP recording started (non-blocking)');
-            } else {
-                console.warn('[ImageGen] ⚠️ DOP skipped - missing userId:', !!userId, 'or apiKey:', !!userApiKey);
-            }
-
-            // --- LOG REFERENCE SUMMARY TO DOP CHAT (right before generation) ---
-            // refImageCount already declared above at line 1007
-            if (addProductionLog && refImageCount > 0) {
-                addProductionLog('dop', `📷 Using ${refImageCount} reference image(s) for generation`, 'info', 'ref_summary');
-
-                // Log character names if any
-                if (sceneToUpdate.characterIds && sceneToUpdate.characterIds.length > 0) {
-                    const allCharacters = currentState.characters || [];
-                    const charNames = sceneToUpdate.characterIds
-                        .map((cid: string) => allCharacters.find((c: any) => c.id === cid)?.name || 'Unknown')
-                        .filter((n: string) => n !== 'Unknown')
-                        .join(', ');
-                    if (charNames) {
-                        addProductionLog('dop', `👤 Characters: ${charNames}`, 'info', 'char_summary');
-                    }
-                }
-            }
-
-            // TIMING: Start API call
-            const apiStartTime = Date.now();
-
-            const { imageUrl: rawImageUrl, mediaId } = await callAIImageAPI(
+        // Record prompt in DOP Learning System - NON-BLOCKING (fire and forget)
+        // This was causing 10-20s delay because generateEmbedding calls Gemini API
+        let dopRecordId: string | null = null;
+        const capturedSceneId = sceneId; // Capture for async callback
+        if (userId && userApiKey) {
+            // Fire and forget - don't await, don't block image generation
+            recordPrompt(
+                userId,
+                finalImagePrompt,
                 promptToSend,
-                userApiKey,
                 modelToUse,
+                'scene',
                 currentState.aspectRatio,
-                isHighRes ? parts : [],
-                currentState.resolution || '1K',
-                { domain: currentState.gommoDomain || '', accessToken: currentState.gommoAccessToken || '' }
-            );
+                userApiKey
+            ).then(id => {
+                if (id) {
+                    console.log('[ImageGen] ✅ DOP recorded (async):', id);
+                    // Store globally for fallback
+                    (window as any).__lastDopRecordId = id;
 
-            let imageUrl = rawImageUrl;
-            let variants: string[] = [];
-
-            // [MJ FIX] Detect Midjourney grid and split into 4 images
-            if (isGridModel(modelToUse) && rawImageUrl.startsWith('data:image')) {
-                try {
-                    console.log('[ImageGen] 🧩 Midjourney grid detected, splitting...');
-                    variants = await splitImageGrid(rawImageUrl);
-                    if (variants.length === 4) {
-                        imageUrl = variants[0]; // Use first one as default
-                        console.log('[ImageGen] ✅ Grid split successful. Using variant 1.');
-                    }
-                } catch (e) {
-                    console.error('[ImageGen] ❌ Failed to split Midjourney grid:', e);
+                    // Update scene with dopRecordId so rating buttons work
+                    updateStateAndRecord(s => ({
+                        ...s,
+                        scenes: s.scenes.map(sc => sc.id === capturedSceneId ? {
+                            ...sc,
+                            dopRecordId: id
+                        } : sc)
+                    }));
+                    console.log('[ImageGen] 📊 Scene updated with dopRecordId for rating');
                 }
-            }
-
-            // TIMING: Log API call duration
-            const apiTime = Date.now() - apiStartTime;
-            const totalTime = Date.now() - startTime;
-            console.log(`[ImageGen] ⏱️ API call: ${apiTime}ms | TOTAL: ${totalTime}ms`);
-
-            // Calculate estimated prompt tokens (rough: ~4 chars per token)
-            const estimatedTokens = Math.ceil(promptToSend.length / 4);
-            console.log(`[ImageGen] 📊 Stats: Provider=${promptProvider}, EstTokens=${estimatedTokens}, Prompt=${promptToSend.length} chars`);
-
-            // Auto-approve in DOP Learning if generation succeeded (NON-BLOCKING)
-            // DISABLED: Only learn from explicit user rating/keeping.
-            // If we auto-approve everything, we learn garbage.
-            /* 
-            if (dopRecordId && imageUrl) {
-                // Fire and forget - don't block on DOP approval
-                approvePrompt(dopRecordId, {
-                    overall: 0.8, // Assume good quality if generation succeeded
-                    match: 0.8
-                }).then(() => {
-                    console.log('[ImageGen] ✅ DOP approved (async):', dopRecordId);
-                }).catch(e => {
-                    console.warn('[ImageGen] DOP approval failed (async):', e);
-                });
-            }
-            */
-
-            updateStateAndRecord(s => {
-                const duration = Date.now() - startTime;
-                const resolutionKey = (currentState.resolution || '1K') as '1K' | '2K' | '4K';
-                const currentStats = s.usageStats || { '1K': 0, '2K': 0, '4K': 0, total: 0 };
-                const newCount = (currentStats[resolutionKey] || 0) + 1;
-
-                const updatedStats = {
-                    ...currentStats,
-                    [resolutionKey]: newCount,
-                    total: (currentStats.total || 0) + 1,
-                    scenes: (currentStats.scenes || 0) + 1,
-                    // Provider breakdown
-                    geminiImages: (currentStats.geminiImages || 0) + (promptProvider === 'gemini' ? 1 : 0),
-                    gommoImages: (currentStats.gommoImages || 0) + (promptProvider === 'gommo' ? 1 : 0),
-                    estimatedPromptTokens: (currentStats.estimatedPromptTokens || 0) + estimatedTokens,
-                    lastGeneratedAt: new Date().toISOString()
-                };
-
-                // Sync to Supabase if userId is present
-                if (userId) {
-                    syncUserStatsToCloud(userId, updatedStats);
-
-                    // Track in GLOBAL stats (persists across projects)
-                    incrementGlobalStats(userId, {
-                        images: 1,
-                        scenes: 1,
-                        gemini: promptProvider === 'gemini' ? 1 : 0,
-                        gommo: promptProvider === 'gommo' ? 1 : 0,
-                        resolution1K: resolutionKey === '1K' ? 1 : 0,
-                        resolution2K: resolutionKey === '2K' ? 1 : 0,
-                        resolution4K: resolutionKey === '4K' ? 1 : 0,
-                    });
-
-                    // Record image to history
-                    recordGeneratedImage(userId, {
-                        projectId: currentState.projectName || 'unknown',
-                        imageUrl: imageUrl,
-                        generationType: 'scene',
-                        sceneId: sceneId,
-                        prompt: promptToSend,
-                        modelId: modelToUse,
-                        modelType: promptProvider,
-                        aspectRatio: currentState.aspectRatio,
-                        resolution: resolutionKey,
-                    });
-                }
-
-                return {
-                    ...s,
-                    totalGenerationTime: (s.totalGenerationTime || 0) + duration,
-                    scenes: s.scenes.map(sc => sc.id === sceneId ? {
-                        ...sc,
-                        generationDuration: duration,
-                        generationStartTime: undefined,
-                        ...(fromManual ? { endFrameImage: imageUrl } : { generatedImage: imageUrl }),
-                        generatedByModel: currentState.imageModel, // Track which model generated this
-                        mediaId: fromManual ? sc.mediaId : (mediaId || sc.mediaId),
-                        isGenerating: false,
-                        error: null,
-                        // Store all 4 variants in editHistory for easy swapping
-                        editHistory: variants.length > 0 ? [
-                            ... (sc.editHistory || []),
-                            ...variants.map((v, idx) => ({
-                                id: `variant_${Date.now()}_${idx}`,
-                                image: v,
-                                prompt: `Midjourney Variant ${idx + 1}: ${finalImagePrompt}`
-                            }))
-                        ] : sc.editHistory,
-                        // Use local dopRecordId or fallback to global (async DOP recording updates global)
-                        dopRecordId: dopRecordId || (window as any).__lastDopRecordId || sc.dopRecordId
-                    } : sc),
-                    usageStats: updatedStats
-                };
+            }).catch(e => {
+                console.error('[ImageGen] ❌ DOP recording failed (async):', e);
             });
 
-            // Add to session gallery
-            if (addToGallery) {
-                if (variants.length > 0) {
-                    // Add all variants to gallery so user can pick
-                    variants.forEach((v, idx) => {
-                        addToGallery(v, fromManual ? 'end-frame' : 'scene', `[Variant ${idx + 1}] ${finalImagePrompt}`, sceneId);
-                    });
-                } else {
-                    addToGallery(imageUrl, fromManual ? 'end-frame' : 'scene', finalImagePrompt, sceneId);
+            console.log('[ImageGen] 🔄 DOP recording started (non-blocking)');
+        } else {
+            console.warn('[ImageGen] ⚠️ DOP skipped - missing userId:', !!userId, 'or apiKey:', !!userApiKey);
+        }
+
+        // --- LOG REFERENCE SUMMARY TO DOP CHAT (right before generation) ---
+        // refImageCount already declared above at line 1007
+        if (addProductionLog && refImageCount > 0) {
+            addProductionLog('dop', `📷 Using ${refImageCount} reference image(s) for generation`, 'info', 'ref_summary');
+
+            // Log character names if any
+            if (sceneToUpdate.characterIds && sceneToUpdate.characterIds.length > 0) {
+                const allCharacters = currentState.characters || [];
+                const charNames = sceneToUpdate.characterIds
+                    .map((cid: string) => allCharacters.find((c: any) => c.id === cid)?.name || 'Unknown')
+                    .filter((n: string) => n !== 'Unknown')
+                    .join(', ');
+                if (charNames) {
+                    addProductionLog('dop', `👤 Characters: ${charNames}`, 'info', 'char_summary');
                 }
             }
+        }
 
-        } catch (error: any) {
-            console.error("Image generation failed:", error);
+        // TIMING: Start API call
+        const apiStartTime = Date.now();
 
-            // [Fix] STOP batch if we hit a rate limit, fatal credential error, or auth failure
-            const errorMessage = error.message || "";
-            const errorLower = errorMessage.toLowerCase();
+        const { imageUrl: rawImageUrl, mediaId } = await callAIImageAPI(
+            promptToSend,
+            userApiKey,
+            modelToUse,
+            currentState.aspectRatio,
+            isHighRes ? parts : [],
+            currentState.resolution || '1K',
+            { domain: currentState.gommoDomain || '', accessToken: currentState.gommoAccessToken || '' }
+        );
 
-            const isRateLimit = errorMessage.includes("429") ||
-                errorLower.includes("quota") ||
-                errorLower.includes("exhausted") ||
-                errorLower.includes("limit");
+        let imageUrl = rawImageUrl;
+        let variants: string[] = [];
 
-            const isFatalAuth = errorLower.includes("api key") ||
-                errorLower.includes("credentials") ||
-                errorLower.includes("invalid") ||
-                errorLower.includes("not found") ||
-                errorLower.includes("permission");
+        // [MJ FIX] Detect Midjourney grid and split into 4 images
+        if (isGridModel(modelToUse) && rawImageUrl.startsWith('data:image')) {
+            try {
+                console.log('[ImageGen] 🧩 Midjourney grid detected, splitting...');
+                variants = await splitImageGrid(rawImageUrl);
+                if (variants.length === 4) {
+                    imageUrl = variants[0]; // Use first one as default
+                    console.log('[ImageGen] ✅ Grid split successful. Using variant 1.');
+                }
+            } catch (e) {
+                console.error('[ImageGen] ❌ Failed to split Midjourney grid:', e);
+            }
+        }
 
-            const isGommoError = errorLower.includes("gommo error");
+        // TIMING: Log API call duration
+        const apiTime = Date.now() - apiStartTime;
+        const totalTime = Date.now() - startTime;
+        console.log(`[ImageGen] ⏱️ API call: ${apiTime}ms | TOTAL: ${totalTime}ms`);
 
-            if (isRateLimit || isFatalAuth || isGommoError) {
-                console.warn("[ImageGen] 🛑 Fatal API or Auth error detected. Stopping batch generation.");
-                stopRef.current = true;
-                setIsStopping(true);
+        // Calculate estimated prompt tokens (rough: ~4 chars per token)
+        const estimatedTokens = Math.ceil(promptToSend.length / 4);
+        console.log(`[ImageGen] 📊 Stats: Provider=${promptProvider}, EstTokens=${estimatedTokens}, Prompt=${promptToSend.length} chars`);
+
+        // Auto-approve in DOP Learning if generation succeeded (NON-BLOCKING)
+        // DISABLED: Only learn from explicit user rating/keeping.
+        // If we auto-approve everything, we learn garbage.
+        /* 
+        if (dopRecordId && imageUrl) {
+            // Fire and forget - don't block on DOP approval
+            approvePrompt(dopRecordId, {
+                overall: 0.8, // Assume good quality if generation succeeded
+                match: 0.8
+            }).then(() => {
+                console.log('[ImageGen] ✅ DOP approved (async):', dopRecordId);
+            }).catch(e => {
+                console.warn('[ImageGen] DOP approval failed (async):', e);
+            });
+        }
+        */
+
+        updateStateAndRecord(s => {
+            const duration = Date.now() - startTime;
+            const resolutionKey = (currentState.resolution || '1K') as '1K' | '2K' | '4K';
+            const currentStats = s.usageStats || { '1K': 0, '2K': 0, '4K': 0, total: 0 };
+            const newCount = (currentStats[resolutionKey] || 0) + 1;
+
+            const updatedStats = {
+                ...currentStats,
+                [resolutionKey]: newCount,
+                total: (currentStats.total || 0) + 1,
+                scenes: (currentStats.scenes || 0) + 1,
+                // Provider breakdown
+                geminiImages: (currentStats.geminiImages || 0) + (promptProvider === 'gemini' ? 1 : 0),
+                gommoImages: (currentStats.gommoImages || 0) + (promptProvider === 'gommo' ? 1 : 0),
+                estimatedPromptTokens: (currentStats.estimatedPromptTokens || 0) + estimatedTokens,
+                lastGeneratedAt: new Date().toISOString()
+            };
+
+            // Sync to Supabase if userId is present
+            if (userId) {
+                syncUserStatsToCloud(userId, updatedStats);
+
+                // Track in GLOBAL stats (persists across projects)
+                incrementGlobalStats(userId, {
+                    images: 1,
+                    scenes: 1,
+                    gemini: promptProvider === 'gemini' ? 1 : 0,
+                    gommo: promptProvider === 'gommo' ? 1 : 0,
+                    resolution1K: resolutionKey === '1K' ? 1 : 0,
+                    resolution2K: resolutionKey === '2K' ? 1 : 0,
+                    resolution4K: resolutionKey === '4K' ? 1 : 0,
+                });
+
+                // Record image to history
+                recordGeneratedImage(userId, {
+                    projectId: currentState.projectName || 'unknown',
+                    imageUrl: imageUrl,
+                    generationType: 'scene',
+                    sceneId: sceneId,
+                    prompt: promptToSend,
+                    modelId: modelToUse,
+                    modelType: promptProvider,
+                    aspectRatio: currentState.aspectRatio,
+                    resolution: resolutionKey,
+                });
             }
 
-            updateStateAndRecord(s => ({
+            return {
                 ...s,
+                totalGenerationTime: (s.totalGenerationTime || 0) + duration,
                 scenes: s.scenes.map(sc => sc.id === sceneId ? {
                     ...sc,
-                    isGenerating: false,
+                    generationDuration: duration,
                     generationStartTime: undefined,
-                    error: isRateLimit ? "Tạm thời hết hạn mức (Rate Limit). Vui lòng thử lại sau hoặc đổi API Key." : (error as Error).message
-                } : sc)
-            }));
-        }
-    }, [stateRef, userApiKey, updateStateAndRecord, setApiKeyModalOpen, userId]);
+                    ...(fromManual ? { endFrameImage: imageUrl } : { generatedImage: imageUrl }),
+                    generatedByModel: currentState.imageModel, // Track which model generated this
+                    mediaId: fromManual ? sc.mediaId : (mediaId || sc.mediaId),
+                    isGenerating: false,
+                    error: null,
+                    // Store all 4 variants in editHistory for easy swapping
+                    editHistory: variants.length > 0 ? [
+                        ... (sc.editHistory || []),
+                        ...variants.map((v, idx) => ({
+                            id: `variant_${Date.now()}_${idx}`,
+                            image: v,
+                            prompt: `Midjourney Variant ${idx + 1}: ${finalImagePrompt}`
+                        }))
+                    ] : sc.editHistory,
+                    // Use local dopRecordId or fallback to global (async DOP recording updates global)
+                    dopRecordId: dopRecordId || (window as any).__lastDopRecordId || sc.dopRecordId
+                } : sc),
+                usageStats: updatedStats
+            };
+        });
 
-    const generateGroupConcept = useCallback(async (groupName: string, groupDescription: string, styleOverride?: string, customStyleOverride?: string) => {
-        const currentState = stateRef.current;
-        const apiKey = userApiKey || (process.env as any).API_KEY;
-
-        if (!apiKey) {
-            setApiKeyModalOpen(true);
-            return null;
-        }
-
-        try {
-            let styleInstruction = '';
-            const effectiveStylePrompt = styleOverride || currentState.stylePrompt;
-            const effectiveCustomStyle = styleOverride ? customStyleOverride : currentState.customStyleInstruction;
-
-            if (effectiveStylePrompt === 'custom') {
-                styleInstruction = effectiveCustomStyle || '';
+        // Add to session gallery
+        if (addToGallery) {
+            if (variants.length > 0) {
+                // Add all variants to gallery so user can pick
+                variants.forEach((v, idx) => {
+                    addToGallery(v, fromManual ? 'end-frame' : 'scene', `[Variant ${idx + 1}] ${finalImagePrompt}`, sceneId);
+                });
             } else {
-                const selectedStyle = GLOBAL_STYLES.find(s => s.value === effectiveStylePrompt);
-                styleInstruction = selectedStyle ? selectedStyle.prompt : '';
+                addToGallery(imageUrl, fromManual ? 'end-frame' : 'scene', finalImagePrompt, sceneId);
             }
+        }
 
-            const activePreset = getPresetById(currentState.activeScriptPreset, currentState.customScriptPresets);
-            const metaTokens = currentState.customMetaTokens || DEFAULT_META_TOKENS[activePreset?.category || 'custom'] || DEFAULT_META_TOKENS['custom'];
+    } catch (error: any) {
+        console.error("Image generation failed:", error);
 
-            // Enhanced concept art prompt with specific artistic keywords
-            const conceptPrompt = `PROFESSIONAL ENVIRONMENT CONCEPT ART: Location "${groupName}". 
+        // [Fix] STOP batch if we hit a rate limit, fatal credential error, or auth failure
+        const errorMessage = error.message || "";
+        const errorLower = errorMessage.toLowerCase();
+
+        const isRateLimit = errorMessage.includes("429") ||
+            errorLower.includes("quota") ||
+            errorLower.includes("exhausted") ||
+            errorLower.includes("limit");
+
+        const isFatalAuth = errorLower.includes("api key") ||
+            errorLower.includes("credentials") ||
+            errorLower.includes("invalid") ||
+            errorLower.includes("not found") ||
+            errorLower.includes("permission");
+
+        const isGommoError = errorLower.includes("gommo error");
+
+        if (isRateLimit || isFatalAuth || isGommoError) {
+            console.warn("[ImageGen] 🛑 Fatal API or Auth error detected. Stopping batch generation.");
+            stopRef.current = true;
+            setIsStopping(true);
+        }
+
+        updateStateAndRecord(s => ({
+            ...s,
+            scenes: s.scenes.map(sc => sc.id === sceneId ? {
+                ...sc,
+                isGenerating: false,
+                generationStartTime: undefined,
+                error: isRateLimit ? "Tạm thời hết hạn mức (Rate Limit). Vui lòng thử lại sau hoặc đổi API Key." : (error as Error).message
+            } : sc)
+        }));
+    }
+}, [stateRef, userApiKey, updateStateAndRecord, setApiKeyModalOpen, userId]);
+
+const generateGroupConcept = useCallback(async (groupName: string, groupDescription: string, styleOverride?: string, customStyleOverride?: string) => {
+    const currentState = stateRef.current;
+    const apiKey = userApiKey || (process.env as any).API_KEY;
+
+    if (!apiKey) {
+        setApiKeyModalOpen(true);
+        return null;
+    }
+
+    try {
+        let styleInstruction = '';
+        const effectiveStylePrompt = styleOverride || currentState.stylePrompt;
+        const effectiveCustomStyle = styleOverride ? customStyleOverride : currentState.customStyleInstruction;
+
+        if (effectiveStylePrompt === 'custom') {
+            styleInstruction = effectiveCustomStyle || '';
+        } else {
+            const selectedStyle = GLOBAL_STYLES.find(s => s.value === effectiveStylePrompt);
+            styleInstruction = selectedStyle ? selectedStyle.prompt : '';
+        }
+
+        const activePreset = getPresetById(currentState.activeScriptPreset, currentState.customScriptPresets);
+        const metaTokens = currentState.customMetaTokens || DEFAULT_META_TOKENS[activePreset?.category || 'custom'] || DEFAULT_META_TOKENS['custom'];
+
+        // Enhanced concept art prompt with specific artistic keywords
+        const conceptPrompt = `PROFESSIONAL ENVIRONMENT CONCEPT ART: Location "${groupName}". 
             DESCRIPTION: ${groupDescription}. 
             STYLE: ${styleInstruction} ${metaTokens}. 
             COMPOSITION: Master shot, architectural visualization, cinematic wide angle, high-level set design, matte painting, Unreal Engine 5 render style. 
             MANDATORY: Focus on spatial layout, atmospheric lighting, and materials (wood, stone, metal). 
             !!! ABSOLUTELY NO PEOPLE, NO HUMANS, NO CHARACTERS, NO FACES !!! focus purely on the empty world and set design.`.trim();
 
-            const { imageUrl } = await callAIImageAPI(
-                conceptPrompt,
-                userApiKey,
-                currentState.imageModel || 'gemini-3-pro-image-preview',
-                currentState.aspectRatio,
-                [], // No parts for concept art
-                currentState.resolution || '1K',
-                { domain: currentState.gommoDomain || '', accessToken: currentState.gommoAccessToken || '' }
-            );
+        const { imageUrl } = await callAIImageAPI(
+            conceptPrompt,
+            userApiKey,
+            currentState.imageModel || 'gemini-3-pro-image-preview',
+            currentState.aspectRatio,
+            [], // No parts for concept art
+            currentState.resolution || '1K',
+            { domain: currentState.gommoDomain || '', accessToken: currentState.gommoAccessToken || '' }
+        );
 
-            if (imageUrl) {
-                // Increment Usage Stats
-                updateStateAndRecord(s => {
-                    const resolutionKey = (currentState.resolution || '1K') as '1K' | '2K' | '4K';
-                    const currentStats = s.usageStats || { '1K': 0, '2K': 0, '4K': 0, total: 0 };
+        if (imageUrl) {
+            // Increment Usage Stats
+            updateStateAndRecord(s => {
+                const resolutionKey = (currentState.resolution || '1K') as '1K' | '2K' | '4K';
+                const currentStats = s.usageStats || { '1K': 0, '2K': 0, '4K': 0, total: 0 };
 
-                    const updatedStats = {
-                        ...currentStats,
-                        [resolutionKey]: (currentStats[resolutionKey] || 0) + 1,
-                        total: (currentStats.total || 0) + 1,
-                        concepts: (currentStats.concepts || 0) + 1,
-                        lastGeneratedAt: new Date().toISOString()
-                    };
+                const updatedStats = {
+                    ...currentStats,
+                    [resolutionKey]: (currentStats[resolutionKey] || 0) + 1,
+                    total: (currentStats.total || 0) + 1,
+                    concepts: (currentStats.concepts || 0) + 1,
+                    lastGeneratedAt: new Date().toISOString()
+                };
 
-                    if (userId) {
-                        syncUserStatsToCloud(userId, updatedStats);
-                    }
+                if (userId) {
+                    syncUserStatsToCloud(userId, updatedStats);
+                }
 
-                    return {
+                return {
+                    ...s,
+                    usageStats: updatedStats
+                };
+            });
+
+            if (addToGallery) {
+                addToGallery(imageUrl, 'concept', conceptPrompt, groupName);
+            }
+        }
+
+        return imageUrl;
+    } catch (error) {
+        console.error("Concept generation failed:", error);
+        return null;
+    }
+}, [stateRef, userApiKey, setApiKeyModalOpen, userId]);
+
+// specificSceneIds: Optional list of specific IDs to regenerate
+// referenceMap: Optional mapping of sceneId -> sourceImageURL for DNA syncing
+// baseImageMap: Optional mapping of sceneId -> baseImageURL for Img2Img editing from a specific source
+const handleGenerateAllImages = useCallback(async (specificSceneIds?: string[], referenceMap?: { [key: string]: string }, baseImageMap?: { [key: string]: string }) => {
+    console.log('[BatchGen] handleGenerateAllImages called', { specificSceneIds, hasReferenceMap: !!referenceMap, hasBaseImageMap: !!baseImageMap });
+
+    const allScenesToGenerate = specificSceneIds
+        ? stateRef.current.scenes.filter(s => specificSceneIds.includes(s.id))
+        : stateRef.current.scenes.filter(s => !s.generatedImage && s.contextDescription);
+
+    // Generation Lock: Filter out scenes that are already being generated
+    const scenesToGenerate = allScenesToGenerate.filter(scene => {
+        if (generatingSceneIdsRef.current.has(scene.id)) {
+            console.warn(`[BatchGen] ⏸️ Scene ${scene.sceneNumber} (${scene.id}) already generating, skipping duplicate request`);
+            return false;
+        }
+        return true;
+    });
+
+    // Mark all scenes as generating
+    scenesToGenerate.forEach(scene => generatingSceneIdsRef.current.add(scene.id));
+
+    console.log('[BatchGen] Scenes to generate:', scenesToGenerate.length, '(filtered from', allScenesToGenerate.length, ')');
+
+    if (scenesToGenerate.length === 0) {
+        console.log('[BatchGen] No scenes to generate (all duplicates or empty), returning');
+        return; // Don't show alert if we filtered out duplicates
+    }
+
+    // PRE-WARM CACHE: Load all character/product reference images upfront
+    // This significantly speeds up first image generation
+    const currentState = stateRef.current;
+    const allRefImages: string[] = [];
+
+    // Collect character images
+    currentState.characters.forEach(char => {
+        if (char.masterImage) allRefImages.push(char.masterImage);
+        if (char.faceImage) allRefImages.push(char.faceImage);
+        if (char.bodyImage && char.bodyImage !== char.masterImage) allRefImages.push(char.bodyImage);
+    });
+
+    // Collect product images
+    currentState.products.forEach(prod => {
+        if (prod.image) allRefImages.push(prod.image);
+    });
+
+    // Collect custom style and DNA images
+    if (currentState.customStyleImage) allRefImages.push(currentState.customStyleImage);
+
+    // Collect group concept images
+    currentState.sceneGroups?.forEach(g => {
+        if (g.conceptImage) allRefImages.push(g.conceptImage);
+    });
+
+    // Pre-warm in background (don't await, just start loading)
+    if (allRefImages.length > 0) {
+        console.log(`[BatchGen] 🔥 Pre-warming cache with ${allRefImages.length} reference images...`);
+        preWarmImageCache(allRefImages).then(count => {
+            console.log(`[BatchGen] ✅ Cache pre-warmed: ${count} images ready`);
+        });
+    }
+
+    setIsBatchGenerating(true);
+    setIsStopping(false);
+    stopRef.current = false;
+
+    console.log('[BatchGen] Starting batch generation...');
+    const batchStartTime = Date.now();
+    setAgentState('director', 'thinking', 'Đang lập kế hoạch sản xuất cho các phân cảnh...');
+    setAgentState('dop', 'idle', '');
+
+    try {
+        // KEY FRAME STRATEGY: Generate Key Frames FIRST within each group
+        // This ensures hero shots are available as references for other scenes
+        const sortedScenes = [...scenesToGenerate].sort((a, b) => {
+            // Key frames first
+            if (a.isKeyFrame && !b.isKeyFrame) return -1;
+            if (!a.isKeyFrame && b.isKeyFrame) return 1;
+            // Then by scene number
+            return parseInt(a.sceneNumber) - parseInt(b.sceneNumber);
+        });
+
+        const keyFrameCount = sortedScenes.filter(s => s.isKeyFrame).length;
+        if (keyFrameCount > 0) {
+            console.log(`[BatchGen] ⭐ Key Frame Strategy: ${keyFrameCount} key frames will be generated first`);
+        }
+
+        for (let i = 0; i < sortedScenes.length; i++) {
+            const scene = sortedScenes[i];
+            if (stopRef.current) break;
+
+            setAgentState('director', 'speaking', `Đang chỉ đạo Phân cảnh ${scene.sceneNumber}...`);
+
+            // STORYBOARD MODE: Find cascade reference from same group for visual consistency
+            const cascadeRef = findCascadeReference(scene, stateRef.current);
+
+            // Check if this scene has a specific DNA reference image (from Reference Map OR Scene Attributes)
+            // Priority: explicit referenceMap > scene.referenceImage > cascadeReference
+            const dnaReference = (referenceMap && referenceMap[scene.id]) || scene.referenceImage || cascadeRef || undefined;
+
+            // Check if scene ALREADY has an image -> Treat as Base Image for Editing
+            // PRIORITIZE explicitly passed baseImageMap
+            const existingBaseImage = (baseImageMap && baseImageMap[scene.id]) || scene.generatedImage || undefined;
+
+            const result = await performImageGeneration(scene.id, undefined, false, dnaReference, existingBaseImage);
+
+            if (result === 'critical_error') {
+                console.warn(`[BatchGen] ⚠️ CRITICAL DOP ERROR in Scene ${scene.sceneNumber}. Marking as unfixable but CONTINUING batch.`);
+                // We do NOT break here anymore, per user request.
+                // The scene is already marked as error in state by performImageGeneration.
+            }
+
+            setAgentState('director', 'success', `Đã xử lý xong Phân cảnh ${scene.sceneNumber}.`);
+
+
+            // Get the newly generated image
+            const updatedState = stateRef.current;
+            const updatedScene = updatedState.scenes.find(s => s.id === scene.id);
+            const currentImage = updatedScene?.generatedImage;
+
+            // DOP Vision Validation - Re-enabled for raccord checking
+            // Validates visual continuity with previous scene
+            // User toggle: isDOPEnabled from state
+            if (isDOPEnabled && validateRaccordWithVision && currentImage && userApiKey) {
+                const currentSceneIndex = updatedState.scenes.findIndex(s => s.id === scene.id);
+                const prevScene = currentSceneIndex > 0 ? updatedState.scenes[currentSceneIndex - 1] : null;
+
+                if (prevScene?.generatedImage) {
+                    setAgentState('dop', 'thinking', 'Đang kiểm tra tính nhất quán (Raccord) với cảnh trước...');
+                    console.log('[DOP] Validating raccord between scenes...');
+
+
+                    // [DOP UI FEEDBACK] Show validation in progress
+                    updateStateAndRecord(s => ({
                         ...s,
-                        usageStats: updatedStats
-                    };
-                });
+                        scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                            ...sc,
+                            error: '🎬 DOP đang kiểm tra...'
+                        } : sc)
+                    }));
 
-                if (addToGallery) {
-                    addToGallery(imageUrl, 'concept', conceptPrompt, groupName);
-                }
-            }
+                    // Max 1 retry: If still wrong, show error message for user review
+                    let MAX_DOP_RETRIES = 1;
+                    let retryCount = 0;
+                    let lastValidation = await validateRaccordWithVision(
+                        currentImage,
+                        prevScene.generatedImage,
+                        updatedScene!,
+                        prevScene,
+                        userApiKey
+                    );
 
-            return imageUrl;
-        } catch (error) {
-            console.error("Concept generation failed:", error);
-            return null;
-        }
-    }, [stateRef, userApiKey, setApiKeyModalOpen, userId]);
+                    // DEBUG: Log full validation result
+                    console.log('[DOP] Validation result:', {
+                        isValid: lastValidation.isValid,
+                        errorCount: lastValidation.errors?.length || 0,
+                        errors: lastValidation.errors,
+                        decision: lastValidation.decision
+                    });
 
-    // specificSceneIds: Optional list of specific IDs to regenerate
-    // referenceMap: Optional mapping of sceneId -> sourceImageURL for DNA syncing
-    // baseImageMap: Optional mapping of sceneId -> baseImageURL for Img2Img editing from a specific source
-    const handleGenerateAllImages = useCallback(async (specificSceneIds?: string[], referenceMap?: { [key: string]: string }, baseImageMap?: { [key: string]: string }) => {
-        console.log('[BatchGen] handleGenerateAllImages called', { specificSceneIds, hasReferenceMap: !!referenceMap, hasBaseImageMap: !!baseImageMap });
+                    // Filter for critical errors (warrant regen)
+                    // character: face/identity wrong
+                    // prop: items missing/wrong
+                    // spatial: background/environment wrong
+                    const criticalErrors = lastValidation.errors.filter(e =>
+                        e.type === 'character' || e.type === 'prop' || e.type === 'spatial'
+                    );
 
-        const allScenesToGenerate = specificSceneIds
-            ? stateRef.current.scenes.filter(s => specificSceneIds.includes(s.id))
-            : stateRef.current.scenes.filter(s => !s.generatedImage && s.contextDescription);
+                    console.log('[DOP] Critical errors:', criticalErrors.length, criticalErrors);
 
-        // Generation Lock: Filter out scenes that are already being generated
-        const scenesToGenerate = allScenesToGenerate.filter(scene => {
-            if (generatingSceneIdsRef.current.has(scene.id)) {
-                console.warn(`[BatchGen] ⏸️ Scene ${scene.sceneNumber} (${scene.id}) already generating, skipping duplicate request`);
-                return false;
-            }
-            return true;
-        });
-
-        // Mark all scenes as generating
-        scenesToGenerate.forEach(scene => generatingSceneIdsRef.current.add(scene.id));
-
-        console.log('[BatchGen] Scenes to generate:', scenesToGenerate.length, '(filtered from', allScenesToGenerate.length, ')');
-
-        if (scenesToGenerate.length === 0) {
-            console.log('[BatchGen] No scenes to generate (all duplicates or empty), returning');
-            return; // Don't show alert if we filtered out duplicates
-        }
-
-        // PRE-WARM CACHE: Load all character/product reference images upfront
-        // This significantly speeds up first image generation
-        const currentState = stateRef.current;
-        const allRefImages: string[] = [];
-
-        // Collect character images
-        currentState.characters.forEach(char => {
-            if (char.masterImage) allRefImages.push(char.masterImage);
-            if (char.faceImage) allRefImages.push(char.faceImage);
-            if (char.bodyImage && char.bodyImage !== char.masterImage) allRefImages.push(char.bodyImage);
-        });
-
-        // Collect product images
-        currentState.products.forEach(prod => {
-            if (prod.image) allRefImages.push(prod.image);
-        });
-
-        // Collect custom style and DNA images
-        if (currentState.customStyleImage) allRefImages.push(currentState.customStyleImage);
-
-        // Collect group concept images
-        currentState.sceneGroups?.forEach(g => {
-            if (g.conceptImage) allRefImages.push(g.conceptImage);
-        });
-
-        // Pre-warm in background (don't await, just start loading)
-        if (allRefImages.length > 0) {
-            console.log(`[BatchGen] 🔥 Pre-warming cache with ${allRefImages.length} reference images...`);
-            preWarmImageCache(allRefImages).then(count => {
-                console.log(`[BatchGen] ✅ Cache pre-warmed: ${count} images ready`);
-            });
-        }
-
-        setIsBatchGenerating(true);
-        setIsStopping(false);
-        stopRef.current = false;
-
-        console.log('[BatchGen] Starting batch generation...');
-        const batchStartTime = Date.now();
-        setAgentState('director', 'thinking', 'Đang lập kế hoạch sản xuất cho các phân cảnh...');
-        setAgentState('dop', 'idle', '');
-
-        try {
-            // KEY FRAME STRATEGY: Generate Key Frames FIRST within each group
-            // This ensures hero shots are available as references for other scenes
-            const sortedScenes = [...scenesToGenerate].sort((a, b) => {
-                // Key frames first
-                if (a.isKeyFrame && !b.isKeyFrame) return -1;
-                if (!a.isKeyFrame && b.isKeyFrame) return 1;
-                // Then by scene number
-                return parseInt(a.sceneNumber) - parseInt(b.sceneNumber);
-            });
-
-            const keyFrameCount = sortedScenes.filter(s => s.isKeyFrame).length;
-            if (keyFrameCount > 0) {
-                console.log(`[BatchGen] ⭐ Key Frame Strategy: ${keyFrameCount} key frames will be generated first`);
-            }
-
-            for (let i = 0; i < sortedScenes.length; i++) {
-                const scene = sortedScenes[i];
-                if (stopRef.current) break;
-
-                setAgentState('director', 'speaking', `Đang chỉ đạo Phân cảnh ${scene.sceneNumber}...`);
-
-                // STORYBOARD MODE: Find cascade reference from same group for visual consistency
-                const cascadeRef = findCascadeReference(scene, stateRef.current);
-
-                // Check if this scene has a specific DNA reference image (from Reference Map OR Scene Attributes)
-                // Priority: explicit referenceMap > scene.referenceImage > cascadeReference
-                const dnaReference = (referenceMap && referenceMap[scene.id]) || scene.referenceImage || cascadeRef || undefined;
-
-                // Check if scene ALREADY has an image -> Treat as Base Image for Editing
-                // PRIORITIZE explicitly passed baseImageMap
-                const existingBaseImage = (baseImageMap && baseImageMap[scene.id]) || scene.generatedImage || undefined;
-
-                const result = await performImageGeneration(scene.id, undefined, false, dnaReference, existingBaseImage);
-
-                if (result === 'critical_error') {
-                    console.warn(`[BatchGen] ⚠️ CRITICAL DOP ERROR in Scene ${scene.sceneNumber}. Marking as unfixable but CONTINUING batch.`);
-                    // We do NOT break here anymore, per user request.
-                    // The scene is already marked as error in state by performImageGeneration.
-                }
-
-                setAgentState('director', 'success', `Đã xử lý xong Phân cảnh ${scene.sceneNumber}.`);
-
-
-                // Get the newly generated image
-                const updatedState = stateRef.current;
-                const updatedScene = updatedState.scenes.find(s => s.id === scene.id);
-                const currentImage = updatedScene?.generatedImage;
-
-                // DOP Vision Validation - Re-enabled for raccord checking
-                // Validates visual continuity with previous scene
-                // User toggle: isDOPEnabled from state
-                if (isDOPEnabled && validateRaccordWithVision && currentImage && userApiKey) {
-                    const currentSceneIndex = updatedState.scenes.findIndex(s => s.id === scene.id);
-                    const prevScene = currentSceneIndex > 0 ? updatedState.scenes[currentSceneIndex - 1] : null;
-
-                    if (prevScene?.generatedImage) {
-                        setAgentState('dop', 'thinking', 'Đang kiểm tra tính nhất quán (Raccord) với cảnh trước...');
-                        console.log('[DOP] Validating raccord between scenes...');
-
-
-                        // [DOP UI FEEDBACK] Show validation in progress
+                    // FIX: If validation passed OR no critical errors, clear the checking status immediately
+                    if (lastValidation.isValid || criticalErrors.length === 0) {
                         updateStateAndRecord(s => ({
                             ...s,
                             scenes: s.scenes.map(sc => sc.id === scene.id ? {
                                 ...sc,
-                                error: '🎬 DOP đang kiểm tra...'
+                                error: lastValidation.isValid ? null : `ℹ️ Minor issues (non-critical): ${lastValidation.errors.map(e => e.description).join('; ')}`
                             } : sc)
                         }));
 
-                        // Max 1 retry: If still wrong, show error message for user review
-                        let MAX_DOP_RETRIES = 1;
-                        let retryCount = 0;
-                        let lastValidation = await validateRaccordWithVision(
-                            currentImage,
-                            prevScene.generatedImage,
-                            updatedScene!,
-                            prevScene,
-                            userApiKey
-                        );
+                        if (lastValidation.isValid) {
+                            console.log('[DOP] Raccord validation PASSED - clearing status');
+                            setAgentState('dop', 'success', `Cảnh ${scene.sceneNumber} khớp raccord hoàn hảo!`);
+                        } else {
+                            console.log('[DOP] Only minor issues found - continuing without retry');
+                            setAgentState('dop', 'idle', '');
+                        }
+                    }
 
-                        // DEBUG: Log full validation result
-                        console.log('[DOP] Validation result:', {
-                            isValid: lastValidation.isValid,
-                            errorCount: lastValidation.errors?.length || 0,
-                            errors: lastValidation.errors,
-                            decision: lastValidation.decision
-                        });
+                    // Use Decision Agent if available, otherwise use simple retry logic
+                    if (!lastValidation.isValid && criticalErrors.length > 0) {
+                        console.log(`[DOP] RACCORD ERROR DETECTED:`, criticalErrors);
 
-                        // Filter for critical errors (warrant regen)
-                        // character: face/identity wrong
-                        // prop: items missing/wrong
-                        // spatial: background/environment wrong
-                        const criticalErrors = lastValidation.errors.filter(e =>
-                            e.type === 'character' || e.type === 'prop' || e.type === 'spatial'
-                        );
+                        // Get original prompt for decision agent
+                        const originalPrompt = updatedScene?.contextDescription || '';
 
-                        console.log('[DOP] Critical errors:', criticalErrors.length, criticalErrors);
+                        // Ask Decision Agent if we should retry
+                        let shouldRetry = true;
+                        let enhancedCorrection = lastValidation.correctionPrompt;
 
-                        // FIX: If validation passed OR no critical errors, clear the checking status immediately
-                        if (lastValidation.isValid || criticalErrors.length === 0) {
+                        if (makeRetryDecision && currentImage) {
+                            setAgentState('dop', 'speaking', 'Phát hiện lỗi Raccord! Đang phân tích khả năng sửa đổi...');
+                            console.log('[DOP Agent] Analyzing if retry will succeed...');
+
+
+                            // [DOP UI FEEDBACK] Show decision agent thinking
                             updateStateAndRecord(s => ({
                                 ...s,
                                 scenes: s.scenes.map(sc => sc.id === scene.id ? {
                                     ...sc,
-                                    error: lastValidation.isValid ? null : `ℹ️ Minor issues (non-critical): ${lastValidation.errors.map(e => e.description).join('; ')}`
+                                    error: '🧠 DOP Agent đang phân tích lỗi...'
                                 } : sc)
                             }));
 
-                            if (lastValidation.isValid) {
-                                console.log('[DOP] Raccord validation PASSED - clearing status');
-                                setAgentState('dop', 'success', `Cảnh ${scene.sceneNumber} khớp raccord hoàn hảo!`);
-                            } else {
-                                console.log('[DOP] Only minor issues found - continuing without retry');
-                                setAgentState('dop', 'idle', '');
-                            }
-                        }
+                            const decision = await makeRetryDecision(
+                                currentImage,
+                                prevScene.generatedImage,
+                                originalPrompt,
+                                criticalErrors,
+                                userApiKey
+                            );
 
-                        // Use Decision Agent if available, otherwise use simple retry logic
-                        if (!lastValidation.isValid && criticalErrors.length > 0) {
-                            console.log(`[DOP] RACCORD ERROR DETECTED:`, criticalErrors);
+                            console.log('[DOP Agent] Decision:', decision);
 
-                            // Get original prompt for decision agent
-                            const originalPrompt = updatedScene?.contextDescription || '';
+                            // ALWAYS TRY ONCE before giving up
+                            // Decision Agent now only affects enhancement prompt, not skip decision
+                            if (decision.action === 'skip' && retryCount === 0) {
+                                console.log('[DOP Agent] Would skip, but forcing 1 retry first');
+                                // Still try once with enhanced correction
+                                if (decision.enhancedPrompt) {
+                                    enhancedCorrection = decision.enhancedPrompt;
+                                }
+                                // Mark that this is a "last chance" retry
+                                MAX_DOP_RETRIES = 1;
+                            } else if (decision.action === 'skip' && retryCount >= 1) {
+                                // Already retried once, now truly skip
+                                console.log('[DOP Agent] SKIP after 1 retry - errors are unfixable');
+                                shouldRetry = false;
 
-                            // Ask Decision Agent if we should retry
-                            let shouldRetry = true;
-                            let enhancedCorrection = lastValidation.correctionPrompt;
+                                // FIX: Clear checking status and show clear unfixable message
+                                const unfixableMsg = decision.reason.includes('face') || decision.reason.includes('identity')
+                                    ? `🚫 UNFIXABLE: Nhân vật khác (AI không thể sửa - cần chọn reference khác)`
+                                    : `⚠️ DOP: Đã retry 1 lần nhưng vẫn lỗi - ${decision.reason}`;
 
-                            if (makeRetryDecision && currentImage) {
-                                setAgentState('dop', 'speaking', 'Phát hiện lỗi Raccord! Đang phân tích khả năng sửa đổi...');
-                                console.log('[DOP Agent] Analyzing if retry will succeed...');
-
-
-                                // [DOP UI FEEDBACK] Show decision agent thinking
                                 updateStateAndRecord(s => ({
                                     ...s,
                                     scenes: s.scenes.map(sc => sc.id === scene.id ? {
                                         ...sc,
-                                        error: '🧠 DOP Agent đang phân tích lỗi...'
+                                        error: unfixableMsg,
+                                        dopFailed: true
                                     } : sc)
                                 }));
 
-                                const decision = await makeRetryDecision(
-                                    currentImage,
+                                setAgentState('dop', 'error', 'Lỗi không thể sửa sau 1 retry');
+                                if (addProductionLog) {
+                                    addProductionLog('dop', unfixableMsg, 'warning');
+                                }
+                            } else if (decision.action === 'try_once') {
+                                MAX_DOP_RETRIES = 1;
+                                if (decision.enhancedPrompt) {
+                                    enhancedCorrection = decision.enhancedPrompt;
+                                }
+                            } else if (decision.enhancedPrompt) {
+                                enhancedCorrection = decision.enhancedPrompt;
+                            }
+                        }
+
+                        // Only retry if Decision Agent approves
+                        while (shouldRetry && !lastValidation.isValid && retryCount < MAX_DOP_RETRIES) {
+                            // [Fix] Check stop signal inside retry loop
+                            if (stopRef.current) {
+                                console.log('[DOP] Batch stopped during retry.');
+                                break;
+                            }
+
+                            console.log(`[DOP] Retrying with enhanced correction (attempt ${retryCount + 1}/${MAX_DOP_RETRIES})`);
+
+                            // Clear the bad image and regenerate with correction
+                            updateStateAndRecord(s => ({
+                                ...s,
+                                scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                    ...sc,
+                                    generatedImage: null,
+                                    error: `DOP Retry ${retryCount + 1}: ${lastValidation.errors.filter(e => e.type === 'character' || e.type === 'prop').map(e => e.description).join('; ')}`
+                                } : sc)
+                            }));
+
+                            // Wait a bit then regenerate with enhanced correction prompt
+                            await new Promise(r => setTimeout(r, 500));
+
+                            console.log('[DOP] Auto-regenerating with correction:', enhancedCorrection);
+
+                            // Construct Negative Prompt based on specific errors
+                            const negativeConstraints: string[] = [];
+                            let retryBoost = '';
+
+                            lastValidation.errors.forEach(e => {
+                                const desc = e.description.toLowerCase();
+                                if (e.type === 'character' || desc.includes('face') || desc.includes('person')) {
+                                    negativeConstraints.push('wrong person', 'different face', 'extra people', 'ugly face', 'distorted face');
+                                    // STRONG IDENTITY FIX
+                                    retryBoost += ' !!! CRITICAL IDENTITY LOCK !!! Match the EXACT face from Face ID reference. Copy facial bone structure, eye shape, nose, mouth PRECISELY. Do NOT create a new person. ';
+                                }
+                                if (e.type === 'prop' || desc.includes('missing')) {
+                                    negativeConstraints.push('missing object', 'floating objects', 'bad hands', 'mutated');
+                                    retryBoost += ' Ensure ALL props from the scene are VISIBLE and correctly positioned. ';
+                                }
+                                if (e.type === 'lighting') {
+                                    negativeConstraints.push('bad lighting', 'wrong exposure', 'dark image');
+                                }
+                                if (e.type === 'spatial' || desc.includes('scale') || desc.includes('perspective') || desc.includes('floating')) {
+                                    negativeConstraints.push('same background', 'floating furniture', 'double exposure', 'collage', 'surreal', 'bad perspective');
+                                }
+                                if (desc.includes('static background') || desc.includes('identical') || desc.includes('wallpaper')) {
+                                    negativeConstraints.push('static background', 'identical composition', 'same pixels', 'exact match', 'repetitive');
+                                    // JITTER FIX: Force camera movement
+                                    retryBoost += ' (CAMERA MOVEMENT: Shift angle slightly! Dynamic perspective change! Do not reuse exact background pixels!) ';
+                                }
+                                if (desc.includes('outfit') || desc.includes('clothing') || desc.includes('costume')) {
+                                    retryBoost += ' OUTFIT LOCK: Character MUST wear the EXACT same clothes as in the reference. Copy colors, patterns, accessories. ';
+                                }
+                            });
+
+                            const negativePrompt = negativeConstraints.length > 0
+                                ? `(${[...new Set(negativeConstraints)].join(', ')})`
+                                : undefined;
+
+                            // Construct enhanced retry prompt with corrections
+                            const retryPrompt = `${retryBoost}${enhancedCorrection || ''}`.trim() || undefined;
+
+                            console.log('[DOP] Retry with identity boost:', retryBoost.substring(0, 100));
+
+                            // Pass previous scene image as reference for continuity
+                            await performImageGeneration(scene.id, retryPrompt, false, prevScene.generatedImage, undefined, negativePrompt);
+
+                            // Re-validate
+                            const reUpdatedState = stateRef.current;
+                            const reUpdatedScene = reUpdatedState.scenes.find(s => s.id === scene.id);
+                            const newImage = reUpdatedScene?.generatedImage;
+
+                            if (newImage) {
+                                lastValidation = await validateRaccordWithVision(
+                                    newImage,
                                     prevScene.generatedImage,
-                                    originalPrompt,
-                                    criticalErrors,
+                                    reUpdatedScene!,
+                                    prevScene,
                                     userApiKey
                                 );
 
-                                console.log('[DOP Agent] Decision:', decision);
+                                // [Fix] Re-evaluate critical errors to determine if we should continue retrying
+                                const currentCriticalErrors = lastValidation.errors.filter(e =>
+                                    e.type === 'character' || e.type === 'prop'
+                                );
 
-                                // ALWAYS TRY ONCE before giving up
-                                // Decision Agent now only affects enhancement prompt, not skip decision
-                                if (decision.action === 'skip' && retryCount === 0) {
-                                    console.log('[DOP Agent] Would skip, but forcing 1 retry first');
-                                    // Still try once with enhanced correction
-                                    if (decision.enhancedPrompt) {
-                                        enhancedCorrection = decision.enhancedPrompt;
-                                    }
-                                    // Mark that this is a "last chance" retry
-                                    MAX_DOP_RETRIES = 1;
-                                } else if (decision.action === 'skip' && retryCount >= 1) {
-                                    // Already retried once, now truly skip
-                                    console.log('[DOP Agent] SKIP after 1 retry - errors are unfixable');
-                                    shouldRetry = false;
-
-                                    // FIX: Clear checking status and show clear unfixable message
-                                    const unfixableMsg = decision.reason.includes('face') || decision.reason.includes('identity')
-                                        ? `🚫 UNFIXABLE: Nhân vật khác (AI không thể sửa - cần chọn reference khác)`
-                                        : `⚠️ DOP: Đã retry 1 lần nhưng vẫn lỗi - ${decision.reason}`;
-
-                                    updateStateAndRecord(s => ({
-                                        ...s,
-                                        scenes: s.scenes.map(sc => sc.id === scene.id ? {
-                                            ...sc,
-                                            error: unfixableMsg,
-                                            dopFailed: true
-                                        } : sc)
-                                    }));
-
-                                    setAgentState('dop', 'error', 'Lỗi không thể sửa sau 1 retry');
-                                    if (addProductionLog) {
-                                        addProductionLog('dop', unfixableMsg, 'warning');
-                                    }
-                                } else if (decision.action === 'try_once') {
-                                    MAX_DOP_RETRIES = 1;
-                                    if (decision.enhancedPrompt) {
-                                        enhancedCorrection = decision.enhancedPrompt;
-                                    }
-                                } else if (decision.enhancedPrompt) {
-                                    enhancedCorrection = decision.enhancedPrompt;
-                                }
-                            }
-
-                            // Only retry if Decision Agent approves
-                            while (shouldRetry && !lastValidation.isValid && retryCount < MAX_DOP_RETRIES) {
-                                // [Fix] Check stop signal inside retry loop
-                                if (stopRef.current) {
-                                    console.log('[DOP] Batch stopped during retry.');
+                                // If no critical errors remain (only minor ones), stop retrying
+                                if (currentCriticalErrors.length === 0) {
+                                    console.log('[DOP] Critical errors resolved. Stopping retries.');
                                     break;
                                 }
-
-                                console.log(`[DOP] Retrying with enhanced correction (attempt ${retryCount + 1}/${MAX_DOP_RETRIES})`);
-
-                                // Clear the bad image and regenerate with correction
-                                updateStateAndRecord(s => ({
-                                    ...s,
-                                    scenes: s.scenes.map(sc => sc.id === scene.id ? {
-                                        ...sc,
-                                        generatedImage: null,
-                                        error: `DOP Retry ${retryCount + 1}: ${lastValidation.errors.filter(e => e.type === 'character' || e.type === 'prop').map(e => e.description).join('; ')}`
-                                    } : sc)
-                                }));
-
-                                // Wait a bit then regenerate with enhanced correction prompt
-                                await new Promise(r => setTimeout(r, 500));
-
-                                console.log('[DOP] Auto-regenerating with correction:', enhancedCorrection);
-
-                                // Construct Negative Prompt based on specific errors
-                                const negativeConstraints: string[] = [];
-                                let retryBoost = '';
-
-                                lastValidation.errors.forEach(e => {
-                                    const desc = e.description.toLowerCase();
-                                    if (e.type === 'character' || desc.includes('face') || desc.includes('person')) {
-                                        negativeConstraints.push('wrong person', 'different face', 'extra people', 'ugly face', 'distorted face');
-                                        // STRONG IDENTITY FIX
-                                        retryBoost += ' !!! CRITICAL IDENTITY LOCK !!! Match the EXACT face from Face ID reference. Copy facial bone structure, eye shape, nose, mouth PRECISELY. Do NOT create a new person. ';
-                                    }
-                                    if (e.type === 'prop' || desc.includes('missing')) {
-                                        negativeConstraints.push('missing object', 'floating objects', 'bad hands', 'mutated');
-                                        retryBoost += ' Ensure ALL props from the scene are VISIBLE and correctly positioned. ';
-                                    }
-                                    if (e.type === 'lighting') {
-                                        negativeConstraints.push('bad lighting', 'wrong exposure', 'dark image');
-                                    }
-                                    if (e.type === 'spatial' || desc.includes('scale') || desc.includes('perspective') || desc.includes('floating')) {
-                                        negativeConstraints.push('same background', 'floating furniture', 'double exposure', 'collage', 'surreal', 'bad perspective');
-                                    }
-                                    if (desc.includes('static background') || desc.includes('identical') || desc.includes('wallpaper')) {
-                                        negativeConstraints.push('static background', 'identical composition', 'same pixels', 'exact match', 'repetitive');
-                                        // JITTER FIX: Force camera movement
-                                        retryBoost += ' (CAMERA MOVEMENT: Shift angle slightly! Dynamic perspective change! Do not reuse exact background pixels!) ';
-                                    }
-                                    if (desc.includes('outfit') || desc.includes('clothing') || desc.includes('costume')) {
-                                        retryBoost += ' OUTFIT LOCK: Character MUST wear the EXACT same clothes as in the reference. Copy colors, patterns, accessories. ';
-                                    }
-                                });
-
-                                const negativePrompt = negativeConstraints.length > 0
-                                    ? `(${[...new Set(negativeConstraints)].join(', ')})`
-                                    : undefined;
-
-                                // Construct enhanced retry prompt with corrections
-                                const retryPrompt = `${retryBoost}${enhancedCorrection || ''}`.trim() || undefined;
-
-                                console.log('[DOP] Retry with identity boost:', retryBoost.substring(0, 100));
-
-                                // Pass previous scene image as reference for continuity
-                                await performImageGeneration(scene.id, retryPrompt, false, prevScene.generatedImage, undefined, negativePrompt);
-
-                                // Re-validate
-                                const reUpdatedState = stateRef.current;
-                                const reUpdatedScene = reUpdatedState.scenes.find(s => s.id === scene.id);
-                                const newImage = reUpdatedScene?.generatedImage;
-
-                                if (newImage) {
-                                    lastValidation = await validateRaccordWithVision(
-                                        newImage,
-                                        prevScene.generatedImage,
-                                        reUpdatedScene!,
-                                        prevScene,
-                                        userApiKey
-                                    );
-
-                                    // [Fix] Re-evaluate critical errors to determine if we should continue retrying
-                                    const currentCriticalErrors = lastValidation.errors.filter(e =>
-                                        e.type === 'character' || e.type === 'prop'
-                                    );
-
-                                    // If no critical errors remain (only minor ones), stop retrying
-                                    if (currentCriticalErrors.length === 0) {
-                                        console.log('[DOP] Critical errors resolved. Stopping retries.');
-                                        break;
-                                    }
-                                } else {
-                                    // If generation failed (no image), stick with previous validation result or break
-                                    console.warn('[DOP] Retry generation failed to produce image.');
-                                    break;
-                                }
-
-                                retryCount++;
+                            } else {
+                                // If generation failed (no image), stick with previous validation result or break
+                                console.warn('[DOP] Retry generation failed to produce image.');
+                                break;
                             }
+
+                            retryCount++;
                         }
-
-                        if (retryCount >= MAX_DOP_RETRIES && !lastValidation.isValid) {
-                            console.warn('[DOP] Max retries reached. Marking scene as FAILED but CONTINUING batch.');
-                            if (addProductionLog) {
-                                addProductionLog('dop', `⚠️ Cảnh ${scene.sceneNumber} lỗi raccord - đã bỏ qua. Tiếp tục cảnh tiếp theo.`, 'warning');
-                            }
-
-                            // Mark scene as failed with clear error message
-                            updateStateAndRecord(s => ({
-                                ...s,
-                                scenes: s.scenes.map(sc => sc.id === scene.id ? {
-                                    ...sc,
-                                    // Keep the generated image but mark as needs review
-                                    error: `⚠️ DOP FAILED: ${lastValidation.errors.map(e => e.description).join('; ')} - Cần review thủ công`,
-                                    dopFailed: true // Flag for next scene to skip this as reference
-                                } : sc)
-                            }));
-
-                            setAgentState('dop', 'error', `Cảnh ${scene.sceneNumber} lỗi - tiếp tục cảnh sau`);
-
-                            // DO NOT RETURN - Continue to next scene
-                            // Next scene will check dopFailed flag and use last GOOD scene as reference
-                        } else if (lastValidation.isValid) {
-                            console.log('[DOP] Raccord validation PASSED');
-                            if (addProductionLog) {
-                                addProductionLog('dop', `Cảnh ${scene.sceneNumber} khớp raccord hoàn hảo. Tiếp tục sản xuất.`, 'success');
-                            }
-                            // [DOP UI FEEDBACK] Clear status on success
-                            updateStateAndRecord(s => ({
-                                ...s,
-                                scenes: s.scenes.map(sc => sc.id === scene.id ? {
-                                    ...sc,
-                                    error: null, // Clear the status indicator
-                                    dopFailed: false // This is a GOOD reference for future scenes
-                                } : sc)
-                            }));
-
-                            setAgentState('dop', 'success', `Cảnh ${scene.sceneNumber} khớp raccord hoàn hảo!`);
-                        }
-
                     }
+
+                    if (retryCount >= MAX_DOP_RETRIES && !lastValidation.isValid) {
+                        console.warn('[DOP] Max retries reached. Marking scene as FAILED but CONTINUING batch.');
+                        if (addProductionLog) {
+                            addProductionLog('dop', `⚠️ Cảnh ${scene.sceneNumber} lỗi raccord - đã bỏ qua. Tiếp tục cảnh tiếp theo.`, 'warning');
+                        }
+
+                        // Mark scene as failed with clear error message
+                        updateStateAndRecord(s => ({
+                            ...s,
+                            scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                ...sc,
+                                // Keep the generated image but mark as needs review
+                                error: `⚠️ DOP FAILED: ${lastValidation.errors.map(e => e.description).join('; ')} - Cần review thủ công`,
+                                dopFailed: true // Flag for next scene to skip this as reference
+                            } : sc)
+                        }));
+
+                        setAgentState('dop', 'error', `Cảnh ${scene.sceneNumber} lỗi - tiếp tục cảnh sau`);
+
+                        // DO NOT RETURN - Continue to next scene
+                        // Next scene will check dopFailed flag and use last GOOD scene as reference
+                    } else if (lastValidation.isValid) {
+                        console.log('[DOP] Raccord validation PASSED');
+                        if (addProductionLog) {
+                            addProductionLog('dop', `Cảnh ${scene.sceneNumber} khớp raccord hoàn hảo. Tiếp tục sản xuất.`, 'success');
+                        }
+                        // [DOP UI FEEDBACK] Clear status on success
+                        updateStateAndRecord(s => ({
+                            ...s,
+                            scenes: s.scenes.map(sc => sc.id === scene.id ? {
+                                ...sc,
+                                error: null, // Clear the status indicator
+                                dopFailed: false // This is a GOOD reference for future scenes
+                            } : sc)
+                        }));
+
+                        setAgentState('dop', 'success', `Cảnh ${scene.sceneNumber} khớp raccord hoàn hảo!`);
+                    }
+
                 }
-
-                const imageDelay = state.generationConfig?.imageDelay || 500;
-                await new Promise(r => setTimeout(r, imageDelay));
             }
-        } catch (e) {
-            console.error('[BatchGen] Generation interrupted:', e);
-            setAgentState('director', 'error', 'Có lỗi xảy ra khi tạo ảnh.');
-        } finally {
-            // Generation Lock Cleanup: Remove all scene IDs that were being generated
-            scenesToGenerate.forEach(scene => generatingSceneIdsRef.current.delete(scene.id));
-            console.log('[BatchGen] Cleaned up generation lock for', scenesToGenerate.length, 'scenes');
 
-            setIsBatchGenerating(false);
-            setIsStopping(false);
-            setAgentState('dop', 'idle', '');
-
-            if (!stopRef.current) {
-                const batchDuration = Date.now() - batchStartTime;
-                const seconds = Math.floor(batchDuration / 1000);
-                const timeStr = seconds > 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
-
-                setAgentState('director', 'success', `Đã hoàn thành! Tổng thời gian: ${timeStr}`);
-                if (addProductionLog) {
-                    addProductionLog('director', `Production hoàn tất. Thời gian thực thi: ${timeStr}`, 'success');
-                }
-            } else {
-                setAgentState('director', 'idle', 'Đã dừng production.');
-            }
+            const imageDelay = state.generationConfig?.imageDelay || 500;
+            await new Promise(r => setTimeout(r, imageDelay));
         }
-    }, [state.scenes, performImageGeneration, isDOPEnabled, validateRaccordWithVision, makeRetryDecision, userApiKey, stateRef, updateStateAndRecord, setAgentState]);
+    } catch (e) {
+        console.error('[BatchGen] Generation interrupted:', e);
+        setAgentState('director', 'error', 'Có lỗi xảy ra khi tạo ảnh.');
+    } finally {
+        // Generation Lock Cleanup: Remove all scene IDs that were being generated
+        scenesToGenerate.forEach(scene => generatingSceneIdsRef.current.delete(scene.id));
+        console.log('[BatchGen] Cleaned up generation lock for', scenesToGenerate.length, 'scenes');
+
+        setIsBatchGenerating(false);
+        setIsStopping(false);
+        setAgentState('dop', 'idle', '');
+
+        if (!stopRef.current) {
+            const batchDuration = Date.now() - batchStartTime;
+            const seconds = Math.floor(batchDuration / 1000);
+            const timeStr = seconds > 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
+
+            setAgentState('director', 'success', `Đã hoàn thành! Tổng thời gian: ${timeStr}`);
+            if (addProductionLog) {
+                addProductionLog('director', `Production hoàn tất. Thời gian thực thi: ${timeStr}`, 'success');
+            }
+        } else {
+            setAgentState('director', 'idle', 'Đã dừng production.');
+        }
+    }
+}, [state.scenes, performImageGeneration, isDOPEnabled, validateRaccordWithVision, makeRetryDecision, userApiKey, stateRef, updateStateAndRecord, setAgentState]);
 
 
-    return {
-        isBatchGenerating,
-        isStopping,
-        performImageGeneration,
-        generateGroupConcept,
-        handleGenerateAllImages,
-        stopBatchGeneration
-    };
+return {
+    isBatchGenerating,
+    isStopping,
+    performImageGeneration,
+    generateGroupConcept,
+    handleGenerateAllImages,
+    stopBatchGeneration
+};
 }

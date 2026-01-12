@@ -502,6 +502,17 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                                         <QualityRating
                                             dopRecordId={scene.dopRecordId}
                                             className="mt-2 bg-black/60 px-2 py-1 rounded-full"
+                                            onRetry={(reason, note, allReasons) => {
+                                                console.log('[SceneRow] 🔧 Smart Retry Triggered:', reason, note);
+                                                // Call generateImage but pass the retry context
+                                                // We need to extend generateImage signature in parent or handle it here
+                                                // Since generateImage prop is () => void, we might need to cast or updated Props
+                                                // For now, let's assume the parent app will update the prop signature or we pass it as custom event
+
+                                                // Hack: Type assertion to call generateImage with arguments if the prop allows it at runtime
+                                                // Ideally, we should update SceneRowProps.generateImage to accept optional args
+                                                (generateImage as any)(undefined, undefined, false, undefined, undefined, undefined, { reason, userNote: note });
+                                            }}
                                         />
                                     </div>
                                 </div>

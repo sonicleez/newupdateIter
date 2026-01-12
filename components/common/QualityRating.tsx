@@ -105,7 +105,15 @@ export function QualityRating({
             }
             setRated('bad');
             setShowRejectMenu(false);
-            onRate?.('bad', selectedReasons);
+
+            // Trigger parent callback
+            if (autoRetry && onRetry && selectedReasons.length > 0) {
+                // Use first reason as primary cause for correction
+                onRetry(selectedReasons[0], retryNote, selectedReasons);
+            } else {
+                onRate?.('bad', selectedReasons);
+            }
+
         } catch (e) {
             console.error('[QualityRating] Reject failed:', e);
         } finally {
@@ -189,7 +197,7 @@ export function QualityRating({
                             // Position relative to containerRef
                             ...(containerRef.current ? (() => {
                                 const rect = containerRef.current.getBoundingClientRect();
-                                const popupHeight = 380; // Approximate popup height
+                                const popupHeight = 520; // Increased height for text area
                                 const popupWidth = 320;
 
                                 // Prefer positioning ABOVE the button
@@ -220,7 +228,7 @@ export function QualityRating({
                         <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-700 bg-gradient-to-r from-red-900/40 to-orange-900/30">
                             <span className="text-sm font-bold text-white flex items-center gap-2">
                                 <AlertTriangle size={16} className="text-red-400" />
-                                Chọn lý do lỗi
+                                Báo lỗi & Sửa (Beta)
                             </span>
                             <button
                                 onClick={() => setShowRejectMenu(false)}
@@ -231,7 +239,7 @@ export function QualityRating({
                         </div>
 
                         {/* Options Grid - Compact */}
-                        <div className="p-2 grid grid-cols-2 gap-1.5">
+                        <div className="p-2 grid grid-cols-2 gap-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
                             {REJECTION_OPTIONS.map(opt => {
                                 const isSelected = selectedReasons.includes(opt.value);
                                 return (
@@ -251,26 +259,42 @@ export function QualityRating({
                             })}
                         </div>
 
+                        {/* NEW: Smart Retry Options */}
+                        <div className="px-3 py-2 bg-gray-800/30 border-t border-gray-700 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={autoRetry}
+                                        onChange={(e) => setAutoRetry(e.target.checked)}
+                                        className="w-3.5 h-3.5 rounded border-gray-600 bg-gray-700 checked:bg-green-500"
+                                    />
+                                    <span className="text-xs text-gray-300 font-medium">Auto-fix & Retry</span>
+                                </label>
+                                {autoRetry && <span className="text-[10px] text-green-400 font-bold animate-pulse">Smart Mode ON</span>}
+                            </div>
+
+                            {autoRetry && (
+                                <textarea
+                                    value={retryNote}
+                                    onChange={(e) => setRetryNote(e.target.value)}
+                                    placeholder="Ghi chú thêm cho AI sửa lỗi (VD: 'Góc nhìn phải từ trên cao xuống')..."
+                                    className="w-full bg-gray-950 border border-gray-700 rounded p-2 text-xs text-white h-16 resize-none focus:border-green-500 focus:outline-none"
+                                />
+                            )}
+                        </div>
+
                         {/* Footer */}
                         <div className="px-2 py-2 border-t border-gray-700 flex gap-2 bg-gray-800/50">
                             <button
                                 onClick={handleReject}
                                 disabled={selectedReasons.length === 0 || isRating}
-                                className={`flex-1 px-3 py-2 rounded-lg font-bold text-xs transition-all ${selectedReasons.length > 0
-                                    ? 'bg-red-600 hover:bg-red-500 text-white'
+                                className={`flex-1 px-3 py-2 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${selectedReasons.length > 0
+                                    ? (autoRetry ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white')
                                     : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                                     }`}
                             >
-                                {isRating ? '⏳' : `Báo lỗi (${selectedReasons.length})`}
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setSelectedReasons([]);
-                                    setShowRejectMenu(false);
-                                }}
-                                className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs transition-colors"
-                            >
-                                Hủy
+                                {isRating ? 'Working...' : (autoRetry ? '🔧 Báo Lỗi & Sửa Ngay' : 'Chỉ Báo Lỗi')}
                             </button>
                         </div>
                     </div>
