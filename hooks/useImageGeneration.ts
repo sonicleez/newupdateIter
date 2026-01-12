@@ -20,6 +20,7 @@ import { validateRaccord as validateRaccordWithVision, formatValidationResult } 
 import type { RaccordValidationResult } from '../utils/dopRaccordValidator';
 import { isGridModel, splitImageGrid } from '../utils/imageUtils';
 import { RetryContext, getCorrectionPrompt } from '../utils/dopCorrections';
+import { loadDirectorMemory, saveDirectorMemory, recordGeneration as recordDirectorGeneration } from '../utils/directorBrain';
 // Helper function to clean VEO-specific tokens from prompt for image generation
 const cleanPromptForImageGen = (prompt: string): string => {
     return prompt
@@ -1678,6 +1679,33 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 } else {
                     addToGallery(imageUrl, fromManual ? 'end-frame' : 'scene', finalImagePrompt, sceneId);
                 }
+            }
+
+            // === DIRECTOR BRAIN LEARNING ===
+            // Record this generation for the evolving director memory
+            try {
+                const directorMemory = loadDirectorMemory();
+                const activeDirectorId = currentState.activeDirectorId || 'default';
+                const activeDirectorName = (() => {
+                    const allDirectors = Object.values(DIRECTOR_PRESETS).flat();
+                    const customDirectors = currentState.customDirectors || [];
+                    const found = [...allDirectors, ...customDirectors].find(d => d.id === activeDirectorId);
+                    return found?.name || 'Custom';
+                })();
+
+                const updatedMemory = recordDirectorGeneration(
+                    directorMemory,
+                    sceneId,
+                    sceneToUpdate.contextDescription || '',
+                    activeDirectorId,
+                    activeDirectorName,
+                    currentState.globalStylePrompt || '',
+                    currentState.customMetaTokens || ''
+                );
+                saveDirectorMemory(updatedMemory);
+                console.log('[DirectorBrain] 🎬 Recorded generation. Total:', updatedMemory.totalGenerations);
+            } catch (brainErr) {
+                console.warn('[DirectorBrain] Failed to record generation:', brainErr);
             }
 
         } catch (error: any) {

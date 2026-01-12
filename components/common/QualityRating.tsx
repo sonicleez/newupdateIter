@@ -9,11 +9,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ThumbsUp, ThumbsDown, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
 import { approvePrompt, rejectPrompt, RejectReason } from '../../utils/dopLearning';
+import { loadDirectorMemory, saveDirectorMemory, recordLike, recordDislike } from '../../utils/directorBrain';
 
 interface QualityRatingProps {
     dopRecordId?: string;
     onRate?: (rating: 'good' | 'bad', reasons?: RejectReason[]) => void;
     onRetry?: (reason: RejectReason, note: string, allReasons: RejectReason[]) => void;
+    sceneId?: string; // For DirectorBrain learning
     size?: 'sm' | 'md';
     className?: string;
 }
@@ -37,6 +39,7 @@ export function QualityRating({
     dopRecordId,
     onRate,
     onRetry,
+    sceneId, // For DirectorBrain learning
     size = 'sm',
     className = ''
 }: QualityRatingProps) {
@@ -92,6 +95,17 @@ export function QualityRating({
             }
             setRated('good');
             onRate?.('good');
+
+            // DirectorBrain: Record LIKE signal
+            if (sceneId) {
+                try {
+                    const memory = loadDirectorMemory();
+                    const updated = recordLike(memory, sceneId);
+                    saveDirectorMemory(updated);
+                } catch (e) {
+                    console.warn('[DirectorBrain] Failed to record like:', e);
+                }
+            }
         } catch (e) {
             console.error('[QualityRating] Approve failed:', e);
         } finally {
@@ -119,6 +133,17 @@ export function QualityRating({
                 onRetry(selectedReasons[0], userRetryNote, selectedReasons);
             } else {
                 onRate?.('bad', selectedReasons);
+            }
+
+            // DirectorBrain: Record DISLIKE signal
+            if (sceneId) {
+                try {
+                    const memory = loadDirectorMemory();
+                    const updated = recordDislike(memory, sceneId, selectedReasons[0]);
+                    saveDirectorMemory(updated);
+                } catch (e) {
+                    console.warn('[DirectorBrain] Failed to record dislike:', e);
+                }
             }
 
         } catch (e) {

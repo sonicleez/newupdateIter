@@ -501,6 +501,7 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                                     <div onClick={(e) => e.stopPropagation()}>
                                         <QualityRating
                                             dopRecordId={scene.dopRecordId}
+                                            sceneId={scene.id}
                                             className="mt-2 bg-black/60 px-2 py-1 rounded-full"
                                             onRetry={(reason, note, allReasons) => {
                                                 // Pass the rejected image as reference for fixing
