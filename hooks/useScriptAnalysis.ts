@@ -451,6 +451,11 @@ If a sentence contains DRAMATIC content (violence, numbers, key actions), it MUS
 *** DYNAMIC VISUAL INFERENCE ENGINE (METAPHOR SYSTEM) ***
 For every scene, you MUST analyze the Voice Over/Context and assign a [CREATIVE INTENSITY] tag [C1], [C2], or [C3].
 
+*** USER OVERRIDE RULE ***
+If the input script contains explicit tags like [C1], [C2], or [C3], you MUST respect them and override your own analysis.
+- Input: "He stood in the rain [C3]." -> You MUST treat this as METAPHORIC (e.g. focus on raindrops/mood), even if the text looks literal.
+- Input: "The system crashed [C1]." -> You MUST treat this as LITERAL (show a computer screen error), even if the text looks abstract.
+
 [C1] LITERAL (The Witness):
 - Trigger: VO mentions specific physical actions, objects, names, locations.
 - Logic: "Draw exactly what is described."
