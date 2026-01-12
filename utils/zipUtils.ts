@@ -61,11 +61,12 @@ export const handleDownloadAll = async (state: ProjectState) => {
     let fileCount = 0;
 
     // 0. Include Script Text
-    const scriptContent = state.scenes.map(s => `[SCENE ${s.sceneNumber}] ${s.voiceOverText}`).join('\n\n');
+    const scenes = state.scenes || []; // Defensive
+    const scriptContent = scenes.map(s => `[SCENE ${s.sceneNumber}] ${s.voiceOverText}`).join('\n\n');
     docsFolder?.file("script_voiceover.txt", scriptContent);
 
     // 1. SCENE MAP IMAGES
-    const scenePromises = state.scenes.map(async (scene) => {
+    const scenePromises = scenes.map(async (scene) => {
         if (scene.generatedImage) {
             const img = await prepareImageForZip(scene.generatedImage);
             if (img) {
@@ -78,7 +79,8 @@ export const handleDownloadAll = async (state: ProjectState) => {
     });
 
     // 2. ASSETS - Characters
-    const charPromises = state.characters.map(async (c) => {
+    const characters = state.characters || []; // Defensive
+    const charPromises = characters.map(async (c) => {
         const cName = slugify(c.name) || c.id;
         const charImages = [
             { key: 'master', img: c.masterImage },
@@ -101,7 +103,8 @@ export const handleDownloadAll = async (state: ProjectState) => {
     });
 
     // 3. ASSETS - Products
-    const prodPromises = state.products.map(async (p) => {
+    const products = state.products || []; // Defensive
+    const prodPromises = products.map(async (p) => {
         const pName = slugify(p.name) || p.id;
 
         // Master image
@@ -188,18 +191,19 @@ export const saveProjectPackage = async (state: ProjectState) => {
 
         // Manual Clone to avoid JSON.stringify limit (V8 string limit) and ensure safety
         // We only deep-clone the arrays containing images we modify
-        const safeCharacters = state.characters.map(c => ({
+        // DEFENSIVE CODING: Use (array || []) to prevent crashes on legacy projects missing fields
+        const safeCharacters = (state.characters || []).map(c => ({
             ...c,
             props: c.props ? c.props.map(p => ({ ...p })) : []
         }));
 
-        const safeProducts = state.products.map(p => ({
+        const safeProducts = (state.products || []).map(p => ({
             ...p,
             masterImage: p.masterImage,
             views: p.views ? { ...p.views } : undefined
         }));
 
-        const safeScenes = state.scenes.map(s => ({ ...s }));
+        const safeScenes = (state.scenes || []).map(s => ({ ...s }));
 
         const safeGallery = state.assetGallery ? state.assetGallery.map(a => ({ ...a })) : undefined;
 
@@ -288,7 +292,8 @@ export const saveProjectPackage = async (state: ProjectState) => {
         zip.file("project.json", JSON.stringify(safeState, null, 2));
 
         // 7. Save Read-only Script
-        const scriptContent = state.scenes.map(s => `[SCENE ${s.sceneNumber}] ${s.voiceOverText || ''}`).join('\n\n');
+        // Defensive access for script content as well
+        const scriptContent = (state.scenes || []).map(s => `[SCENE ${s.sceneNumber}] ${s.voiceOverText || ''}`).join('\n\n');
         zip.file("script_voiceover.txt", scriptContent);
 
         // Download
