@@ -886,6 +886,7 @@ ${poseOverrides.map((p, i) => `${i + 1}. ${p}`).join('\n')}
                 // ═══════════════════════════════════════════════════════════════
                 finalImagePrompt = `${dopCorrectionPrompt ? `!!! DOP CORRECTION: ${dopCorrectionPrompt} !!! ` : ''}${antiCollagePromptShort} SUBJECT & ACTION: ${coreActionPrompt} ${cleanedContext}. CHARACTERS: ${charPrompt}. ENVIRONMENT: ${groupEnvAnchor} ${timeWeatherLock}. STYLE: ${authoritativeStyle} ${directorDNAPrompt} ${metaTokens}. CAMERA: ${cinematographyPrompt || 'Auto'}.`.trim();
                 console.log('[ImageGen] 🟡 GOMMO prompt (subject-first optimized)');
+            } else {
                 // ═══════════════════════════════════════════════════════════════
                 // GEMINI PROMPT: Context-First Architecture
                 // Structure: [Rules] -> [Visual Core (Who/What/Action)] -> [Where] -> [How (Style/Cam)]
@@ -1479,7 +1480,7 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 }
             } else {
                 // Gemini native - Vietnamese supported, use full prompt
-                console.log('[ImageGen] 🔵 Gemini prompt ready:', finalImagePrompt.length, 'chars');
+                console.log('[ImageGen] 🔵 Gemini prompt ready:', finalImagePrompt?.length || 0, 'chars');
             }
 
             // Record prompt in DOP Learning System - NON-BLOCKING (fire and forget)
