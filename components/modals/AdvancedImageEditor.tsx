@@ -682,35 +682,59 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
 
         if (views.length === 0) return null;
 
+        // Collapsible design - shows as compact icon row in TOP-LEFT, expands on hover
         return (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center bg-black/40 backdrop-blur-xl rounded-2xl border border-white/10 p-2 z-40 shadow-2xl space-x-3 transition-all duration-300 hover:bg-black/60 group/nav">
-                <div className="flex items-center gap-2 px-2 border-r border-white/10 mr-1">
-                    <ImageIcon size={14} className="text-purple-400" />
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Views</span>
-                </div>
-                {views.map((v) => (
-                    <button
-                        key={v.key}
-                        onClick={() => switchView(v.key, v.img)}
-                        disabled={!v.img}
-                        className={`group relative flex flex-col items-center transition-all ${!v.img ? 'opacity-20 cursor-not-allowed grayscale' : 'hover:scale-105'}`}
-                    >
-                        <div className={`w-14 h-14 rounded-xl overflow-hidden border-2 transition-all duration-300 ${currentView === v.key ? 'border-purple-500 scale-110 shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'border-white/5 group-hover:border-white/20'}`}>
-                            {v.img ? (
+            <div className="absolute top-3 left-3 z-40 group/viewnav">
+                {/* Collapsed state - just small icon indicators */}
+                <div className="flex flex-col gap-1 bg-black/50 backdrop-blur-md rounded-xl p-1.5 border border-white/10 transition-all duration-300 group-hover/viewnav:opacity-0 group-hover/viewnav:pointer-events-none">
+                    <div className="flex items-center gap-1">
+                        <ImageIcon size={12} className="text-purple-400" />
+                        <span className="text-[8px] font-bold text-gray-400 uppercase">Views</span>
+                    </div>
+                    <div className="flex gap-0.5">
+                        {views.filter(v => v.img).slice(0, 5).map((v) => (
+                            <div
+                                key={v.key}
+                                className={`w-6 h-6 rounded overflow-hidden border ${currentView === v.key ? 'border-purple-500' : 'border-white/10'}`}
+                            >
                                 <img src={v.img} className="w-full h-full object-cover" alt={v.label} />
-                            ) : (
-                                <div className="w-full h-full bg-gray-900/50 flex items-center justify-center">
-                                    <ImageIcon size={16} className="text-gray-700" />
-                                </div>
-                            )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Expanded state - full view selector on hover */}
+                <div className="absolute top-0 left-0 opacity-0 pointer-events-none group-hover/viewnav:opacity-100 group-hover/viewnav:pointer-events-auto transition-all duration-300">
+                    <div className="flex flex-col bg-black/70 backdrop-blur-xl rounded-2xl border border-white/10 p-3 shadow-2xl min-w-[180px]">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10">
+                            <ImageIcon size={14} className="text-purple-400" />
+                            <span className="text-xs font-black text-white uppercase tracking-wider">Character Views</span>
                         </div>
-                        <div className={`mt-1.5 px-2 py-0.5 rounded-full transition-all ${currentView === v.key ? 'bg-purple-600 text-white' : 'text-gray-500 group-hover:text-gray-300'}`}>
-                            <span className="text-[8px] font-bold uppercase tracking-tighter whitespace-nowrap">
-                                {v.label}
-                            </span>
+                        <div className="grid grid-cols-3 gap-2">
+                            {views.map((v) => (
+                                <button
+                                    key={v.key}
+                                    onClick={() => switchView(v.key, v.img)}
+                                    disabled={!v.img}
+                                    className={`group relative flex flex-col items-center transition-all ${!v.img ? 'opacity-20 cursor-not-allowed grayscale' : 'hover:scale-105'}`}
+                                >
+                                    <div className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all duration-200 ${currentView === v.key ? 'border-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.5)]' : 'border-white/10 group-hover:border-white/30'}`}>
+                                        {v.img ? (
+                                            <img src={v.img} className="w-full h-full object-cover" alt={v.label} />
+                                        ) : (
+                                            <div className="w-full h-full bg-gray-900/50 flex items-center justify-center">
+                                                <ImageIcon size={14} className="text-gray-700" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className={`mt-1 text-[8px] font-bold uppercase ${currentView === v.key ? 'text-purple-400' : 'text-gray-500'}`}>
+                                        {v.label}
+                                    </span>
+                                </button>
+                            ))}
                         </div>
-                    </button>
-                ))}
+                    </div>
+                </div>
             </div>
         );
     };
