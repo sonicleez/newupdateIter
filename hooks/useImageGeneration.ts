@@ -698,7 +698,7 @@ ${poseOverrides.map((p, i) => `${i + 1}. ${p}`).join('\n')}
             // --- 2.5 CONTINUITY ANALYSIS (Action Mapping) ---
             let continuityLinkInstruction = '';
             if (currentSceneIndex > 0 && userApiKey && isContinuityMode) {
-                const prevScene = currentState.scenes[currentSceneIndex - 1];
+                const prevScene = (currentState.scenes || [])[currentSceneIndex - 1];
                 // Only analyze if within same group or logically connected
                 if (prevScene.groupId === sceneToUpdate.groupId) {
                     try {
@@ -726,7 +726,7 @@ ${poseOverrides.map((p, i) => `${i + 1}. ${p}`).join('\n')}
             // Extract character positions/props from previous scene to maintain animation sequence consistency
             let characterStateContinuity = '';
             if (currentSceneIndex > 0) {
-                const prevScene = currentState.scenes[currentSceneIndex - 1];
+                const prevScene = (currentState.scenes || [])[currentSceneIndex - 1];
                 if (prevScene && prevScene.contextDescription) {
                     characterStateContinuity = extractCharacterState(prevScene.contextDescription);
                     if (characterStateContinuity) {
@@ -739,7 +739,7 @@ ${poseOverrides.map((p, i) => `${i + 1}. ${p}`).join('\n')}
             // Ensure same location is maintained when camera angle changes
             let environmentLockPrompt = '';
             if (currentSceneIndex > 0) {
-                const prevScene = currentState.scenes[currentSceneIndex - 1];
+                const prevScene = (currentState.scenes || [])[currentSceneIndex - 1];
                 if (prevScene?.generatedImage && prevScene.groupId === sceneToUpdate.groupId) {
                     environmentLockPrompt = `[ENV LOCK]: SAME location as previous shot. Keep walls/floor/lighting IDENTICAL. Only change camera angle.`;
                     console.log('[ImageGen] 🏠 Environment Lock enabled for same-group scene');
@@ -750,7 +750,7 @@ ${poseOverrides.map((p, i) => `${i + 1}. ${p}`).join('\n')}
             // Auto-compute dynamic camera movement based on shot type changes (ONLY within same group)
             let cameraProgressionPrompt = '';
             if (currentSceneIndex > 0) {
-                const prevScene = currentState.scenes[currentSceneIndex - 1];
+                const prevScene = (currentState.scenes || [])[currentSceneIndex - 1];
                 // Only apply camera progression within SAME GROUP
                 if (prevScene?.groupId === sceneToUpdate.groupId) {
                     const prevShot = (prevScene?.cameraAngleOverride || 'wide').toLowerCase();
@@ -1156,7 +1156,7 @@ DO NOT invent new environments or change the location. This is NOT a different p
                 }
 
                 // FIRST SCENE BACKUP: If no concept image but first scene exists, use it as environment template
-                const firstSceneInGroup = currentState.scenes
+                const firstSceneInGroup = (currentState.scenes || [])
                     .filter(s => s.groupId === sceneToUpdate.groupId && s.generatedImage && s.id !== sceneToUpdate.id)
                     .sort((a, b) => parseInt(a.scene_number) - parseInt(b.scene_number))[0];
 
@@ -1180,7 +1180,7 @@ DO NOT invent new environments or change the location. This is NOT a different p
             let referencePreamble = '';
 
             // Track characters from the previous scene for re-entry logic
-            const prevScene = currentSceneIndex > 0 ? currentState.scenes[currentSceneIndex - 1] : null;
+            const prevScene = currentSceneIndex > 0 ? (currentState.scenes || [])[currentSceneIndex - 1] : null;
             const prevSceneCharIds = prevScene?.characterIds || [];
 
             // STEP 1: Inject ALL Face IDs FIRST (highest priority for identity)
@@ -1289,7 +1289,7 @@ DO NOT generate a different face. DO NOT create a "similar" face. This EXACT fac
             // SKIP dopFailed scenes - use last GOOD scene as reference
             if (isContinuityMode && currentSceneIndex > 0 && !sceneToUpdate.referenceImage) {
                 // Find previous scene that has image AND is not marked as dopFailed
-                const prevSceneWithImage = currentState.scenes
+                const prevSceneWithImage = (currentState.scenes || [])
                     .slice(0, currentSceneIndex)
                     .reverse()
                     .find(s => s.generatedImage && !(s as any).dopFailed);
@@ -1389,7 +1389,7 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
             if (addProductionLog) {
                 // Log previous scene reference
                 if (currentState.scenes && currentState.scenes.length > 0) {
-                    const prevSceneWithImage = currentState.scenes
+                    const prevSceneWithImage = (currentState.scenes || [])
                         .filter((s: any) => s.id !== sceneToUpdate.id && s.generatedImage)
                         .slice(-1)[0];
                     if (prevSceneWithImage) {
