@@ -1388,6 +1388,7 @@ const App: React.FC = () => {
                 onClearChat={() => updateStateAndRecord(s => ({ ...s, productionLogs: [] }))}
                 activeDirectorId={state.activeDirectorId}
                 onDirectorChange={(directorId) => updateStateAndRecord(s => ({ ...s, activeDirectorId: directorId }))}
+                currentSceneContext={state.scenes.find(s => s.isGenerating)?.contextDescription || state.scenes[state.scenes.length - 1]?.contextDescription || ''}
             />
         </div>
     );
