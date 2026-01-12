@@ -1359,10 +1359,27 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
 
                                 <button
                                     onClick={() => { onSave(currentImage, history, currentView); onClose(); }}
-                                    className="h-full px-8 bg-white hover:bg-gray-50 text-black font-black rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center space-x-3 group/save border border-gray-200 min-w-[140px]"
+                                    className="h-full px-6 bg-white hover:bg-gray-50 text-black font-black rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center space-x-2 group/save border border-gray-200"
                                 >
-                                    <Download size={20} className="group-hover/save:translate-y-0.5 transition-transform" />
-                                    <span className="uppercase tracking-widest text-sm text-black">Save</span>
+                                    <span className="uppercase tracking-widest text-sm text-black">💾 Save</span>
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        if (currentImage) {
+                                            const link = document.createElement('a');
+                                            link.href = currentImage;
+                                            link.download = `edited_image_${Date.now()}.png`;
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                        }
+                                    }}
+                                    disabled={!currentImage}
+                                    className="h-full px-6 bg-green-600 hover:bg-green-500 text-white font-black rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center space-x-2 group/dl disabled:opacity-50"
+                                >
+                                    <Download size={18} className="group-hover/dl:translate-y-0.5 transition-transform" />
+                                    <span className="uppercase tracking-widest text-sm">Download</span>
                                 </button>
                             </div>
                         </div>

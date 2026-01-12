@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Brush } from 'lucide-react';
+import { Brush, Download } from 'lucide-react';
 import { Scene } from '../../types';
 
 export interface ImageViewerModalProps {
@@ -105,6 +105,23 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({ isOpen, onCl
                         >
                             <Brush size={16} />
                             Advanced Edit (Layers/Mask)
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (currentScene.generatedImage) {
+                                    const link = document.createElement('a');
+                                    link.href = currentScene.generatedImage;
+                                    link.download = `scene_${String(currentIndex + 1).padStart(3, '0')}.png`;
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                }
+                            }}
+                            disabled={!currentScene.generatedImage}
+                            className="w-full mt-2 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded shadow-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            <Download size={16} />
+                            Tải ảnh (PNG)
                         </button>
                         <button
                             onClick={() => onRegenerate(currentScene.id)}

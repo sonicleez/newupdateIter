@@ -18,13 +18,14 @@ interface SingleImageSlotProps {
     onDelete: () => void;
     onEdit?: () => void;
     onGenerate?: () => void;
+    onDownload?: () => void; // NEW: Download button
     aspect?: 'square' | 'portrait' | 'auto'; // Added 'auto'
     subLabel?: React.ReactNode;
     isProcessing?: boolean;
     processingStartTime?: number; // For LiveTimer
 }
 
-const SingleImageSlot: React.FC<SingleImageSlotProps> = ({ label, image, onUpload, onDelete, onEdit, onGenerate, aspect = 'square', subLabel, isProcessing, processingStartTime }) => {
+const SingleImageSlot: React.FC<SingleImageSlotProps> = ({ label, image, onUpload, onDelete, onEdit, onGenerate, onDownload, aspect = 'square', subLabel, isProcessing, processingStartTime }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,6 +35,20 @@ const SingleImageSlot: React.FC<SingleImageSlotProps> = ({ label, image, onUploa
         reader.onload = (ev) => onUpload(ev.target?.result as string);
         reader.readAsDataURL(file);
         e.target.value = ''; // reset
+    };
+
+    // Default download handler if onDownload not provided
+    const handleDownload = () => {
+        if (onDownload) {
+            onDownload();
+        } else if (image) {
+            const link = document.createElement('a');
+            link.href = image;
+            link.download = `${label.replace(/\s+/g, '_')}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     };
 
     // Determine aspect class
@@ -81,6 +96,7 @@ const SingleImageSlot: React.FC<SingleImageSlotProps> = ({ label, image, onUploa
                         />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity flex-col space-y-2 p-2 h-full">
                             <div className="flex space-x-2">
+                                <button onClick={(e) => { e.stopPropagation(); handleDownload(); }} className="p-1.5 bg-green-600 hover:bg-green-500 rounded text-white text-xs" title="Tải ảnh">⬇ Tải</button>
                                 <button onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} className="p-1.5 bg-blue-600 hover:bg-blue-500 rounded text-white text-xs">Up lại</button>
                                 <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 bg-red-600 hover:bg-red-500 rounded text-white text-xs">Xóa</button>
                             </div>
