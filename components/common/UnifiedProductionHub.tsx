@@ -254,7 +254,7 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                     <div className="flex items-center gap-1 no-drag">
                         {/* Quick Director Picker */}
                         {onDirectorChange && (
-                            <>
+                            <div className="relative">
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -270,7 +270,7 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                                     <Film className="w-4 h-4" />
                                 </button>
 
-                                {/* Director Dropdown (Portal-like positioning) */}
+                                {/* Director Dropdown (absolute positioned) */}
                                 {showDirectorPicker && (
                                     <>
                                         {/* Backdrop to close on click outside */}
@@ -278,11 +278,7 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                                             className="fixed inset-0 z-[9998]"
                                             onClick={() => setShowDirectorPicker(false)}
                                         />
-                                        <div className="fixed z-[9999] w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden"
-                                            style={{
-                                                top: position.y + 60,
-                                                left: Math.min(position.x, window.innerWidth - 240)
-                                            }}
+                                        <div className="absolute z-[9999] w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden right-0 bottom-full mb-2"
                                         >
                                             <div className="px-3 py-2 border-b border-white/10 bg-amber-500/10">
                                                 <span className="text-xs font-bold text-amber-400 uppercase">🎬 Quick Director</span>
@@ -361,7 +357,7 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                                         </div>
                                     </>
                                 )}
-                            </>
+                            </div>
                         )}
 
                         {/* Clear Chat Button */}
