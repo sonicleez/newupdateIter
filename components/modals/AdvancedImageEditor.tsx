@@ -159,7 +159,8 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
             };
 
             loadImage();
-            setIsCreateMode(false); // Ensure we're in edit mode when image loads
+            // FULL STATE RESET on open - prevents "second open" display bugs
+            setIsCreateMode(false);
             setCurrentResolution('1k');
             setAnalysisTags(null);
             setLayerImage(null);
@@ -167,8 +168,26 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
             setPrompt('');
             setPromptHistory(['']);
             setPromptIndex(0);
+            setActiveTab('tools');
+            setHistoryLayout('list');
+            setShowModelDropdown(false);
+            setError(null);
+            setLoadingMessage('');
+            setIsGenerating(false);
+            setBrushSize(20);
+            setIsEraser(false);
+            setIsDrawMode(false);
+            setTryOnImage(null);
+            setCorkboardImage(null);
+            setIsTryOnLoading(false);
+            setUpscaleLevel('2k');
+            setImageAspectRatio('1:1');
+            setCurrentView(initialActiveView);
+            setEditModel(EDIT_MODELS[0]?.value || 'gemini-3-pro-image-preview');
+            // Reset dimensions to force recalculation
+            setDimensions({ width: 800, height: 600 });
         }
-    }, [isOpen, sourceImage]);
+    }, [isOpen, sourceImage, initialActiveView]);
 
     // Initial Load & Resize Handler
     useEffect(() => {
