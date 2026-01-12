@@ -391,6 +391,40 @@ export function useScriptAnalysis(userApiKey: string | null) {
             }
 
             // ═══════════════════════════════════════════════════════════════
+            // NEW LAYER: CINEMATIC MAPPING (Psychological & Metaphorical Logic)
+            // ═══════════════════════════════════════════════════════════════
+            const cinematicMappingInstructions = `
+*** CINEMATIC MAPPING LAYER (PSYCHOLOGICAL DOCUMENTARY) ***
+You are an expert DoP specializing in Psychological Crime Documentaries. 
+Apply the following 3-STEP LOGIC to every scene you generate:
+
+STEP 1: CONTENT CLASSIFICATION (Assign a Mode)
+- [C1] LITERAL: For Action, Evidence, Numbers, Locations. (e.g. "He hid the knife under the bed") -> SHOW IT DIRECTLY.
+- [C2] SUGGESTIVE: For Consequences, Mystery. (e.g. "He knew there was no escape") -> SHOW SYMBOLIC OBJECTS (e.g., A trapped insect, a closing door).
+- [C3] METAPHORIC: For Pure Emotion, Inner Thought, Trauma. (e.g. "His soul shattered") -> SHOW PURE METAPHOR (Lighting, Textures, Abstract Compositions).
+
+STEP 2: LOCATION-BASED METAPHOR (Crucial)
+- DO NOT hallucinate random objects. USE THE MATERIALS FROM THE CURRENT LOCATION.
+- If Location is "Warehouse": Metaphor = Rust, Chains, Dust, Broken Glass, Shadows.
+- If Location is "Luxury Hotel": Metaphor = Reflections, Cold Marble, Distorted Mirrors, Wine Stains.
+- RULE: "Metaphor must be plausibly found in the location."
+
+STEP 3: TECHNICAL TRANSLATION (Prompt Engineering)
+- Translate emotions into CINEMATIC SPECS, not adjectives.
+- SADNESS -> "Desaturated Blue/Grey tones, Wide Shot (Isolation), Static Camera."
+- FEAR -> "High Contrast (Chiaroscuro), Extreme Close-Up on eyes/sweat, Dutch Angle, Unsettling framing."
+- CONFUSION -> "Shallow Depth of Field, Rack Focus, Lens Distortion, Fog/Haze."
+
+*** ANTI-BLINDSPOT RULES ***
+1. FORENSIC GUARD: If script mentions EVIDENCE (knife, gun, letter), you MUST use [C1] LITERAL mode. Do not obscure evidence with metaphor.
+2. CONSISTENCY: Keep the Face ID and Location ID consistent even in [C3] mode.
+3. NO CLICHÉS: No cheesy "demons behind back" or "crying blood". Use LIGHTING and COMPOSITION to show horror.
+
+INSTRUCTION: In your scene breakdowns, explicitly mark the mode ([C1], [C2], [C3]) in the 'visualPrompt' field.
+`;
+            contextInstructions += cinematicMappingInstructions;
+
+            // ═══════════════════════════════════════════════════════════════
             // STEP 1: VISUAL CLUSTERING (The "Director's Thinking" Phase)
             // ═══════════════════════════════════════════════════════════════
             setAnalysisStage('clustering'); // New Stage
