@@ -128,11 +128,25 @@ export function loadDirectorMemory(): DirectorMemory {
     return getDefaultMemory();
 }
 
-export function saveDirectorMemory(memory: DirectorMemory): void {
+// Debounce cloud saves to avoid too many API calls
+let cloudSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+const CLOUD_SAVE_DEBOUNCE_MS = 5000; // Wait 5s after last save before syncing to cloud
+
+export function saveDirectorMemory(memory: DirectorMemory, userId?: string): void {
     try {
         memory.updatedAt = Date.now();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(memory));
-        console.log('[DirectorBrain] Memory saved. Total generations:', memory.totalGenerations);
+        console.log('[DirectorBrain] Memory saved to local. Total generations:', memory.totalGenerations);
+
+        // Debounced cloud save (if userId available)
+        if (userId) {
+            if (cloudSaveTimeout) clearTimeout(cloudSaveTimeout);
+            cloudSaveTimeout = setTimeout(async () => {
+                console.log('[DirectorBrain] ☁️ Auto-syncing to cloud...');
+                const { saveCloudMemory } = await import('./directorBrain');
+                await saveCloudMemory(userId, memory);
+            }, CLOUD_SAVE_DEBOUNCE_MS);
+        }
     } catch (err) {
         console.error('[DirectorBrain] Failed to save memory:', err);
     }
@@ -412,6 +426,161 @@ export function getDirectorInsights(memory: DirectorMemory): DirectorInsights {
         favoriteStyle,
         suggestedTokens: getSuggestedTokens(memory, 5),
     };
+}
+
+// ============================================================
+// SUPABASE CLOUD SYNC
+// ============================================================
+
+import { supabase } from './supabaseClient';
+
+/**
+ * Fetch Director Brain memory from Supabase cloud
+ */
+export async function fetchCloudMemory(userId: string): Promise<DirectorMemory | null> {
+    try {
+        const { data, error } = await supabase
+            .from('director_brain_memory')
+            .select('memory_data, version')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        if (error) {
+            console.error('[DirectorBrain] Cloud fetch error:', error.message);
+            return null;
+        }
+
+        if (data?.memory_data) {
+            console.log('[DirectorBrain] 📥 Loaded from cloud. Version:', data.version);
+            return data.memory_data as DirectorMemory;
+        }
+
+        return null;
+    } catch (err) {
+        console.error('[DirectorBrain] Cloud fetch failed:', err);
+        return null;
+    }
+}
+
+/**
+ * Save Director Brain memory to Supabase cloud
+ */
+export async function saveCloudMemory(userId: string, memory: DirectorMemory): Promise<boolean> {
+    try {
+        const { error } = await supabase
+            .from('director_brain_memory')
+            .upsert({
+                user_id: userId,
+                memory_data: memory,
+                updated_at: new Date().toISOString()
+            }, {
+                onConflict: 'user_id'
+            });
+
+        if (error) {
+            console.error('[DirectorBrain] Cloud save error:', error.message);
+            return false;
+        }
+
+        console.log('[DirectorBrain] 📤 Saved to cloud. Generations:', memory.totalGenerations);
+        return true;
+    } catch (err) {
+        console.error('[DirectorBrain] Cloud save failed:', err);
+        return false;
+    }
+}
+
+/**
+ * Merge local and cloud memory - keeps the one with more data
+ * Returns merged memory and whether cloud should be updated
+ */
+export function mergeMemories(
+    local: DirectorMemory,
+    cloud: DirectorMemory | null
+): { merged: DirectorMemory; shouldSyncToCloud: boolean } {
+    // No cloud data - use local
+    if (!cloud) {
+        return { merged: local, shouldSyncToCloud: local.totalGenerations > 0 };
+    }
+
+    // Compare which has more data
+    const localScore = local.totalGenerations + local.totalLikes * 2;
+    const cloudScore = cloud.totalGenerations + cloud.totalLikes * 2;
+
+    // If local is significantly newer/larger, use local and update cloud
+    if (local.updatedAt > cloud.updatedAt && localScore > cloudScore) {
+        console.log('[DirectorBrain] 🔀 Local memory is newer. Will sync to cloud.');
+        return { merged: local, shouldSyncToCloud: true };
+    }
+
+    // If cloud is larger, use cloud and update local
+    if (cloudScore > localScore) {
+        console.log('[DirectorBrain] 🔀 Cloud memory has more data. Updating local.');
+        saveDirectorMemory(cloud); // Update local storage
+        return { merged: cloud, shouldSyncToCloud: false };
+    }
+
+    // If roughly equal, merge affinities and tokens
+    const merged: DirectorMemory = {
+        ...local,
+        version: Math.max(local.version, cloud.version) + 1,
+        updatedAt: Date.now(),
+        totalGenerations: Math.max(local.totalGenerations, cloud.totalGenerations),
+        totalLikes: Math.max(local.totalLikes, cloud.totalLikes),
+        totalDislikes: Math.max(local.totalDislikes, cloud.totalDislikes),
+        // Merge director affinities
+        directorAffinities: { ...cloud.directorAffinities },
+        // Merge scene history (keep newer ones)
+        sceneHistory: [...cloud.sceneHistory, ...local.sceneHistory]
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, MAX_SCENE_HISTORY),
+    };
+
+    // Merge local affinities (prefer higher counts)
+    for (const [id, affinity] of Object.entries(local.directorAffinities)) {
+        const existing = merged.directorAffinities[id];
+        if (!existing || affinity.usageCount > existing.usageCount) {
+            merged.directorAffinities[id] = affinity;
+        }
+    }
+
+    // Merge learned tokens
+    const mergeTokens = (
+        localTokens: { token: string; weight: number }[],
+        cloudTokens: { token: string; weight: number }[]
+    ) => {
+        const tokenMap = new Map<string, number>();
+        for (const t of cloudTokens) tokenMap.set(t.token, t.weight);
+        for (const t of localTokens) {
+            tokenMap.set(t.token, Math.max(tokenMap.get(t.token) || 0, t.weight));
+        }
+        return Array.from(tokenMap.entries()).map(([token, weight]) => ({ token, weight }));
+    };
+
+    merged.learnedTokens = {
+        positive: mergeTokens(local.learnedTokens.positive, cloud.learnedTokens.positive),
+        negative: mergeTokens(local.learnedTokens.negative, cloud.learnedTokens.negative),
+    };
+
+    console.log('[DirectorBrain] 🔀 Merged local + cloud memories.');
+    saveDirectorMemory(merged);
+    return { merged, shouldSyncToCloud: true };
+}
+
+/**
+ * Full sync: Load from cloud, merge with local, save back if needed
+ */
+export async function syncDirectorBrain(userId: string): Promise<DirectorMemory> {
+    const local = loadDirectorMemory();
+    const cloud = await fetchCloudMemory(userId);
+
+    const { merged, shouldSyncToCloud } = mergeMemories(local, cloud);
+
+    if (shouldSyncToCloud) {
+        await saveCloudMemory(userId, merged);
+    }
+
+    return merged;
 }
 
 console.log('[DirectorBrain] Module loaded. Ready to learn!');

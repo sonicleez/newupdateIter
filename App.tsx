@@ -28,6 +28,7 @@ import { GommoLibraryModal } from './components/modals/GommoLibraryModal';
 import { KeyboardShortcuts } from './components/common/KeyboardShortcuts';
 import { LocationLibraryPanel } from './components/locations'; // NEW: Location Library
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { syncDirectorBrain } from './utils/directorBrain';
 import { APP_NAME, PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from './constants/presets';
 import { handleDownloadAll, saveProjectPackage } from './utils/zipUtils';
 import {
@@ -640,6 +641,17 @@ const App: React.FC = () => {
         };
         syncStats();
     }, [session?.user?.id, updateStateAndRecord]);
+
+    // Sync Director Brain from Cloud (on login)
+    useEffect(() => {
+        const syncBrain = async () => {
+            if (session?.user?.id) {
+                console.log('[App] 🧠 Syncing Director Brain from cloud...');
+                await syncDirectorBrain(session.user.id);
+            }
+        };
+        syncBrain();
+    }, [session?.user?.id]);
 
     // Hydrate Gommo credentials from Supabase (priority) or localStorage (fallback)
     useEffect(() => {
