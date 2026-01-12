@@ -256,7 +256,13 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                         {onDirectorChange && (
                             <>
                                 <button
-                                    onClick={() => setShowDirectorPicker(!showDirectorPicker)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        console.log('[DirectorPicker] Button clicked, current state:', showDirectorPicker);
+                                        setShowDirectorPicker(!showDirectorPicker);
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
                                     aria-label="Change Director"
                                     title="Đổi Director nhanh"
                                     className="p-1.5 rounded-lg hover:bg-amber-500/20 transition-colors text-slate-400 hover:text-amber-400 flex items-center gap-1"
