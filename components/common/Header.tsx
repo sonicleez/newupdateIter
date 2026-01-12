@@ -71,12 +71,12 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
 
                     <button onClick={onNewProject} className="px-3 py-2 text-xs md:text-sm font-semibold text-white bg-blue-600/50 rounded-lg hover:bg-blue-600/70 transition-colors">📄 New</button>
-                    <button onClick={onSave} className="px-3 py-2 text-xs md:text-sm font-semibold text-white bg-white/10 rounded-lg hover:bg-white/20 transition-colors">Lưu</button>
                     {onSavePackage && (
-                        <button onClick={onSavePackage} className="px-3 py-2 text-xs md:text-sm font-semibold text-emerald-400 bg-emerald-500/10 rounded-lg hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 ml-2">
-                            Lưu ZIP
+                        <button onClick={onSavePackage} className="px-3 py-2 text-xs md:text-sm font-semibold text-white bg-white/10 rounded-lg hover:bg-white/20 transition-colors" title="Lưu dự án (Dạng gói ZIP)">
+                            Lưu
                         </button>
                     )}
+                    {/* <button onClick={onSave} className="px-3 py-2 text-xs md:text-sm font-semibold text-white bg-white/10 rounded-lg hover:bg-white/20 transition-colors">Lưu JSON (Cũ)</button> */}
                     <button onClick={onOpen} className="px-3 py-2 text-xs md:text-sm font-semibold text-white bg-white/10 rounded-lg hover:bg-white/20 transition-colors">Mở</button>
 
                     {isLoggedIn && (
