@@ -13,6 +13,7 @@ import { approvePrompt, rejectPrompt, RejectReason } from '../../utils/dopLearni
 interface QualityRatingProps {
     dopRecordId?: string;
     onRate?: (rating: 'good' | 'bad', reasons?: RejectReason[]) => void;
+    onRetry?: (reason: RejectReason, note: string, allReasons: RejectReason[]) => void;
     size?: 'sm' | 'md';
     className?: string;
 }
@@ -35,6 +36,7 @@ const REJECTION_OPTIONS: { value: RejectReason; label: string; emoji: string }[]
 export function QualityRating({
     dopRecordId,
     onRate,
+    onRetry,
     size = 'sm',
     className = ''
 }: QualityRatingProps) {
@@ -42,6 +44,11 @@ export function QualityRating({
     const [isRating, setIsRating] = useState(false);
     const [showRejectMenu, setShowRejectMenu] = useState(false);
     const [selectedReasons, setSelectedReasons] = useState<RejectReason[]>([]);
+
+    // NEW: Smart Retry State
+    const [autoRetry, setAutoRetry] = useState(true);
+    const [retryNote, setRetryNote] = useState('');
+
     const containerRef = useRef<HTMLDivElement>(null);
     const popupRef = useRef<HTMLDivElement>(null);
 
