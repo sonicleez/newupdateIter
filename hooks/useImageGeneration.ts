@@ -89,7 +89,7 @@ export function useImageGeneration(
         if (!currentScene.groupId) return undefined;
 
         // 1. Get ALL scenes in same group that have generated images AND are valid (no critical errors)
-        const sameGroupScenes = currentState.scenes.filter(
+        const sameGroupScenes = (currentState.scenes || []).filter(
             s => s.groupId === currentScene.groupId &&
                 s.generatedImage &&
                 s.id !== currentScene.id &&
@@ -298,8 +298,8 @@ export function useImageGeneration(
         retryContext?: RetryContext // NEW: Smart Retry Context
     ) => {
         const currentState = stateRef.current;
-        const currentSceneIndex = currentState.scenes.findIndex(s => s.id === sceneId);
-        const sceneToUpdate = currentState.scenes[currentSceneIndex];
+        const currentSceneIndex = (currentState.scenes || []).findIndex(s => s.id === sceneId);
+        const sceneToUpdate = (currentState.scenes || [])[currentSceneIndex];
         if (!sceneToUpdate) return;
 
         updateStateAndRecord(s => ({
@@ -363,7 +363,7 @@ export function useImageGeneration(
             cleanedContext = cleanPromptForImageGen(cleanedContext);
 
             // STRIP character names from context if they are NOT selected for this scene
-            const unselectedChars = currentState.characters.filter(c => !sceneToUpdate.characterIds.includes(c.id));
+            const unselectedChars = (currentState.characters || []).filter(c => !(sceneToUpdate.characterIds || []).includes(c.id));
             unselectedChars.forEach(c => {
                 if (!c.name) return;
                 const escapedName = c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -460,8 +460,9 @@ OUTPUT ONLY THE PROMPT. DO NOT OUTPUT MARKDOWN OR EXPLANATION.`;
                 }
             }
 
+
             // --- 3. CHARACTERS & PRODUCTS ---
-            const selectedChars = currentState.characters.filter(c => sceneToUpdate.characterIds.includes(c.id));
+            const selectedChars = (currentState.characters || []).filter(c => (sceneToUpdate.characterIds || []).includes(c.id));
             let charPrompt = '';
             const isDocumentary = activePreset?.category === 'documentary';
 
@@ -1246,7 +1247,7 @@ DO NOT generate a different face. DO NOT create a "similar" face. This EXACT fac
                 }
             }
 
-            const selectedProducts = currentState.products.filter(p => sceneToUpdate.productIds.includes(p.id));
+            const selectedProducts = (currentState.products || []).filter(p => (sceneToUpdate.productIds || []).includes(p.id));
             for (const prod of selectedProducts) {
                 const prodRefs: { type: string, img: string }[] = [];
                 if (prod.views?.front) prodRefs.push({ type: 'FRONT VIEW', img: prod.views.front });
@@ -1399,7 +1400,7 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 // Log character references
                 if (sceneToUpdate.characterIds && sceneToUpdate.characterIds.length > 0) {
                     const charNames = sceneToUpdate.characterIds
-                        .map((cid: string) => currentState.characters.find((c: any) => c.id === cid)?.name || cid.slice(0, 6))
+                        .map((cid: string) => (currentState.characters || []).find((c: any) => c.id === cid)?.name || cid.slice(0, 6))
                         .join(', ');
                     addProductionLog('dop', `👤 Characters: ${charNames}`, 'info', 'char_ref');
                 }
@@ -1860,14 +1861,14 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
         const allRefImages: string[] = [];
 
         // Collect character images
-        currentState.characters.forEach(char => {
+        (currentState.characters || []).forEach(char => {
             if (char.masterImage) allRefImages.push(char.masterImage);
             if (char.faceImage) allRefImages.push(char.faceImage);
             if (char.bodyImage && char.bodyImage !== char.masterImage) allRefImages.push(char.bodyImage);
         });
 
         // Collect product images
-        currentState.products.forEach(prod => {
+        (currentState.products || []).forEach(prod => {
             if (prod.image) allRefImages.push(prod.image);
         });
 
