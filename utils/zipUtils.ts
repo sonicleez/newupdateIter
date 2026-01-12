@@ -194,7 +194,7 @@ export const saveProjectPackage = async (state: ProjectState) => {
         // DEFENSIVE CODING: Use (array || []) to prevent crashes on legacy projects missing fields
         const safeCharacters = (state.characters || []).map(c => ({
             ...c,
-            props: c.props ? c.props.map(p => ({ ...p })) : []
+            props: Array.isArray(c.props) ? c.props.map(p => ({ ...p })) : []
         }));
 
         const safeProducts = (state.products || []).map(p => ({
