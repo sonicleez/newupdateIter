@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { AgentStatus, ProductionLogEntry } from '../../types';
 import { DirectorPreset, DIRECTOR_PRESETS } from '../../constants/directors';
+import { loadDirectorMemory, getDirectorInsights, getDirectorRecommendations, detectSceneMood, DirectorMemory } from '../../utils/directorBrain';
 
 interface UnifiedProductionHubProps {
     agents: {
@@ -34,6 +35,8 @@ interface UnifiedProductionHubProps {
     // Quick Director
     activeDirectorId?: string;
     onDirectorChange?: (directorId: string) => void;
+    // For Director Brain recommendations
+    currentSceneContext?: string;
 }
 
 
@@ -46,9 +49,9 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
     onClearChat,
     onToggleAgentVisibility,
     activeDirectorId,
-    onDirectorChange
+    onDirectorChange,
+    currentSceneContext
 }) => {
-
 
     const [isExpanded, setIsExpanded] = useState(false);
     const [command, setCommand] = useState('');
@@ -59,6 +62,23 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
     });
     const [isDragging, setIsDragging] = useState(false);
     const [snapEdge, setSnapEdge] = useState<'left' | 'right' | null>(null);
+
+    // DirectorBrain state
+    const [directorMemory, setDirectorMemory] = useState<DirectorMemory | null>(null);
+    const [recommendations, setRecommendations] = useState<{ directorId: string; directorName: string; confidence: number; reason: string }[]>([]);
+
+    // Load Director Brain memory on mount and when picker opens
+    useEffect(() => {
+        if (showDirectorPicker) {
+            const memory = loadDirectorMemory();
+            setDirectorMemory(memory);
+            if (currentSceneContext) {
+                const recs = getDirectorRecommendations(memory, currentSceneContext, 3);
+                setRecommendations(recs);
+            }
+        }
+    }, [showDirectorPicker, currentSceneContext]);
+
 
     const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -260,7 +280,47 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                                         >
                                             <div className="px-3 py-2 border-b border-white/10 bg-amber-500/10">
                                                 <span className="text-xs font-bold text-amber-400 uppercase">🎬 Quick Director</span>
+                                                {directorMemory && directorMemory.totalGenerations > 0 && (
+                                                    <span className="ml-2 text-[9px] text-gray-400">
+                                                        {directorMemory.totalGenerations} gens • {Math.round((directorMemory.totalLikes / Math.max(directorMemory.totalGenerations, 1)) * 100)}% 👍
+                                                    </span>
+                                                )}
                                             </div>
+
+                                            {/* Director Brain Recommendations */}
+                                            {recommendations.length > 0 && (
+                                                <div className="px-3 py-2 bg-gradient-to-r from-emerald-900/30 to-transparent border-b border-emerald-500/20">
+                                                    <div className="text-[9px] text-emerald-400 font-bold uppercase mb-1.5 flex items-center gap-1">
+                                                        <span>🧠</span> AI Recommends
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        {recommendations.map((rec, idx) => (
+                                                            <button
+                                                                key={rec.directorId}
+                                                                onClick={() => {
+                                                                    onDirectorChange(rec.directorId);
+                                                                    setShowDirectorPicker(false);
+                                                                }}
+                                                                className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center justify-between
+                                                                    ${rec.directorId === activeDirectorId
+                                                                        ? 'bg-emerald-500/30 text-emerald-200'
+                                                                        : 'hover:bg-emerald-500/10 text-emerald-300'
+                                                                    }`}
+                                                            >
+                                                                <span className="flex items-center gap-1.5">
+                                                                    <span className="text-[10px] text-emerald-500">{idx === 0 ? '⭐' : '✓'}</span>
+                                                                    {rec.directorName}
+                                                                </span>
+                                                                <span className="text-[9px] text-emerald-500/70">{rec.confidence}%</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <p className="text-[8px] text-emerald-600 mt-1 italic">
+                                                        {recommendations[0]?.reason}
+                                                    </p>
+                                                </div>
+                                            )}
+
                                             <div className="max-h-64 overflow-y-auto py-1">
                                                 {Object.entries(DIRECTOR_PRESETS).map(([category, directors]) => (
                                                     <div key={category}>
@@ -272,12 +332,21 @@ const UnifiedProductionHub: React.FC<UnifiedProductionHubProps> = ({
                                                                     onDirectorChange(d.id);
                                                                     setShowDirectorPicker(false);
                                                                 }}
-                                                                className={`w-full text-left px-3 py-2 text-xs transition-colors ${d.id === activeDirectorId
+                                                                className={`w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between ${d.id === activeDirectorId
                                                                     ? 'bg-amber-500/20 text-amber-300 font-medium'
                                                                     : 'hover:bg-white/5 text-slate-300'
                                                                     }`}
                                                             >
-                                                                {d.name}
+                                                                <span>{d.name}</span>
+                                                                {/* Show success rate if we have data */}
+                                                                {directorMemory?.directorAffinities[d.id] && (
+                                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${directorMemory.directorAffinities[d.id].likeCount / Math.max(directorMemory.directorAffinities[d.id].usageCount, 1) >= 0.7
+                                                                        ? 'bg-emerald-500/20 text-emerald-400'
+                                                                        : 'bg-slate-700 text-slate-400'
+                                                                        }`}>
+                                                                        {Math.round((directorMemory.directorAffinities[d.id].likeCount / Math.max(directorMemory.directorAffinities[d.id].usageCount, 1)) * 100)}% ✓
+                                                                    </span>
+                                                                )}
                                                             </button>
                                                         ))}
                                                     </div>
