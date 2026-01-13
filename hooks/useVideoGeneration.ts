@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { ProjectState, AgentStatus } from '../types';
 
 import { CAMERA_ANGLES, LENS_OPTIONS, VEO_PRESETS, VEO_CAMERA_MOTIONS } from '../constants/presets';
+import { DIRECTOR_PRESETS, DirectorPreset } from '../constants/directors';
 import { Scene } from '../types';
 
 export function useVideoGeneration(
@@ -191,6 +192,30 @@ export function useVideoGeneration(
             const cameraMotionPrompt = selectedCameraMotion?.prompt || '';
             const cameraMotionLabel = selectedCameraMotion?.label || 'Auto';
 
+            // ========== DIRECTOR DNA INJECTION ==========
+            // Find active director and get signature camera style
+            let activeDirector: DirectorPreset | undefined;
+            const activeDirectorId = state.activeDirectorId;
+
+            if (activeDirectorId) {
+                // Search through all director categories
+                for (const category of Object.values(DIRECTOR_PRESETS)) {
+                    const found = category.find(d => d.id === activeDirectorId);
+                    if (found) {
+                        activeDirector = found;
+                        break;
+                    }
+                }
+                // Also check custom directors
+                if (!activeDirector && state.customDirectors) {
+                    activeDirector = state.customDirectors.find(d => d.id === activeDirectorId);
+                }
+            }
+
+            const directorName = activeDirector?.name || 'Default';
+            const directorDNA = activeDirector?.dna || '';
+            const directorSignatureCameraStyle = activeDirector?.signatureCameraStyle || '';
+
             // Check if Documentary mode
             const isDocumentaryMode = scene.veoPreset === 'documentary-natural';
 
@@ -205,10 +230,11 @@ Role: Documentary Video Prompt Generator (MINIMAL mode)
 **SCENE CONTEXT (for action reference):**
 - Story: "${context}"
 - Intent: "${promptName}"
-${cameraMotionPrompt ? `- REQUIRED CAMERA MOTION: ${cameraMotionPrompt}` : '- Camera Motion: Auto (choose appropriate for action)'}
+${directorSignatureCameraStyle ? `- DIRECTOR STYLE (${directorName}): Apply these signature camera techniques: ${directorSignatureCameraStyle}` : ''}
+${cameraMotionPrompt ? `- USER SELECTED CAMERA MOTION: ${cameraMotionPrompt}` : '- Camera Motion: Choose from Director signature techniques above, or default to handheld/observational'}
 
 **STRICT OUTPUT FORMAT:**
-"[Camera: ${cameraMotionPrompt || 'handheld/observational'}], [subject action verb], [natural body movement]. SFX: [real ambient sound]."
+"[Camera: ${cameraMotionPrompt || 'choose from Director signature style'}], [subject action verb], [natural body movement]. SFX: [real ambient sound]."
 
 **EXAMPLE OUTPUTS:**
 - "Handheld medium shot, subject exhales slowly, shoulders relax. SFX: distant traffic hum."
@@ -226,6 +252,7 @@ ${cameraMotionPrompt ? `- REQUIRED CAMERA MOTION: ${cameraMotionPrompt}` : '- Ca
 - ✅ Keep under 50 words
 - ✅ Only action verbs: walks, turns, reaches, looks, breathes, pauses, sits, opens
 - ✅ Only real SFX: wind, footsteps, breath, traffic, nature, room tone
+- ✅ PRIORITIZE Director's signature camera style when choosing movement
 
 Return ONLY the video prompt. Maximum 2 sentences.
 `;
@@ -251,7 +278,12 @@ ${finalDialogue ? `- Character Dialogue (ON-SCREEN character speaking, ${effecti
 - Products visible: "${productContext}"
 - Camera Angle: "${scene.cameraAngleOverride === 'custom' ? scene.customCameraAngle : (CAMERA_ANGLES.find(a => a.value === scene.cameraAngleOverride)?.label || 'Auto')}"
 - Lens Style: "${scene.lensOverride === 'custom' ? scene.customLensOverride : (LENS_OPTIONS.find(l => l.value === scene.lensOverride)?.label || 'Auto')}"
-${cameraMotionPrompt ? `- **REQUIRED CAMERA MOTION:** ${cameraMotionPrompt}` : '- Camera Motion: Auto (AI selects based on emotion and scene type)'}
+${cameraMotionPrompt ? `- **USER SELECTED CAMERA MOTION:** ${cameraMotionPrompt}` : '- Camera Motion: Auto (AI selects based on Director DNA and emotion)'}
+
+**DIRECTOR DNA (${directorName}):**
+${directorDNA ? `- Visual DNA: ${directorDNA}` : '- Visual DNA: Default cinematic style'}
+${directorSignatureCameraStyle ? `- **SIGNATURE CAMERA TECHNIQUES:** ${directorSignatureCameraStyle}` : '- Signature Camera: Standard cinematic coverage'}
+- PRIORITY: When choosing camera movement, PRIORITIZE the Director's signature techniques above. This gives consistency to the overall film.
 
 **SCENE INTELLIGENCE (Auto-Analyzed):**
 - Detected Emotional Tone: ${primaryEmotion.toUpperCase()}${detectedEmotions.length > 1 ? ` (also: ${detectedEmotions.slice(1).join(', ')})` : ''}
