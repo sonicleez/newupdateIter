@@ -186,7 +186,46 @@ export function useVideoGeneration(
 
             const selectedPreset = VEO_PRESETS.find(p => p.value === scene.veoPreset) || VEO_PRESETS[0];
 
-            const promptText = `
+            // Check if Documentary mode
+            const isDocumentaryMode = scene.veoPreset === 'documentary-natural';
+
+            // DOCUMENTARY MODE: Ultra-simplified prompt
+            const documentaryPromptText = `
+Role: Documentary Video Prompt Generator (MINIMAL mode)
+
+**YOU HAVE AN IMAGE. DO NOT DESCRIBE IT.**
+
+**YOUR ONLY JOB:** Write a SHORT prompt describing CHARACTER ACTION only.
+
+**SCENE CONTEXT (for action reference):**
+- Story: "${context}"
+- Intent: "${promptName}"
+
+**STRICT OUTPUT FORMAT:**
+"[Camera: handheld/observational], [subject action verb], [natural body movement]. SFX: [real ambient sound]."
+
+**EXAMPLE OUTPUTS:**
+- "Handheld medium shot, subject exhales slowly, shoulders relax. SFX: distant traffic hum."
+- "Observational wide shot, figure walks toward door, pauses briefly. SFX: footsteps on concrete, wind."
+- "Steady close-up, hands reach for object, gentle touch. SFX: fabric rustle, room tone."
+
+**FORBIDDEN (STRICTLY ENFORCED):**
+- ❌ NO character appearance description (clothes, hair, face, body)
+- ❌ NO environment description (setting, lighting, colors, location)
+- ❌ NO background music, score, or orchestral sounds
+- ❌ NO VFX, effects, or cinematic style keywords
+- ❌ NO emotions/mood words (only show through action)
+
+**REQUIRED:**
+- ✅ Keep under 50 words
+- ✅ Only action verbs: walks, turns, reaches, looks, breathes, pauses, sits, opens
+- ✅ Only real SFX: wind, footsteps, breath, traffic, nature, room tone
+
+Return ONLY the video prompt. Maximum 2 sentences.
+`;
+
+            // STANDARD MODE: Full cinematic prompt
+            const standardPromptText = `
 Role: Expert Video Prompt Designer for Google Veo 3.1 IMAGE-TO-VIDEO mode.
 
 **CRITICAL: IMAGE-TO-VIDEO MODE**
@@ -246,6 +285,9 @@ ${selectedPreset.prompt}
 **OUTPUT FORMAT:**
 Return ONLY the video prompt string. NO explanations, NO markdown.
 `;
+
+            // Use documentary or standard prompt based on preset
+            const promptText = isDocumentaryMode ? documentaryPromptText : standardPromptText;
 
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',

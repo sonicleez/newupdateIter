@@ -213,6 +213,34 @@ MANDATORY ELEMENTS:
 - End with vast environment visible
 - Epic/cinematic style keywords`,
         keywords: 'aerial view, crane shot, wide-angle, epic reveal, vast scale, establishing'
+    },
+    {
+        value: 'documentary-natural',
+        label: '📹 Documentary (Natural/Simple)',
+        // Documentary style - action-focused, minimal prompt, natural sound only
+        prompt: `Generate a DOCUMENTARY-STYLE video (6 seconds) with MINIMAL description.
+
+**CRITICAL RULES FOR DOCUMENTARY:**
+- DO NOT describe character appearance (already in image)
+- DO NOT describe environment/setting (already in image)
+- ONLY describe the ACTION happening
+- Keep prompt SHORT and FOCUSED
+
+**OUTPUT FORMAT (STRICT):**
+"[Camera movement], [character action verbs only - no physical description], [natural movement]. SFX: [real-world ambient sounds only]."
+
+**EXAMPLE OUTPUT:**
+"Handheld medium shot, subject turns head slowly and exhales, slight body shift. SFX: wind rustle, distant traffic."
+
+**MANDATORY CONSTRAINTS:**
+- ⛔ NO background music, NO orchestral, NO score
+- ⛔ NO VFX, NO effects, NO color grading mentions
+- ⛔ NO character description (clothes, face, body)
+- ⛔ NO environment description (already visible in image)
+- ✅ ONLY real-world natural sounds (wind, footsteps, breath, nature, city ambiance)
+- ✅ ONLY action verbs: walks, turns, reaches, looks, sits, stands, breathes
+- ✅ Camera: handheld, observational, natural movement`,
+        keywords: 'documentary, natural, observational, realistic, candid, raw footage, handheld'
     }
 ];
 
