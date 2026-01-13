@@ -626,76 +626,62 @@ const App: React.FC = () => {
         }
     }, [session]);
 
-    // Sync Usage Stats from Cloud
+    // ========== BATCHED INITIALIZATION (Performance Optimization) ==========
+    // Merged 3 separate effects into 1 to reduce waterfall requests
     useEffect(() => {
-        const syncStats = async () => {
-            if (session?.user?.id) {
-                const cloudStats = await fetchUserStatsFromCloud(session.user.id);
-                if (cloudStats) {
-                    updateStateAndRecord(s => ({
-                        ...s,
-                        usageStats: cloudStats
-                    }));
-                }
-            }
-        };
-        syncStats();
-    }, [session?.user?.id, updateStateAndRecord]);
+        const initializeUserData = async () => {
+            if (!session?.user?.id) return;
 
-    // Sync Director Brain from Cloud (on login)
-    useEffect(() => {
-        const syncBrain = async () => {
-            if (session?.user?.id) {
-                console.log('[App] 🧠 Syncing Director Brain from cloud...');
-                await syncDirectorBrain(session.user.id);
-            }
-        };
-        syncBrain();
-    }, [session?.user?.id]);
+            const userId = session.user.id;
+            console.log('[App] ⚡ Batched initialization starting...');
 
-    // Hydrate Gommo credentials from Supabase (priority) or localStorage (fallback)
-    useEffect(() => {
-        const loadGommoCredentials = async () => {
-            let domain: string | null = null;
-            let token: string | null = null;
-
-            // Priority 1: Try Supabase if logged in (gommo_credentials table)
-            if (session?.user?.id) {
-                try {
-                    const { data: gommoData } = await supabase
+            try {
+                // Run all fetches in parallel
+                const [cloudStats, gommoData] = await Promise.all([
+                    // 1. Fetch usage stats
+                    fetchUserStatsFromCloud(userId),
+                    // 2. Fetch Gommo credentials
+                    supabase
                         .from('gommo_credentials')
                         .select('domain, access_token, credits_ai')
-                        .eq('user_id', session.user.id)
-                        .maybeSingle();
+                        .eq('user_id', userId)
+                        .maybeSingle()
+                        .then(res => res.data),
+                    // 3. Sync Director Brain (fire and forget, doesn't return data for state)
+                    syncDirectorBrain(userId).catch(e => console.warn('[Brain] Sync failed:', e))
+                ]);
 
-                    if (gommoData) {
-                        domain = gommoData.domain;
-                        token = gommoData.access_token;
-                        console.log('[Gommo] ✅ Loaded from Supabase, credits:', gommoData.credits_ai);
-                    }
-                } catch (e: any) {
-                    console.error('[Gommo] Failed to load from Supabase:', e.message);
+                // Batch state updates
+                let stateUpdates: Partial<typeof state> = {};
+
+                if (cloudStats) {
+                    stateUpdates.usageStats = cloudStats;
+                    console.log('[App] ✅ Stats synced from cloud');
                 }
-            }
 
-            // Priority 2: Fallback to localStorage
-            if (!domain) domain = localStorage.getItem('gommoDomain');
-            if (!token) token = localStorage.getItem('gommoAccessToken');
+                // Gommo: Supabase priority, localStorage fallback
+                let domain = gommoData?.domain || localStorage.getItem('gommoDomain');
+                let token = gommoData?.access_token || localStorage.getItem('gommoAccessToken');
 
-            if (domain || token) {
-                if (!domain || !token) {
-                    console.log('[Gommo] Hydrating credentials from localStorage');
+                if (domain || token) {
+                    stateUpdates.gommoDomain = domain || state.gommoDomain;
+                    stateUpdates.gommoAccessToken = token || state.gommoAccessToken;
+                    console.log('[App] ✅ Gommo credentials loaded');
                 }
-                updateStateAndRecord(s => ({
-                    ...s,
-                    gommoDomain: domain || s.gommoDomain,
-                    gommoAccessToken: token || s.gommoAccessToken,
-                }));
+
+                // Single state update
+                if (Object.keys(stateUpdates).length > 0) {
+                    updateStateAndRecord(s => ({ ...s, ...stateUpdates }));
+                }
+
+                console.log('[App] ⚡ Batched initialization complete');
+            } catch (error) {
+                console.error('[App] Initialization error:', error);
             }
         };
 
-        loadGommoCredentials();
-    }, [session?.user?.id]); // Re-run when session changes
+        initializeUserData();
+    }, [session?.user?.id]); // Only re-run when user changes
 
     useEffect(() => {
         // Hydration logic if any

@@ -1,0 +1,195 @@
+# 🔍 PERFORMANCE AUDIT REPORT
+## Genyu Scene Director - Vercel Deployment
+
+**Ngày audit:** 2026-01-14
+**Báo cáo bởi:** Antigravity AI
+
+---
+
+## 📊 BUNDLE SIZE ANALYSIS
+
+| File | Size | Gzip | Đánh giá |
+|------|------|------|----------|
+| `index.js` | 585 KB | 178 KB | ⚠️ LỚN |
+| `app-modals.js` | 715 KB | 227 KB | 🔴 QUÁ LỚN |
+| `vendor-ai.js` | 255 KB | 51 KB | OK |
+| `vendor-supabase.js` | 171 KB | 44 KB | OK |
+| **TOTAL** | **~1.7 MB** | **~500 KB** | 🔴 CẦN TỐI ƯU |
+
+### Khuyến nghị:
+- Bundle `app-modals.js` (715 KB) quá lớn - cần lazy load các modals
+- Total gzip 500KB → First load chậm trên mạng yếu
+
+---
+
+## ⚡ VẤN ĐỀ PERFORMANCE TÌM THẤY
+
+### 1. 🔴 QUÁ NHIỀU useEffect TRÊN MOUNT (6+ effects trong App.tsx)
+
+```tsx
+// App.tsx có 6+ useEffect chạy khi mount:
+- Line 529: Scroll listener
+- Line 540: Supabase key fetch + Realtime
+- Line 630: Sync Usage Stats from Cloud ← BLOCKING
+- Line 646: Sync Director Brain ← BLOCKING
+- Line 657: Load Gommo Credentials ← BLOCKING
+- Line 700: Hot reload handler
+```
+
+**Vấn đề:** Tất cả effects chạy đồng thời khi component mount → waterfall requests → UI bị block.
+
+**Fix:**
+```tsx
+// Gộp các API calls vào 1 effect với Promise.all
+useEffect(() => {
+  const initializeApp = async () => {
+    if (!session?.user?.id) return;
+    
+    const [stats, _, gommo] = await Promise.all([
+      fetchUserStatsFromCloud(session.user.id),
+      syncDirectorBrain(session.user.id),
+      loadGommoCredentials(session.user.id)
+    ]);
+    
+    // Update state once
+    updateStateAndRecord(s => ({ ...s, usageStats: stats, ... }));
+  };
+  initializeApp();
+}, [session?.user?.id]);
+```
+
+---
+
+### 2. 🔴 TẠO NHIỀU GoogleGenAI INSTANCES
+
+Tìm thấy **60+ nơi** tạo `new GoogleGenAI({ apiKey })`.
+
+**Vấn đề:** Mỗi lần gọi API lại tạo instance mới → memory overhead.
+
+**Fix:** Tạo singleton:
+```tsx
+// utils/geminiClient.ts
+let aiInstance: GoogleGenAI | null = null;
+let cachedApiKey: string | null = null;
+
+export function getGeminiClient(apiKey: string): GoogleGenAI {
+  if (!aiInstance || cachedApiKey !== apiKey) {
+    aiInstance = new GoogleGenAI({ apiKey: apiKey.trim() });
+    cachedApiKey = apiKey;
+  }
+  return aiInstance;
+}
+```
+
+---
+
+### 3. 🟡 MODALS KHÔNG ĐƯỢC LAZY LOAD
+
+`app-modals.js` chiếm **715 KB** - load ngay lập tức dù user chưa mở modal nào.
+
+**Fix:** Lazy load modals:
+```tsx
+const ImageEditorModal = lazy(() => import('./modals/ImageEditorModal'));
+const ScriptGeneratorModal = lazy(() => import('./modals/ScriptGeneratorModal'));
+// ...
+
+<Suspense fallback={<Loading />}>
+  {isEditorOpen && <ImageEditorModal />}
+</Suspense>
+```
+
+---
+
+### 4. 🟡 LOCALSTORAGE PARSE TRÊN RENDER
+
+```tsx
+// Các component parse JSON từ localStorage TRÊN MỖI RENDER
+const [position] = useState(() => {
+  const saved = localStorage.getItem('position');
+  return saved ? JSON.parse(saved) : defaultValue; // ← Parse mỗi khi re-render state
+});
+```
+
+**OK** vì đã dùng lazy initial state, nhưng kiểm tra không có JSON.parse ngoài useState.
+
+---
+
+### 5. 🟡 SUPABASE REALTIME CHANNEL
+
+```tsx
+// App.tsx line 600+
+const channel = supabase.channel('user_api_keys_changes')...
+```
+
+**Vấn đề:** Realtime subscription active liên tục → WebSocket connection → battery drain trên mobile.
+
+**Fix:** Chỉ subscribe khi cần, hoặc dùng polling thay thế.
+
+---
+
+### 6. 🟡 LARGE STATE OBJECT
+
+`ProjectState` chứa `scenes[]` với `generatedImage` (base64) → Object rất lớn.
+
+**Vấn đề:** Mỗi lần `updateStateAndRecord()` → serialize ~MBs data.
+
+**Fix:** 
+- Tách images ra khỏi state chính
+- Dùng IndexedDB cho images
+- State chỉ giữ URLs/IDs
+
+---
+
+## 🛠️ QUICK WINS (Làm ngay)
+
+### Priority 1: Gộp useEffect calls
+```tsx
+// Trước: 4 useEffect riêng lẻ
+// Sau: 1 useEffect với Promise.all
+```
+
+### Priority 2: Lazy load modals
+```tsx
+const HeavyModal = lazy(() => import('./HeavyModal'));
+```
+
+### Priority 3: Singleton Gemini client
+```tsx
+export const getGeminiClient = (apiKey) => { ... }
+```
+
+### Priority 4: Virtualize scene lists (nếu >50 scenes)
+```tsx
+import { FixedSizeList } from 'react-window';
+```
+
+---
+
+## 📈 EXPECTED IMPROVEMENTS
+
+| Metric | Trước | Sau (estimated) |
+|--------|-------|-----------------|
+| First Contentful Paint | ~3s | ~1.5s |
+| Time to Interactive | ~5s | ~2.5s |
+| Bundle (gzip) | 500KB | ~300KB |
+| Memory usage | High | -40% |
+
+---
+
+## 🔧 IMPLEMENTATION PLAN
+
+### Phase 1 (Ngay lập tức):
+1. ✅ Gộp useEffect calls vào 1 init function
+2. ✅ Tạo Gemini singleton
+
+### Phase 2 (Tuần này):
+3. ✅ Lazy load modals
+4. ✅ Code-split heavy components
+
+### Phase 3 (Sau):
+5. ✅ Move images to IndexedDB
+6. ✅ Virtualize long lists
+
+---
+
+*Report generated by Antigravity AI*
