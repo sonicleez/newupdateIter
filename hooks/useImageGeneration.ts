@@ -9,7 +9,7 @@ import {
 import { DIRECTOR_PRESETS, DirectorCategory } from '../constants/directors';
 import { getPresetById } from '../utils/scriptPresets';
 import { uploadImageToSupabase, syncUserStatsToCloud } from '../utils/storageUtils';
-import { safeGetImageData, callGeminiVisionReasoning, preWarmImageCache } from '../utils/geminiUtils';
+import { safeGetImageData, callGeminiVisionReasoning, preWarmImageCache, fixMimeType } from '../utils/geminiUtils';
 import { GommoAI, urlToBase64 } from '../utils/gommoAI';
 import { IMAGE_MODELS } from '../utils/appConstants';
 import { normalizePrompt, normalizePromptAsync, formatNormalizationLog, needsNormalization, containsVietnamese } from '../utils/promptNormalizer';
@@ -35,6 +35,17 @@ const cleanPromptForImageGen = (prompt: string): string => {
 const getProviderFromModel = (modelId: string): 'gemini' | 'gommo' => {
     const model = IMAGE_MODELS.find(m => m.value === modelId);
     return (model?.provider as 'gemini' | 'gommo') || 'gemini';
+};
+
+// Helper: Create inline data object with sanitized MIME type
+// This prevents "Unsupported MIME type: application/octet-stream" errors
+const createInlineData = (data: string, mimeType: string, sourceUrl?: string) => {
+    return {
+        inlineData: {
+            data,
+            mimeType: fixMimeType(mimeType, sourceUrl)
+        }
+    };
 };
 
 export function useImageGeneration(
@@ -967,7 +978,7 @@ TECHNICAL CAMERA: ${effectiveCameraPrompt}`.trim().replace(/\n+/g, ' '); // Flat
                 const baseImgData = await safeGetImageData(baseImage);
                 if (baseImgData) {
                     console.log('[ImageGen] 🖼️ Base Image Editing Mode: Injecting as PRIMARY input.');
-                    parts.push({ inlineData: { data: baseImgData.data, mimeType: baseImgData.mimeType } });
+                    parts.push(createInlineData(baseImgData.data, baseImgData.mimeType));
                     parts.push({ text: `Using the provided image as the base scene, please EDIT it according to the instructions. Retain the original composition, lighting, and subject pose unless explicitly asked to change them.` });
                 }
             }
@@ -992,7 +1003,7 @@ COPY the EXACT appearance of "${objectToExtract}" (color, texture, shape, detail
 ADD this object to the BASE scene (the first image) in a natural position.
 DO NOT copy the background or other elements from this reference - ONLY the specified object.`
                         });
-                        parts.push({ inlineData: { data: dnaImgData.data, mimeType: dnaImgData.mimeType } });
+                        parts.push(createInlineData(dnaImgData.data, dnaImgData.mimeType));
                         continuityInstruction += `(COMPOSITE: Add "${objectToExtract}" from reference) `;
                         console.log('[ImageGen] 🎯 COMPOSITE Mode: Extracting object:', objectToExtract);
                     } else {
@@ -1012,7 +1023,7 @@ IMPORTANT EXCEPTIONS - DEFER TO PROMPT FOR:
 - COMPOSITION (If text prompt changes camera angle, FOLLOW THE TEXT)
 
 Use this image strictly as a "Style & Material" reference, NOT a pixel-perfect layout content constraint.` });
-                        parts.push({ inlineData: { data: dnaImgData.data, mimeType: dnaImgData.mimeType } });
+                        parts.push(createInlineData(dnaImgData.data, dnaImgData.mimeType));
                         continuityInstruction += '(DNA REFERENCE ENFORCED) ';
                         console.log('[ImageGen] 🧬 DNA Reference Image injected for visual consistency');
                     }
@@ -1046,7 +1057,7 @@ Use this image strictly as a "Style & Material" reference, NOT a pixel-perfect l
                             console.log(`[ImageGen] 👤 Injected FACE reference for ${char.name}`);
                         }
 
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        parts.push(createInlineData(imgData.data, imgData.mimeType));
                         continuityInstruction += `(STRICT IDENTITY LOCK: ${char.name}) `;
                     } else {
                         console.warn(`[ImageGen] ⚠️ Failed to load FACE image for ${char.name}`);
@@ -1057,7 +1068,7 @@ Use this image strictly as a "Style & Material" reference, NOT a pixel-perfect l
                     if (imgData) {
                         const refLabel = `IDENTITY_${char.name.toUpperCase().replace(/\s+/g, '_')}`;
                         parts.push({ text: `[${refLabel}]: !!! MANDATORY IDENTITY LOCK (MASTER) !!! Use this supplied image as the ONLY AUTHORITATIVE reference for ${char.name}. Focus on the face and identity from this image. ${char.description}` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        parts.push(createInlineData(imgData.data, imgData.mimeType));
                         continuityInstruction += `(STRICT IDENTITY LOCK (MASTER): ${char.name}) `;
                         console.log(`[ImageGen] 👤 Injected MASTER reference (as Face fallback) for ${char.name}`);
                     }
@@ -1070,7 +1081,7 @@ Use this image strictly as a "Style & Material" reference, NOT a pixel-perfect l
                         const refLabel = `FULLBODY_${char.name.toUpperCase()}`;
                         // STRONGER COSTUME LOCK
                         parts.push({ text: `[${refLabel}]: MANDATORY COSTUME REFERENCE for ${char.name}. Match clothing, colors, uniform, and textures 100%. If character has clothes in this image, they MUST HAVE CLOTHES in the output.` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        parts.push(createInlineData(imgData.data, imgData.mimeType));
                     }
                 }
             }
@@ -1087,7 +1098,7 @@ Use this image strictly as a "Style & Material" reference, NOT a pixel-perfect l
                 const charNames = selectedChars.map(c => c.name).join(', ');
                 if (imgData) {
                     parts.push({ text: `[STYLE_REFERENCE]: Apply ONLY the artistic rendering style of this image (shading, colors, texture) while RIGIDLY MAINTAINING the facial identity from ${charNames ? `IDENTITY references for ${charNames}` : 'above'}. DO NOT let this image influence the person's face structure or identity.` });
-                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    parts.push(createInlineData(imgData.data, imgData.mimeType));
                     continuityInstruction += `(STYLE ISOLATION: APPLY STYLE TO ENVIRONMENT/RENDER ONLY) `;
                     console.log('[ImageGen] ✅ Style Image INJECTED into prompt');
                 } else {
@@ -1103,7 +1114,7 @@ Use this image strictly as a "Style & Material" reference, NOT a pixel-perfect l
                     if (imgData) {
                         const refLabel = `FACE_OVERRIDE: ${char.name.toUpperCase()}`;
                         parts.push({ text: `[${refLabel}]: !!! IDENTITY GUARD !!! ABSOLUTELY REJECT any facial variations introduced by style. RE-ESTABLISH this exact person. This face is the ONLY valid person for ${char.name}.` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        parts.push(createInlineData(imgData.data, imgData.mimeType));
                     }
                 }
             }
@@ -1147,7 +1158,7 @@ DO NOT invent new environments or change the location. This is NOT a different p
                     if (imgData) {
                         const refLabel = `MANDATORY_LOCATION_TEMPLATE`;
                         parts.push({ text: `[${refLabel}]: !!! CRITICAL ENVIRONMENT ANCHOR !!! This concept image defines the EXACT environment for ALL scenes in this location group. EVERY shot must exist within this space. Match: architectural style, layout, color palette, lighting, textures, and geometry. CHARACTER APPEARANCE comes from separate IDENTITY references - only use this for ENVIRONMENT. This location must be IDENTICAL across all scenes in the group.` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        parts.push(createInlineData(imgData.data, imgData.mimeType));
                         continuityInstruction += `(CONCEPT ENVIRONMENT ENFORCED) `;
                     }
                 } else if (groupObj) {
@@ -1166,7 +1177,7 @@ DO NOT invent new environments or change the location. This is NOT a different p
                     if (imgData) {
                         const refLabel = `ENVIRONMENT_ONLY_LOCK`;
                         parts.push({ text: `[${refLabel}]: Use this as the RIGID template for architecture and lighting ONLY. Match: layout, wall textures, room geometry, furniture placement, and lighting source. ABSOLUTELY IGNORE characters, clothing, and small props. This is a background-only consistency anchor.` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        parts.push(createInlineData(imgData.data, imgData.mimeType));
                         continuityInstruction += `(BACKGROUND LOCK FROM MASTER SCENE) `;
                     }
                 }
@@ -1205,7 +1216,7 @@ COPY EXACTLY:
 ${isReentry ? '⚠️ CHARACTER RE-ENTERING - Reset to this exact face!' : ''}
 DO NOT generate a different face. DO NOT create a "similar" face. This EXACT face only.`
                         });
-                        parts.push({ inlineData: { data: faceData.data, mimeType: faceData.mimeType } });
+                        parts.push(createInlineData(faceData.data, faceData.mimeType));
                         console.log(`[ImageGen] 🔒 FACE ID injected FIRST for ${char.name}`);
                     }
                 }
@@ -1242,7 +1253,7 @@ DO NOT generate a different face. DO NOT create a "similar" face. This EXACT fac
                 for (const { ref, data: imgData } of refDataArray) {
                     if (imgData) {
                         parts.push({ text: `[${char.name.toUpperCase()} ${ref.type}]: Use for OUTFIT and POSE only. Face from FACE ID LOCK above. Description: ${char.description}` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        parts.push(createInlineData(imgData.data, imgData.mimeType));
                         referencePreamble += `(${char.name} ${ref.type}) `;
                     }
                 }
@@ -1279,7 +1290,7 @@ DO NOT generate a different face. DO NOT create a "similar" face. This EXACT fac
                         const refLabel = `MASTER VISUAL: ${prod.name.toUpperCase()} ${ref.type}`;
                         // STRONGER RACCORD FOR PROPS
                         parts.push({ text: `[${refLabel}]: AUTHORITATIVE visual anchor for ${prod.name} (PROP RACCORD). Match the design, colors, material, and branding from this image EXACTLY. Maintain consistent scale relative to the character.` });
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        parts.push(createInlineData(imgData.data, imgData.mimeType));
                         referencePreamble += `(PROP CONTINUITY: Match ${refLabel}) `;
                     }
                 }
@@ -1332,7 +1343,7 @@ INHERIT THESE:
 
 The NEW scene has its OWN camera style as specified in the current prompt. DO NOT apply previous scene's camera treatment.` });
 
-                        parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                        parts.push(createInlineData(imgData.data, imgData.mimeType));
 
                         if (skippedFailedNote) {
                             console.log(`[ImageGen] ⚠️ Skipped failed scene, using Scene ${prevSceneWithImage.sceneNumber} as continuity ref`);
@@ -1355,7 +1366,7 @@ STEP 1: ANALYZE this image deeply. Identify the key visual attributes of the ${f
 STEP 2: GENERATE the new scene by strictly applying these identified attributes.
 Match the ${focus} EXACTLY as shown in this reference.
 IGNORE any prior text descriptions if they conflict with this visual DNA.` });
-                    parts.push({ inlineData: { data: imgData.data, mimeType: imgData.mimeType } });
+                    parts.push(createInlineData(imgData.data, imgData.mimeType));
                     // Add to top of parts if it's really important? No, index-wise handles it.
                 }
             }
