@@ -67,29 +67,36 @@ export function useVideoGeneration(
                 data = base64Data;
                 mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
             } else {
+                // Try to fetch image - first direct, then via proxy if CORS fails
+                let blob: Blob | null = null;
+                const imageUrl = scene.generatedImage;
+
                 try {
-                    const proxyUrl = `http://localhost:3001/api/proxy/fetch-image?url=${encodeURIComponent(scene.generatedImage)}`;
-                    const imgRes = await fetch(proxyUrl);
-                    const blob = await imgRes.blob();
-                    mimeType = blob.type;
-
-                    // [FIX] Veo API rejects 'application/octet-stream'. Infer MIME from URL or default.
-                    if (!mimeType || mimeType === 'application/octet-stream') {
-                        const url = scene.generatedImage.toLowerCase();
-                        if (url.includes('.png')) mimeType = 'image/png';
-                        else if (url.includes('.webp')) mimeType = 'image/webp';
-                        else if (url.includes('.gif')) mimeType = 'image/gif';
-                        else mimeType = 'image/jpeg'; // Default fallback
-                        console.log('[Veo] Fixed MIME type to:', mimeType);
+                    // Try direct fetch first (works for same-origin or CORS-enabled URLs)
+                    const directRes = await fetch(imageUrl);
+                    if (directRes.ok) {
+                        blob = await directRes.blob();
+                        console.log('[Veo] Direct fetch successful');
                     }
+                } catch (directError) {
+                    console.log('[Veo] Direct fetch failed, trying proxy...');
+                }
 
-                    data = await new Promise<string>((resolve) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-                        reader.readAsDataURL(blob);
-                    });
-                } catch (e) {
-                    console.error("[Veo] Fetch image failed:", e);
+                // If direct fetch failed, try proxy (for development)
+                if (!blob) {
+                    try {
+                        const proxyUrl = `http://localhost:3001/api/proxy/fetch-image?url=${encodeURIComponent(imageUrl)}`;
+                        const proxyRes = await fetch(proxyUrl);
+                        if (proxyRes.ok) {
+                            blob = await proxyRes.blob();
+                            console.log('[Veo] Proxy fetch successful');
+                        }
+                    } catch (proxyError) {
+                        console.error('[Veo] Proxy fetch also failed:', proxyError);
+                    }
+                }
+
+                if (!blob) {
                     updateStateAndRecord(s => ({
                         ...s,
                         scenes: s.scenes.map(sc => sc.id === sceneId ? { ...sc, veoPrompt: '❌ Lỗi tải ảnh' } : sc)
@@ -97,6 +104,24 @@ export function useVideoGeneration(
                     alert('Không thể tải ảnh từ URL. Vui lòng thử lại hoặc convert ảnh sang base64.');
                     return;
                 }
+
+                mimeType = blob.type;
+
+                // [FIX] Veo API rejects 'application/octet-stream'. Infer MIME from URL or default.
+                if (!mimeType || mimeType === 'application/octet-stream') {
+                    const url = imageUrl.toLowerCase();
+                    if (url.includes('.png')) mimeType = 'image/png';
+                    else if (url.includes('.webp')) mimeType = 'image/webp';
+                    else if (url.includes('.gif')) mimeType = 'image/gif';
+                    else mimeType = 'image/jpeg'; // Default fallback
+                    console.log('[Veo] Fixed MIME type to:', mimeType);
+                }
+
+                data = await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                    reader.readAsDataURL(blob);
+                });
             }
 
             // Determine effective language for script text

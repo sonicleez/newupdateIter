@@ -4,6 +4,7 @@ import { X, Undo, Redo, Eraser, Brush, Download, Wand2, Image as ImageIcon, Hist
 import MaskCanvas, { MaskCanvasHandle } from '../MaskCanvas';
 import { upscaleImage, expandImage, editImageWithMask, analyzeImage, compositeImages, applyStyleTransfer, generateImageFromImage, tryOnOutfit, GeneratedImage } from '../../utils/geminiImageEdit';
 import { IMAGE_MODELS, ASPECT_RATIOS } from '../../constants/presets';
+import { fixMimeType } from '../../utils/geminiUtils';
 
 import { Character, Product } from '../../types';
 
@@ -397,12 +398,12 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
 
         try {
             // Helper to convert blob to GeneratedImage
-            const toGenImg = async (blob: Blob): Promise<GeneratedImage> => {
+            const toGenImg = async (blob: Blob, sourceUrl?: string): Promise<GeneratedImage> => {
                 return new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onloadend = () => resolve({
                         base64: (reader.result as string).split(',')[1],
-                        mimeType: blob.type
+                        mimeType: fixMimeType(blob.type, sourceUrl)
                     });
                     reader.readAsDataURL(blob);
                 });
@@ -609,7 +610,7 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
             reader.readAsDataURL(blob);
             reader.onloadend = async () => {
                 const base64 = (reader.result as string).split(',')[1];
-                const result = await analyzeImage(apiKey, { base64, mimeType: blob.type });
+                const result = await analyzeImage(apiKey, { base64, mimeType: fixMimeType(blob.type, currentImage) });
                 setAnalysisTags(result);
                 setIsGenerating(false);
                 setLoadingMessage('');

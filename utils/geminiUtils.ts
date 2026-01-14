@@ -18,6 +18,33 @@ const checkCacheExpiry = () => {
     }
 };
 
+/**
+ * Fix MIME type for APIs that reject 'application/octet-stream'
+ * Gemini AI and Veo require valid image MIME types
+ * @param mimeType - The original MIME type from blob.type
+ * @param urlOrFilename - Optional URL or filename to infer type from extension
+ * @returns Valid image MIME type
+ */
+export const fixMimeType = (mimeType: string | undefined, urlOrFilename?: string): string => {
+    // If valid MIME type, return as is
+    if (mimeType && mimeType.startsWith('image/') && mimeType !== 'application/octet-stream') {
+        return mimeType;
+    }
+
+    // Try to infer from URL/filename extension
+    if (urlOrFilename) {
+        const ext = urlOrFilename.split('?')[0].split('.').pop()?.toLowerCase();
+        if (ext === 'png') return 'image/png';
+        if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+        if (ext === 'webp') return 'image/webp';
+        if (ext === 'gif') return 'image/gif';
+    }
+
+    // Default fallback
+    console.warn(`[fixMimeType] ⚠️ Fixed invalid MIME: '${mimeType}' -> 'image/jpeg'`);
+    return 'image/jpeg';
+};
+
 // Helper: Fetch with timeout
 const fetchWithTimeout = async (url: string, timeout: number): Promise<Response> => {
     const controller = new AbortController();
