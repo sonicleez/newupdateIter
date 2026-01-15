@@ -749,13 +749,14 @@ ${poseOverrides.map((p, i) => `${i + 1}. ${p}`).join('\n')}
             }
 
             // --- 2.7 ENVIRONMENT LOCK FROM PREVIOUS FRAME ---
-            // Ensure same location is maintained when camera angle changes
+            // Maintain general location consistency but allow visual variation
             let environmentLockPrompt = '';
             if (currentSceneIndex > 0) {
                 const prevScene = (currentState.scenes || [])[currentSceneIndex - 1];
                 if (prevScene?.generatedImage && prevScene.groupId === sceneToUpdate.groupId) {
-                    environmentLockPrompt = `[ENV LOCK]: SAME location as previous shot. Keep walls/floor/lighting IDENTICAL. Only change camera angle.`;
-                    console.log('[ImageGen] 🏠 Environment Lock enabled for same-group scene');
+                    // SOFTENED: Instead of "IDENTICAL", allow variation while maintaining location type
+                    environmentLockPrompt = `[LOCATION CONTINUITY]: Same general location type as previous shot (indoor/outdoor, same building/area). Maintain consistent time of day and weather. Allow dynamic composition changes based on the text prompt.`;
+                    console.log('[ImageGen] 🏠 Environment continuity enabled (soft mode)');
                 }
             }
 
@@ -1009,25 +1010,25 @@ DO NOT copy the background or other elements from this reference - ONLY the spec
                         continuityInstruction += `(COMPOSITE: Add "${objectToExtract}" from reference) `;
                         console.log('[ImageGen] 🎯 COMPOSITE Mode: Extracting object:', objectToExtract);
                     } else {
-                        // STYLE MODE: Match visual DNA/style
-                        const refLabel = 'DNA_VISUAL_REFERENCE';
+                        // STYLE MODE: Match visual DNA/style - SOFTENED to allow scene variation
+                        const refLabel = 'STYLE_REFERENCE';
                         parts.push({
-                            text: `[${refLabel}]: !!! CRITICAL VISUAL DNA ANCHOR !!!
-This is the MANDATORY reference image that defines the EXACT visual style for this scene.
-MATCH PRECISELY:
-- Color grading, palette, and lighting atmosphere
-- Material textures (e.g. skin, fabric, surfaces) and render style
-- Character identity and appearance details
+                            text: `[${refLabel}]: STYLE REFERENCE (NOT A COPY TARGET)
+This image shows the VISUAL STYLE for this project. Use it as a LOOSE guide for:
+- General color temperature (warm/cool)
+- Lighting mood (soft/harsh)
+- Overall render aesthetic
 
-IMPORTANT EXCEPTIONS - DEFER TO PROMPT FOR:
-- ACTION and POSE (If text prompt describes a different action, FOLLOW THE TEXT)
-- OBJECT PLACEMENT (If text prompt moves an object, FOLLOW THE TEXT)
-- COMPOSITION (If text prompt changes camera angle, FOLLOW THE TEXT)
+⚠️ CRITICAL RULES:
+1. TEXT PROMPT IS PRIMARY - Follow the text description for WHAT to create
+2. CREATE A NEW SCENE - Do NOT recreate or copy this reference image
+3. DIFFERENT CONTENT EXPECTED - The text prompt describes a DIFFERENT scene/action/location
+4. STYLE ONLY - Only carry over the general visual "feel", not the actual content
 
-Use this image strictly as a "Style & Material" reference, NOT a pixel-perfect layout content constraint.` });
+The text prompt below describes the ACTUAL scene you must create.` });
                         parts.push(createInlineData(dnaImgData.data, dnaImgData.mimeType));
-                        continuityInstruction += '(DNA REFERENCE ENFORCED) ';
-                        console.log('[ImageGen] 🧬 DNA Reference Image injected for visual consistency');
+                        continuityInstruction += '(STYLE REF) ';
+                        console.log('[ImageGen] 🧬 DNA Reference Image injected (SOFT mode for variation)');
                     }
                 }
             }
