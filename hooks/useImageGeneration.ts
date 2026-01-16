@@ -802,13 +802,47 @@ ${poseOverrides.map((p, i) => `${i + 1}. ${p}`).join('\n')}
                         'close_close': 'Shift angle 30-45° to show subject from different perspective.',
                         'close_medium': 'Camera pulls back slightly with horizontal pan.',
                         'pov_wide': 'Transition from subjective to objective wide shot.',
+                        'pov_medium': 'Camera moves from behind character to frontal view.',
+                        'pov_close': 'Camera moves from behind character to frontal close-up.',
                         'neutral_neutral': 'Camera orbits 20° for visual dynamism while maintaining subject focus.',
                     };
 
                     const transitionKey = `${prevCat}_${currCat}`;
                     const transitionDesc = cameraTransitions[transitionKey] || cameraTransitions['neutral_neutral'];
 
-                    cameraProgressionPrompt = `[CAMERA]: ${transitionDesc} Character position FIXED, only angle changes.`;
+                    // === SPATIAL CONTEXT AWARENESS ===
+                    // When camera changes from POV/OTS to frontal, the BACKGROUND must change!
+                    // POV looking at kitchen → Frontal means we now see what character WAS looking at (living room, etc.)
+                    let spatialBackgroundInstruction = '';
+
+                    if (prevCat === 'pov' && (currCat === 'medium' || currCat === 'close' || currCat === 'wide')) {
+                        spatialBackgroundInstruction = `
+⚠️ CRITICAL SPATIAL RULE - BACKGROUND MUST CHANGE:
+The previous shot was POV/Over-the-shoulder. Now the camera is FACING the character.
+This means:
+1. The BACKGROUND behind the character is NOW what we SAW in the previous POV shot
+2. If POV showed kitchen → Now we see character with kitchen BEHIND them
+3. The character's FRONT is now visible, their BACK was in the previous shot
+4. DO NOT keep the same background from POV - logically REVERSE the perspective
+
+Example: POV over shoulder looking at kitchen → Frontal shot should show character with dining room/living room/hallway BEHIND them (opposite direction)`;
+                        console.log('[ImageGen] 🔄 SPATIAL REVERSAL: POV → Frontal, background must change!');
+                    }
+
+                    // Reverse case: going FROM frontal TO POV
+                    if ((prevCat === 'medium' || prevCat === 'close' || prevCat === 'wide') && currCat === 'pov') {
+                        spatialBackgroundInstruction = `
+⚠️ CRITICAL SPATIAL RULE - POV PERSPECTIVE:
+Camera is moving BEHIND the character to show their POV.
+This means:
+1. We now SEE what the character is LOOKING AT
+2. The character's back/shoulder may be in frame
+3. Background shows the direction the character FACES
+4. This is the OPPOSITE direction from where the camera was before`;
+                        console.log('[ImageGen] 🔄 SPATIAL SHIFT: Frontal → POV, showing character\'s view!');
+                    }
+
+                    cameraProgressionPrompt = `[CAMERA]: ${transitionDesc} ${spatialBackgroundInstruction}`.trim();
                     console.log('[ImageGen] 🎥 Camera Progression:', `${prevCat} → ${currCat}`);
                 }
             }
