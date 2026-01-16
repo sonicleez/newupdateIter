@@ -164,58 +164,8 @@ export function useVideoGeneration(
             const hasVoiceOver = Boolean(voiceOverText);
             const characterCount = scene.characterIds?.length || 0;
 
-            // Analyze emotional keywords from context and dialogue
-            const emotionalKeywords = {
-                tense: ['tense', 'nervous', 'fear', 'afraid', 'threat', 'danger', 'sợ', 'căng thẳng', 'nguy hiểm'],
-                angry: ['angry', 'rage', 'furious', 'shout', 'scream', 'tức giận', 'hét', 'la'],
-                sad: ['sad', 'cry', 'tears', 'mourn', 'loss', 'buồn', 'khóc', 'mất'],
-                romantic: ['love', 'kiss', 'embrace', 'tender', 'gentle', 'yêu', 'hôn', 'dịu dàng'],
-                action: ['run', 'fight', 'chase', 'attack', 'escape', 'chạy', 'đánh', 'trốn', 'tấn công'],
-                mysterious: ['mystery', 'secret', 'hidden', 'shadow', 'dark', 'bí ẩn', 'bóng tối']
-            };
-
-            const combinedText = `${context} ${voiceOverText} ${finalDialogue}`.toLowerCase();
-            const detectedEmotions: string[] = [];
-            for (const [emotion, keywords] of Object.entries(emotionalKeywords)) {
-                if (keywords.some(kw => combinedText.includes(kw))) {
-                    detectedEmotions.push(emotion);
-                }
-            }
-            const primaryEmotion = detectedEmotions[0] || 'neutral';
-
-            // Build acting and camera suggestions based on emotion
-            const actingCameraGuide: Record<string, { acting: string; camera: string }> = {
-                tense: {
-                    acting: 'Subtle tension in body language: clenched jaw, tight shoulders, darting eyes. Breathing slightly faster. Hands may grip objects tightly.',
-                    camera: 'Slow push-in to build tension. Handheld slight shake for unease. Close-ups on eyes and hands. Low depth of field to isolate subject.'
-                },
-                angry: {
-                    acting: 'Aggressive posture: leaning forward, pointing finger, raised voice. Veins visible, face flushed. Abrupt movements.',
-                    camera: 'Quick cuts between subjects. Dutch angle for instability. Tracking shot following aggressive movement. Wide to show confrontation.'
-                },
-                sad: {
-                    acting: 'Withdrawn body language: slumped shoulders, downcast eyes, slow movements. Hands may touch face or cover eyes. Trembling lip.',
-                    camera: 'Slow dolly out to emphasize isolation. High angle to show vulnerability. Long takes to let emotion breathe. Soft focus transitions.'
-                },
-                romantic: {
-                    acting: 'Soft gazes, gentle touches, leaning toward each other. Relaxed shoulders, open body language. Subtle smiles, lingering looks.',
-                    camera: 'Slow circular dolly around subjects. Shallow depth of field for dreamy look. Warm color grading. Smooth steadicam movement.'
-                },
-                action: {
-                    acting: 'Dynamic movement: running, dodging, reaching. High energy, quick reflexes. Physical exertion visible (sweat, heavy breathing).',
-                    camera: 'Fast tracking shots following movement. Quick cuts for impact. Low angle for heroism. Whip pan for speed. Slow-motion for key moments.'
-                },
-                mysterious: {
-                    acting: 'Guarded body language: face partially hidden, deliberate movements. Eyes scanning surroundings. Careful, measured gestures.',
-                    camera: 'Slow reveal from shadow. Rack focus between elements. Dutch angle for unease. Slow zoom into key details. Silhouette compositions.'
-                },
-                neutral: {
-                    acting: 'Natural, everyday movement appropriate to the context. Relaxed but purposeful actions.',
-                    camera: 'Standard coverage: establishing wide, medium for interaction, close-up for emphasis. Smooth, unobtrusive movement.'
-                }
-            };
-
-            const guide = actingCameraGuide[primaryEmotion] || actingCameraGuide.neutral;
+            // NOTE: Emotion detection REMOVED - it was causing unwanted character acting influence
+            // Character acting should be determined by the AI based on the image and scene description
 
             const selectedPreset = VEO_PRESETS.find(p => p.value === scene.veoPreset) || VEO_PRESETS[0];
 
@@ -310,45 +260,35 @@ ${finalDialogue ? `- Character Dialogue (ON-SCREEN character speaking, ${effecti
 - Products visible: "${productContext}"
 - Camera Angle: "${scene.cameraAngleOverride === 'custom' ? scene.customCameraAngle : (CAMERA_ANGLES.find(a => a.value === scene.cameraAngleOverride)?.label || 'Auto')}"
 - Lens Style: "${scene.lensOverride === 'custom' ? scene.customLensOverride : (LENS_OPTIONS.find(l => l.value === scene.lensOverride)?.label || 'Auto')}"
-${cameraMotionPrompt ? `- **USER SELECTED CAMERA MOTION:** ${cameraMotionPrompt}` : '- Camera Motion: Auto (AI selects based on Director DNA and emotion)'}
+${cameraMotionPrompt ? `- **USER SELECTED CAMERA MOTION:** ${cameraMotionPrompt}` : '- Camera Motion: Auto (AI selects based on Director DNA and scene context)'}
 
 **DIRECTOR DNA (${directorName}):**
 ${directorDNA ? `- Visual DNA: ${directorDNA}` : '- Visual DNA: Default cinematic style'}
 ${directorSignatureCameraStyle ? `- **SIGNATURE CAMERA TECHNIQUES:** ${directorSignatureCameraStyle}` : '- Signature Camera: Standard cinematic coverage'}
 - PRIORITY: When choosing camera movement, PRIORITIZE the Director's signature techniques above. This gives consistency to the overall film.
 
-**SCENE INTELLIGENCE (Auto-Analyzed - USE AS HINTS ONLY):**
-- Keyword-Detected Tone: ${primaryEmotion.toUpperCase()}${detectedEmotions.length > 1 ? ` (also: ${detectedEmotions.slice(1).join(', ')})` : ''} ⚠️ This is auto-detected from text keywords - MAY NOT APPLY to this specific moment!
+**SCENE CONTEXT:**
 - Scene Type: ${hasDialogue ? 'DIALOGUE SCENE' : hasVoiceOver ? 'VOICE-OVER/NARRATION SCENE' : 'VISUAL SCENE'}
 - Character Count: ${characterCount > 0 ? characterCount : 'Auto-detect from image'}
 
-⚠️ CRITICAL EMOTION CONTEXT RULE:
-The detected emotion above is based on KEYWORDS in the script, NOT the actual moment.
-YOU MUST analyze the IMAGE and the SPECIFIC SCENE DESCRIPTION to determine:
-1. What are the characters ACTUALLY doing in this image?
-2. What emotion makes sense for THIS SPECIFIC MOMENT?
-3. A scene with "angry crowd" doesn't mean the protagonist is angry
-4. Match character acting to THEIR situation, not the general scene mood
-
-- IF characters appear calm/neutral in image → Use calm, natural movement
-- IF dialogue suggests different emotion than keywords → Follow dialogue emotion
-- IF this is an establishing shot with no close-up → Use minimal acting, focus on environment
-
-SUGGESTED ACTING (if emotion applies): ${guide.acting}
-SUGGESTED CAMERA (if emotion applies): ${guide.camera}
+**CHARACTER ACTING RULES:**
+- ANALYZE THE IMAGE to determine character emotion and action
+- Follow the scene description for what characters are doing
+- Use NATURAL, SUBTLE movement appropriate to the context
+- Do NOT add exaggerated expressions unless explicitly described
 
 **PRESET MODE: ${selectedPreset.label}**
 ${selectedPreset.prompt}
 
 **GENERATION RULES FOR IMAGE-TO-VIDEO:**
 1. START by analyzing the keyframe image - describe its visual elements
-2. APPLY the SUGGESTED ACTING directions to animate characters naturally
-3. APPLY the SUGGESTED CAMERA movement for cinematic feel
+2. Animate characters with NATURAL movement based on what you see in the image
+3. APPLY the Director's camera techniques for cinematic feel
 4. The [Subject] in your prompt = the subject VISIBLE in the image
 5. The [Context] = the environment VISIBLE in the image  
 6. The [Style] = match the lighting, colors, and aesthetic of the image
-7. Add MOTION that makes sense for what's in the image AND the detected emotion
-8. Include SFX and Emotion tags appropriate to the scene
+7. Add MOTION that makes sense for what's in the image
+8. Include appropriate SFX for the scene
 
 **AUDIO RULES (CRITICAL - STRICTLY ENFORCED):**
 - ⛔ ABSOLUTELY NO BACKGROUND MUSIC - No orchestral, no ambient music, no soundtrack, no score
