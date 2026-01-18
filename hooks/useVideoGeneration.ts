@@ -159,6 +159,33 @@ export function useVideoGeneration(
             const sceneProducts = (state.products || []).filter(p => (scene.productIds || []).includes(p.id));
             const productContext = sceneProducts.map(p => `Product: ${p.name} (${p.description})`).join('; ');
 
+            // === CHARACTER IDENTITY FOR ACTION DIRECTION ===
+            // Get selected characters for this scene to properly identify WHO does WHAT to WHOM
+            const selectedCharacters = (state.characters || []).filter(
+                c => (scene.characterIds || []).includes(c.id)
+            );
+
+            // Build character identity string with position hints
+            let characterIdentityContext = '';
+            if (selectedCharacters.length > 0) {
+                const charDescriptions = selectedCharacters.map((char, idx) => {
+                    const position = idx === 0 ? 'LEFT/FIRST' : idx === 1 ? 'RIGHT/SECOND' : `POSITION ${idx + 1}`;
+                    return `- ${char.name} (${position} in frame): ${char.description || 'No description'}`;
+                });
+                characterIdentityContext = `
+**CHARACTERS IN THIS SCENE (CRITICAL FOR ACTION DIRECTION):**
+${charDescriptions.join('\n')}
+
+⚠️ ACTION DIRECTION RULES:
+- When script says "${selectedCharacters[0]?.name || 'Character A'} gives something to ${selectedCharacters[1]?.name || 'Character B'}", the action MUST flow FROM ${selectedCharacters[0]?.name || 'first character'} TO ${selectedCharacters[1]?.name || 'second character'}
+- Do NOT reverse the action direction
+- Do NOT show the receiving character immediately giving back
+- The GIVER initiates, the RECEIVER only receives
+- Maintain this one-directional action flow throughout the clip
+`;
+                console.log('[Veo] Character context added:', selectedCharacters.map(c => c.name).join(', '));
+            }
+
             // Build Scene Intelligence context
             const hasDialogue = Boolean(finalDialogue);
             const hasVoiceOver = Boolean(voiceOverText);
@@ -215,6 +242,8 @@ Role: Documentary Video Prompt Generator (MINIMAL mode)
 ${directorSignatureCameraStyle ? `- DIRECTOR STYLE (${directorName}): Apply these signature camera techniques: ${directorSignatureCameraStyle}` : ''}
 ${cameraMotionPrompt ? `- USER SELECTED CAMERA MOTION: ${cameraMotionPrompt}` : '- Camera Motion: Choose from Director signature techniques above, or default to handheld/observational'}
 
+${characterIdentityContext}
+
 **STRICT OUTPUT FORMAT:**
 "[Camera: ${cameraMotionPrompt || 'choose from Director signature style'}], [subject action verb], [natural body movement]. SFX: [real ambient sound]."
 
@@ -270,6 +299,8 @@ ${directorSignatureCameraStyle ? `- **SIGNATURE CAMERA TECHNIQUES:** ${directorS
 **SCENE CONTEXT:**
 - Scene Type: ${hasDialogue ? 'DIALOGUE SCENE' : hasVoiceOver ? 'VOICE-OVER/NARRATION SCENE' : 'VISUAL SCENE'}
 - Character Count: ${characterCount > 0 ? characterCount : 'Auto-detect from image'}
+
+${characterIdentityContext}
 
 **CHARACTER ACTING RULES:**
 - ANALYZE THE IMAGE to determine character emotion and action
