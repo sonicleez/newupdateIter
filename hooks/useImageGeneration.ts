@@ -41,6 +41,7 @@ const getProviderFromModel = (modelId: string): 'gemini' | 'gommo' => {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper: Retry wrapper for transient API errors (500, 503, 429)
+// Does NOT retry policy violations - content issues won't be fixed by retry
 const withRetry = async <T>(
     fn: () => Promise<T>,
     operationName: string,
@@ -53,17 +54,38 @@ const withRetry = async <T>(
             return await fn();
         } catch (error: any) {
             lastError = error;
-            const errorMessage = String(error?.message || error);
+            const errorMessage = String(error?.message || error).toLowerCase();
 
-            // Check if it's a retryable error
+            // Check for POLICY VIOLATIONS - these should NOT be retried
+            const isPolicyViolation =
+                errorMessage.includes('policy') ||
+                errorMessage.includes('safety') ||
+                errorMessage.includes('blocked') ||
+                errorMessage.includes('harmful') ||
+                errorMessage.includes('inappropriate') ||
+                errorMessage.includes('prohibited') ||
+                errorMessage.includes('violation') ||
+                errorMessage.includes('content filter') ||
+                errorMessage.includes('nsfw') ||
+                errorMessage.includes('sexual') ||
+                errorMessage.includes('violence') ||
+                errorMessage.includes('hate speech') ||
+                errorMessage.includes('dangerous');
+
+            if (isPolicyViolation) {
+                console.log(`[${operationName}] ❌ Policy violation detected - NOT retrying:`, errorMessage.substring(0, 100));
+                throw error;
+            }
+
+            // Check if it's a retryable transient error
             const isRetryable =
                 errorMessage.includes('500') ||
                 errorMessage.includes('503') ||
                 errorMessage.includes('429') ||
                 errorMessage.includes('overloaded') ||
-                errorMessage.includes('UNAVAILABLE') ||
-                errorMessage.includes('INTERNAL') ||
-                errorMessage.includes('RESOURCE_EXHAUSTED');
+                errorMessage.includes('unavailable') ||
+                errorMessage.includes('internal') ||
+                errorMessage.includes('resource_exhausted');
 
             if (!isRetryable || attempt === maxRetries) {
                 throw error;
@@ -71,7 +93,7 @@ const withRetry = async <T>(
 
             // Exponential backoff: 2s, 4s, 8s
             const waitTime = Math.pow(2, attempt) * 1000;
-            console.log(`[${operationName}] ⚠️ Attempt ${attempt}/${maxRetries} failed. Retrying in ${waitTime / 1000}s...`);
+            console.log(`[${operationName}] ⚠️ Attempt ${attempt}/${maxRetries} failed (transient). Retrying in ${waitTime / 1000}s...`);
             await delay(waitTime);
         }
     }
