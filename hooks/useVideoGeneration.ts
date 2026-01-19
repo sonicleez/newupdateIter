@@ -165,25 +165,39 @@ export function useVideoGeneration(
                 c => (scene.characterIds || []).includes(c.id)
             );
 
-            // Build character identity string with position hints
+            // Build character identity string with visual descriptions for AI to match
             let characterIdentityContext = '';
             if (selectedCharacters.length > 0) {
-                const charDescriptions = selectedCharacters.map((char, idx) => {
-                    const position = idx === 0 ? 'LEFT/FIRST' : idx === 1 ? 'RIGHT/SECOND' : `POSITION ${idx + 1}`;
-                    return `- ${char.name} (${position} in frame): ${char.description || 'No description'}`;
+                const charDescriptions = selectedCharacters.map((char) => {
+                    // Provide visual cues for AI to identify each character in the image
+                    return `- ${char.name}: ${char.description || 'No description'} (identify by their unique appearance/clothing)`;
                 });
+
+                const charNames = selectedCharacters.map(c => c.name).join(', ');
+
                 characterIdentityContext = `
-**CHARACTERS IN THIS SCENE (CRITICAL FOR ACTION DIRECTION):**
+**CHARACTERS TO IDENTIFY IN THIS IMAGE (CRITICAL):**
 ${charDescriptions.join('\n')}
 
-⚠️ ACTION DIRECTION RULES:
-- When script says "${selectedCharacters[0]?.name || 'Character A'} gives something to ${selectedCharacters[1]?.name || 'Character B'}", the action MUST flow FROM ${selectedCharacters[0]?.name || 'first character'} TO ${selectedCharacters[1]?.name || 'second character'}
-- Do NOT reverse the action direction
-- Do NOT show the receiving character immediately giving back
-- The GIVER initiates, the RECEIVER only receives
-- Maintain this one-directional action flow throughout the clip
+🔍 **STEP 1 - ANALYZE THE IMAGE:**
+- Look at the provided image carefully
+- Identify each character by their appearance/clothing from descriptions above
+- Note their positions: LEFT, CENTER, RIGHT, FOREGROUND, BACKGROUND
+
+📌 **STEP 2 - MAP POSITIONS FOR ACTION:**
+Characters in this scene: ${charNames}
+- If script mentions "A gives to B" or "A does X to B", identify:
+  1. WHO is A (the actor/giver) based on their visual appearance
+  2. WHO is B (the receiver) based on their visual appearance
+  3. WHERE each is positioned in the image
+
+⚠️ **STEP 3 - ACTION DIRECTION RULES:**
+- Action flows FROM the initiator TO the receiver (as written in script)
+- Do NOT reverse the action
+- Do NOT show recipient giving back
+- MATCH character names to their VISUAL appearance in the image, not assumed positions
 `;
-                console.log('[Veo] Character context added:', selectedCharacters.map(c => c.name).join(', '));
+                console.log('[Veo] Character context added:', charNames);
             }
 
             // Build Scene Intelligence context
