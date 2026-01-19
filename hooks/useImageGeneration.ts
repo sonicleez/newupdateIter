@@ -598,7 +598,7 @@ OUTPUT ONLY THE PROMPT. DO NOT OUTPUT MARKDOWN OR EXPLANATION.`;
                 charPrompt = `${mannequinMaterialConstraint} Appearing Characters: ${charDesc}${outfitConstraint}${facelessConstraint}`;
 
                 // IDENTITY LOCK: When characters have reference images, enforce strict consistency
-                const hasReferenceImages = selectedChars.some(c => c.faceUrl || c.bodyUrl);
+                const hasReferenceImages = selectedChars.some(c => c.faceImage || c.bodyImage);
                 if (hasReferenceImages) {
                     charPrompt += ` [IDENTITY LOCK - CRITICAL]: Keep EXACT facial features, proportions, hairstyle, and clothing from reference images. NO variations, NO changes to face structure. Characters must be 100% recognizable from their reference sheets.`;
                 }
@@ -1138,9 +1138,17 @@ The text prompt below describes the ACTUAL scene you must create.` });
             // If baseImage is provided, this is an EDIT operation, not a generation from scratch.
 
 
-
             // 5a. CHARACTER FACE ID ANCHOR (ABSOLUTE FIRST - Before Style!)
             // Using Google's recommended pattern: "Use supplied image as reference for how [name] should look"
+
+            // DEBUG: Log character reference status
+            if (selectedChars.length > 0) {
+                console.log('[ImageGen] 🎭 CHARACTER REFERENCE CHECK:');
+                selectedChars.forEach(c => {
+                    console.log(`  - ${c.name}: faceImage=${c.faceImage ? '✅' : '❌'}, bodyImage=${c.bodyImage ? '✅' : '❌'}, masterImage=${c.masterImage ? '✅' : '❌'}`);
+                });
+            }
+
             for (const char of selectedChars) {
                 // PRIMARY ANCHOR: Face ID (most important)
                 const isAnimal = /horse|snake|dog|cat|wolf|bird|lion|tiger|dragon|animal|creature|bear|eagle|fish|shark|whale/i.test(char.name) ||
