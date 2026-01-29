@@ -4,9 +4,21 @@ import axios from 'axios';
 import { fal } from '@fal-ai/client';
 import Groq from 'groq-sdk';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import multer from 'multer';
+import { spawn } from 'child_process';
+import { v4 as uuidv4 } from 'uuid';
+import ExcelJS from 'exceljs';
+import { saveCookies, autoGenerate } from './puppeteer-genyu.js';
+import { exec as execCallback } from 'child_process';
+import { promisify } from 'util';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load environment variables from .env in current or parent directory
-import fs from 'fs';
 const envPath = fs.existsSync('./.env') ? './.env' : '../.env';
 dotenv.config({ path: envPath });
 
@@ -476,10 +488,8 @@ app.get('/api/get-pooled-token', async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
-});
 
 // ==================== PUPPETEER AUTO-GENERATE ====================
-import { saveCookies, autoGenerate } from './puppeteer-genyu.js';
 
 app.post('/api/save-cookies', saveCookies);
 app.post('/api/genyu/auto-generate', autoGenerate);
@@ -1006,11 +1016,6 @@ app.post('/api/proxy/pi/analyze', async (req, res) => {
 // ==================== INTELLIGENCE MODULE ====================
 // Video processing for source finding
 
-import multer from 'multer';
-import path from 'path';
-import { spawn } from 'child_process';
-import { v4 as uuidv4 } from 'uuid';
-
 // Configure multer for video uploads
 const uploadDir = './uploads';
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -1389,12 +1394,6 @@ app.post('/api/proxy/perplexity', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
-// ==================== VIDEO SOURCING MODULE ====================
-import { exec as execCallback } from 'child_process';
-import { promisify } from 'util';
-import ExcelJS from 'exceljs';
-
 const execAsync = promisify(execCallback);
 
 // Configure multer for sourcing video uploads
@@ -1750,10 +1749,6 @@ app.delete('/api/sourcing/cleanup/:projectId', async (req, res) => {
 const PORT = process.env.PORT || 3001;
 
 // SERVE FRONTEND (in production)
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const distPath = path.join(__dirname, '../dist');
 if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
