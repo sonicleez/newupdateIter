@@ -1747,9 +1747,28 @@ app.delete('/api/sourcing/cleanup/:projectId', async (req, res) => {
 });
 
 // ==================== SERVER START ====================
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
+
+// SERVE FRONTEND (in production)
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const distPath = path.join(__dirname, '../dist');
+if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    // SPA Routing
+    app.get('*', (req, res, next) => {
+        if (req.path.startsWith('/api')) return next();
+        res.sendFile(path.join(distPath, 'index.html'));
+    });
+    console.log(`✅ [Static] Serving frontend from ${distPath}`);
+} else {
+    console.warn(`⚠️ [Static] Frontend 'dist' folder not found at ${distPath}. Server will only run API.`);
+}
+
 const server = app.listen(PORT, () => {
-    console.log(`🚀 Proxy running at http://localhost:${PORT}`);
+    console.log(`🚀 Server running at http://localhost:${PORT}`);
     console.log(`📡 Fresh token request endpoint ready`);
     console.log(`🧠 Intelligence module ready (FFmpeg + Groq Vision + Perplexity)`);
 });
