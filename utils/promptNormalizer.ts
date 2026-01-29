@@ -2,9 +2,11 @@
  * Prompt Normalizer
  * Optimizes prompts for each specific AI model
  * Called by DOP before sending to API
+ * 
+ * Migrated from Google AI to Groq
  */
 
-import { GoogleGenAI } from "@google/genai";
+import { callGroqText } from './geminiUtils';
 
 export type ModelType =
     | 'gemini'
@@ -332,16 +334,8 @@ Output: "${mode === 'character'
             : 'cute spotted dalmatian dog wearing red collar, adorable pet portrait, studio lighting'}"`;
 
     try {
-        const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
-            contents: [{
-                role: 'user',
-                parts: [{ text: systemPrompt }]
-            }]
-        });
-
-        let optimized = response.text?.trim() || userDescription;
+        let optimized = await callGroqText(systemPrompt, '', false);
+        optimized = optimized.trim();
         const wasTranslated = containsVietnamese(userDescription);
 
         // For character mode: Force append critical keywords if not present

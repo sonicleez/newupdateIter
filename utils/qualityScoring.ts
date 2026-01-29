@@ -1,11 +1,11 @@
 /**
  * Quality Scoring System
  * 
- * Uses Gemini Vision to analyze generated images and score quality.
+ * Uses Groq Vision to analyze generated images and score quality.
  * Provides feedback for auto-retry and learning system.
  */
 
-import { GoogleGenAI } from "@google/genai";
+import { callGroqVision } from './geminiUtils';
 
 export interface QualityScore {
     overall: number;          // 0-1 overall score
@@ -25,17 +25,15 @@ export interface QualityCheckResult {
 }
 
 /**
- * Analyze image quality using Gemini Vision
+ * Analyze image quality using Groq Vision
  */
 export async function checkImageQuality(
     imageBase64: string,
     originalPrompt: string,
     mode: 'character' | 'scene',
-    apiKey: string
+    apiKey: string // kept for backward compatibility
 ): Promise<QualityScore> {
     try {
-        const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
-
         // Prepare image data
         let data = imageBase64;
         let mimeType = 'image/jpeg';
@@ -50,19 +48,10 @@ export async function checkImageQuality(
             ? getCharacterCheckPrompt(originalPrompt)
             : getSceneCheckPrompt(originalPrompt);
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
-            contents: {
-                parts: [
-                    { inlineData: { data, mimeType } },
-                    { text: checkPrompt }
-                ]
-            },
-            config: { responseMimeType: "application/json" }
-        });
+        const response = await callGroqVision(checkPrompt, [{ data, mimeType }]);
 
         const result = JSON.parse(
-            response.text?.replace(/```json/g, '').replace(/```/g, '').trim() || '{}'
+            response.replace(/```json/g, '').replace(/```/g, '').trim() || '{}'
         );
 
         // Calculate overall score

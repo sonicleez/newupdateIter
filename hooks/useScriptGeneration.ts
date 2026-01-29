@@ -1,16 +1,74 @@
 import { useState, useCallback } from 'react';
-import { GoogleGenAI, Type } from "@google/genai";
 import { ProjectState, Scene, Character, Product, DirectorPreset } from '../types';
 import { getPresetById } from '../utils/scriptPresets';
 import { buildScriptPrompt, buildGroupRegenerationPrompt } from '../utils/promptBuilder';
 import { generateId } from '../utils/helpers';
-import { callGeminiText } from '../utils/geminiUtils';
+
+// Helper to call Groq Chat API via proxy
+async function callGroqChat(
+    messages: Array<{ role: string; content: string }>,
+    options: {
+        model?: string;
+        temperature?: number;
+        max_tokens?: number;
+        response_format?: { type: string };
+    } = {}
+): Promise<string> {
+    // Map internal reasoning format to Groq model if needed
+    // UI might send "gemini-3-pro-preview|high", we strip it to just modelId
+    const targetModel = options.model?.split('|')[0] || 'llama-3.3-70b-versatile';
+
+    const response = await fetch('/api/proxy/groq/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            messages,
+            model: targetModel,
+            temperature: options.temperature ?? 0.7,
+            max_tokens: options.max_tokens ?? 8192,
+            response_format: options.response_format
+        })
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Groq API call failed');
+    }
+    return data.text;
+}
+
+// Helper to call Groq for text generation (Director tasks)
+async function callDirectorText(
+    prompt: string,
+    systemPrompt: string = '',
+    jsonMode: boolean = false,
+    model: string = 'deepseek-r1-distill-llama-70b'
+): Promise<string> {
+    const messages: Array<{ role: string; content: string }> = [];
+    
+    if (systemPrompt) {
+        messages.push({ role: 'system', content: systemPrompt });
+    }
+    messages.push({ role: 'user', content: prompt });
+
+    const options: any = {
+        model: model,
+        temperature: 0.7,
+        max_tokens: 8192
+    };
+
+    if (jsonMode) {
+        options.response_format = { type: 'json_object' };
+    }
+
+    return callGroqChat(messages, options);
+}
 
 
 export function useScriptGeneration(
     state: ProjectState,
     updateStateAndRecord: (updater: (prevState: ProjectState) => ProjectState) => void,
-    userApiKey: string | null,
+    userApiKey: string | null, // kept for backward compatibility but no longer used for script
     setApiKeyModalOpen: (open: boolean) => void,
     setAgentState: (agent: 'director' | 'dop', status: any, message?: string, stage?: string) => void
 
@@ -19,14 +77,6 @@ export function useScriptGeneration(
     const [isScriptGenerating, setIsScriptGenerating] = useState(false);
 
     const handleGenerateScript = useCallback(async (idea: string, count: number, selectedCharacterIds: string[], selectedProductIds: string[], director?: DirectorPreset) => {
-        const rawApiKey = userApiKey || (process.env as any).API_KEY;
-        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
-        if (!apiKey) {
-            alert("Vui lòng nhập API Key để sử dụng tính năng này.");
-            setApiKeyModalOpen(true);
-            return null;
-        }
-
         setIsScriptGenerating(true);
         setAgentState('dop', 'thinking', 'Đang phân tích ý tưởng và xây dựng kịch bản chi tiết...');
 
@@ -50,7 +100,6 @@ export function useScriptGeneration(
                 'custom': state.customScriptLanguage || 'English'
             };
             const effectiveLanguage = languageNames[state.scriptLanguage] || 'English';
-            const [modelId, thinkingLevel] = (state.scriptModel || 'gemini-2.5-flash|high').split('|');
 
             // ═══════════════════════════════════════════════════════════════
             // STEP 1: VISUAL CLUSTERING (The "Director's Thinking" Phase)
@@ -84,8 +133,8 @@ OUTPUT FORMAT:
 ...
             `;
 
-            // Call Step 1
-            const visualPlan = await callGeminiText(apiKey, clusteringUserPrompt, clusteringSystemPrompt, modelId);
+            // Call Step 1 via Groq
+            const visualPlan = await callDirectorText(clusteringUserPrompt, clusteringSystemPrompt, false, state.scriptModel);
             console.log("Visual Plan:", visualPlan);
 
             // ═══════════════════════════════════════════════════════════════
@@ -103,97 +152,53 @@ ${visualPlan}
 
             const prompt = buildScriptPrompt(optimizedIdea, activePreset, activeCharacters, activeProducts, count, effectiveLanguage, state.customScriptInstruction, director);
 
-            const ai = new GoogleGenAI({ apiKey });
+            // Build the scene schema description for JSON mode
+            const sceneSchemaDescription = `
+You must respond with a valid JSON object containing these fields:
+{
+  "global_story_context": "string - overall story/world setting",
+  "detailed_story": "string - expanded narrative",
+  "scene_groups": [
+    {
+      "id": "string - unique group ID",
+      "name": "string - group name",
+      "description": "string - group description",
+      "continuity_reference_group_id": "string (optional) - reference to another group for continuity"
+    }
+  ],
+  "scenes": [
+    {
+      "scene_number": "string - e.g. '1', '2', etc.",
+      "group_id": "string - which group this scene belongs to",
+      "prompt_name": "string - short descriptive name",
+      "visual_context": "string - detailed visual description for image generation",
+      "character_ids": ["array of character IDs appearing in this scene"],
+      "product_ids": ["array of product IDs appearing in this scene"]
+      ${activePreset.outputFormat.hasDialogue ? ',"dialogues": [{"characterName": "string", "line": "string"}]' : ''}
+      ${activePreset.outputFormat.hasNarration ? ',"voiceover": "string - narration text"' : ''}
+      ${activePreset.outputFormat.hasCameraAngles ? ',"camera_angle": "string - camera angle description"' : ''}
+    }
+  ]
+}
+`;
 
-            const sceneProperties: any = {
-                scene_number: { type: Type.STRING },
-                group_id: { type: Type.STRING },
-                prompt_name: { type: Type.STRING },
-                visual_context: { type: Type.STRING },
-                character_ids: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                },
-                product_ids: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                }
-            };
+            const fullPrompt = `${prompt}
 
-            if (activePreset.outputFormat.hasDialogue) {
-                sceneProperties.dialogues = {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            characterName: { type: Type.STRING },
-                            line: { type: Type.STRING }
-                        }
-                    }
-                };
+${sceneSchemaDescription}
+
+Generate the script now. Respond ONLY with valid JSON.`;
+
+            const rawText = await callDirectorText(fullPrompt, 'You are an expert film director and screenwriter.', true, state.scriptModel);
+
+            // Parse JSON - handle potential markdown wrapping
+            let jsonResponse;
+            try {
+                const cleanedText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                jsonResponse = JSON.parse(cleanedText);
+            } catch (e) {
+                console.error('Failed to parse script JSON:', rawText);
+                throw new Error('Failed to parse script response as JSON');
             }
-
-            if (activePreset.outputFormat.hasNarration) {
-                sceneProperties.voiceover = { type: Type.STRING };
-            }
-
-            if (activePreset.outputFormat.hasCameraAngles) {
-                sceneProperties.camera_angle = { type: Type.STRING };
-            }
-
-            const generationConfig: any = {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        global_story_context: { type: Type.STRING }, // New Field
-                        detailed_story: { type: Type.STRING },
-                        scene_groups: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    id: { type: Type.STRING },
-                                    name: { type: Type.STRING },
-                                    description: { type: Type.STRING },
-                                    continuity_reference_group_id: { type: Type.STRING }
-                                },
-                                required: ["id", "name", "description"]
-                            }
-                        },
-                        scenes: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: sceneProperties,
-                                required: ["scene_number", "visual_context", "prompt_name", "character_ids", "group_id"]
-                            }
-                        }
-                    },
-                    required: ["global_story_context", "detailed_story", "scene_groups", "scenes"]
-                }
-            };
-
-            // FORCE AI to generate voiceover if explicitly requested by preset
-            if (activePreset.outputFormat.hasNarration) {
-                const requiredFields = generationConfig.responseSchema.properties.scenes.items.required as string[];
-                if (!requiredFields.includes("voiceover")) {
-                    requiredFields.push("voiceover");
-                }
-            }
-
-            if (thinkingLevel && thinkingLevel !== 'none') {
-                (generationConfig as any).thinkingConfig = { thinkingLevel };
-            }
-
-            const response = await ai.models.generateContent({
-                model: modelId,
-                contents: prompt,
-                config: generationConfig
-            });
-
-            const rawText = response.text || '{}';
-            const jsonResponse = JSON.parse(rawText);
 
             const finalScript = {
                 globalStoryContext: jsonResponse.global_story_context || '',
@@ -216,13 +221,20 @@ ${visualPlan}
             2. If you detect a character is described as "human" in one scene but "mannequin" in another, harmonize them.
             3. Synchronize lighting and weather keywords if they are in the same location/time.
             
-            OUTPUT: JSON array of string (the corrected visual_context for each scene), same order.`;
+            OUTPUT: JSON array of string (the corrected visual_context for each scene), same order.
+            Respond with ONLY the JSON array, no explanation.`;
 
             try {
-                const auditedTextsRaw = await callGeminiText(apiKey, auditPrompt, 'System: Expert Film Director.', 'gemini-2.5-flash', true);
+                const auditedTextsRaw = await callDirectorText(auditPrompt, 'System: Expert Film Director.', true, state.scriptModel);
 
-
-                const auditedTexts = JSON.parse(auditedTextsRaw);
+                let auditedTexts;
+                try {
+                    const cleanedAudit = auditedTextsRaw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                    auditedTexts = JSON.parse(cleanedAudit);
+                } catch (e) {
+                    console.error('Failed to parse audit response:', auditedTextsRaw);
+                    auditedTexts = null;
+                }
 
                 if (Array.isArray(auditedTexts) && auditedTexts.length === finalScript.scenes.length) {
                     finalScript.scenes = finalScript.scenes.map((s: any, idx: number) => {
@@ -246,8 +258,7 @@ ${visualPlan}
                     OUTPUT: Just the comma-separated words.`;
 
                     try {
-                        const kit = await callGeminiText(apiKey, kitPrompt, 'System: Expert Technical Director.', 'gemini-2.5-flash', false);
-
+                        const kit = await callDirectorText(kitPrompt, 'System: Expert Technical Director.', false, state.scriptModel);
 
                         updateStateAndRecord(s => ({
                             ...s,
@@ -275,16 +286,9 @@ ${visualPlan}
         } finally {
             setIsScriptGenerating(false);
         }
-    }, [state, userApiKey, setApiKeyModalOpen]);
+    }, [state, setApiKeyModalOpen]);
 
     const handleRegenerateGroup = useCallback(async (detailedStory: string, groupToRegen: any, allGroups: any[], sceneCount?: number) => {
-        const rawApiKey = userApiKey || (process.env as any).API_KEY;
-        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
-        if (!apiKey) {
-            setApiKeyModalOpen(true);
-            return null;
-        }
-
         setIsScriptGenerating(true);
         setAgentState('dop', 'thinking', 'Đang tái cấu trúc nhóm phân cảnh...');
 
@@ -317,25 +321,22 @@ ${visualPlan}
                 sceneCount
             );
 
-            const [modelId, thinkingLevel] = (state.scriptModel || 'gemini-2.5-flash|high').split('|');
-            const ai = new GoogleGenAI({ apiKey });
+            const fullPrompt = `${prompt}
 
-            const generationConfig: any = {
-                responseMimeType: "application/json",
-            };
+Respond with a JSON object containing a "scenes" array with the regenerated scenes.
+Each scene should have: scene_number, group_id, prompt_name, visual_context, character_ids, product_ids.
+Respond ONLY with valid JSON.`;
 
-            if (thinkingLevel && thinkingLevel !== 'none') {
-                (generationConfig as any).thinkingConfig = { thinkingLevel };
+            const rawText = await callDirectorText(fullPrompt, 'You are an expert film director.', true, state.scriptModel);
+
+            let jsonResponse;
+            try {
+                const cleanedText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                jsonResponse = JSON.parse(cleanedText);
+            } catch (e) {
+                console.error('Failed to parse regeneration JSON:', rawText);
+                throw new Error('Failed to parse regeneration response');
             }
-
-            const response = await ai.models.generateContent({
-                model: modelId,
-                contents: prompt,
-                config: generationConfig
-            });
-
-            const rawText = response.text || '{}';
-            const jsonResponse = JSON.parse(rawText);
 
             setAgentState('dop', 'success', 'Cấu trúc nhóm phân cảnh đã được cập nhật.');
             return jsonResponse.scenes || [];
@@ -347,16 +348,10 @@ ${visualPlan}
         } finally {
             setIsScriptGenerating(false);
         }
-    }, [state, userApiKey, setApiKeyModalOpen]);
+    }, [state, setApiKeyModalOpen]);
 
     const handleSmartMapAssets = useCallback(async (scenes: any[], characters: Character[], products: Product[]) => {
-        const rawApiKey = userApiKey || (process.env as any).API_KEY;
-        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
-        if (!apiKey) return null;
-
         try {
-            const ai = new GoogleGenAI({ apiKey });
-
             const mappingPrompt = `
             **TASK:** Audit this list of scenes and map the correct Character and Product IDs to each scene based on their visual description and dialogue.
             
@@ -389,22 +384,23 @@ ${visualPlan}
             }
             `;
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: mappingPrompt,
-                config: {
-                    responseMimeType: "application/json",
-                    thinkingConfig: { thinkingLevel: 'low' }
-                } as any
-            });
+            const rawText = await callDirectorText(mappingPrompt, 'You are an expert script supervisor.', true, state.scriptModel);
 
-            const rawText = response.text || '{}';
-            return JSON.parse(rawText);
+            let result;
+            try {
+                const cleanedText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                result = JSON.parse(cleanedText);
+            } catch (e) {
+                console.error('Failed to parse mapping JSON:', rawText);
+                return null;
+            }
+
+            return result;
         } catch (error) {
             console.error("Smart mapping failed:", error);
             return null;
         }
-    }, [userApiKey]);
+    }, []);
 
     return {
         handleGenerateScript,

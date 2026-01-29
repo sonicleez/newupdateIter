@@ -3,9 +3,10 @@
  * 
  * Tracks successful prompts and learns patterns for each model.
  * Uses Supabase + pgvector for semantic search.
+ * 
+ * Migrated from Google AI - embeddings temporarily disabled (require dedicated embedding API)
  */
 
-import { GoogleGenAI } from "@google/genai";
 import { supabase } from './storageUtils';
 import { detectModelType, ModelType } from './promptNormalizer';
 
@@ -65,21 +66,15 @@ const IMPORTANT_KEYWORDS = [
 ];
 
 /**
- * Generate embedding using Gemini
+ * Generate embedding - DISABLED
+ * Embeddings require a dedicated embedding API (not available in Groq yet)
+ * TODO: Integrate with Voyage AI or similar embedding service
  */
 async function generateEmbedding(text: string, apiKey: string): Promise<number[] | null> {
-    try {
-        const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
-        const response = await ai.models.embedContent({
-            model: 'text-embedding-004',
-            contents: [{ parts: [{ text }] }]
-        });
-
-        return (response as any).embedding?.values || null;
-    } catch (err) {
-        console.error('[DOP Learning] Embedding generation failed:', err);
-        return null;
-    }
+    // Embedding generation disabled after migration from Google AI
+    // Groq doesn't provide embedding endpoints
+    console.warn('[DOP Learning] Embedding generation disabled (requires dedicated embedding API)');
+    return null;
 }
 
 /**

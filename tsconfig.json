@@ -18,10 +18,10 @@
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
+    "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@google/genai": ["./utils/shims/googleGenai.ts"]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true

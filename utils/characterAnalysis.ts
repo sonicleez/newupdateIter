@@ -1,7 +1,7 @@
-// Helper for analyzing character images using Gemini Vision
+// Helper for analyzing character images using Groq Vision
 // and generating Face/Body prompts
 
-import { GoogleGenAI } from "@google/genai";
+import { callGroqVision, safeGetImageData } from './geminiUtils';
 
 export interface CharacterAnalysis {
     faceDescription: string;
@@ -31,38 +31,33 @@ Return ONLY valid JSON, no markdown.
 `;
 
 /**
- * Analyze character master image using Gemini Vision
+ * Analyze character master image using Groq Vision
  */
 export async function analyzeCharacterImage(
     imageBase64: string,
-    apiKey: string
+    apiKey: string // kept for backward compatibility, not used
 ): Promise<CharacterAnalysis> {
-    const trimmedKey = apiKey?.trim();
-    const ai = new GoogleGenAI({ apiKey: trimmedKey });
-
     // Clean base64 if needed
     const cleanData = imageBase64.includes(',')
         ? imageBase64.split(',')[1]
         : imageBase64;
 
-    console.log('[Character Analysis] 🔍 Analyzing master image with Gemini...');
+    // Determine mime type
+    let mimeType = 'image/jpeg';
+    if (imageBase64.startsWith('data:')) {
+        const match = imageBase64.match(/data:([^;]+);/);
+        if (match) mimeType = match[1];
+    }
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{
-            parts: [
-                { inlineData: { data: cleanData, mimeType: 'image/jpeg' } },
-                { text: ANALYSIS_PROMPT }
-            ]
-        }]
-    });
+    console.log('[Character Analysis] 🔍 Analyzing master image with Groq Vision...');
 
-    const text = response.text || '{}';
-    console.log('[Character Analysis] 📋 Raw response:', text.substring(0, 200));
+    const response = await callGroqVision(ANALYSIS_PROMPT, [{ data: cleanData, mimeType }]);
+
+    console.log('[Character Analysis] 📋 Raw response:', response.substring(0, 200));
 
     try {
         // Clean JSON from markdown if present
-        const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const cleanJson = response.replace(/```json/g, '').replace(/```/g, '').trim();
         const analysis = JSON.parse(cleanJson);
         console.log('[Character Analysis] ✅ Parsed successfully:', analysis);
         return analysis;

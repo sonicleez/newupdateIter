@@ -6,7 +6,7 @@ import { createCustomPreset } from '../../utils/scriptPresets';
 import { PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER, CREATIVE_PRESETS, GLOBAL_STYLES, SCRIPT_MODELS } from '../../constants/presets';
 import { DIRECTOR_CATEGORIES, DIRECTOR_PRESETS, DirectorCategory, DirectorPreset } from '../../constants/directors';
 import { detectCharactersInText, generateId } from '../../utils/helpers';
-import { GoogleGenAI } from "@google/genai";
+import { callGroqText } from '../../utils/geminiUtils';
 
 export interface ScriptGeneratorModalProps {
     isOpen: boolean;
@@ -133,28 +133,20 @@ export const ScriptGeneratorModal: React.FC<ScriptGeneratorModalProps> = ({
 
     const handleSearchCustomDirector = async () => {
         if (!customDirectorName.trim()) return;
-        const currentApiKey = apiKey || (process.env as any).API_KEY;
-        if (!currentApiKey) return alert("Vui lòng nhập API Key để sử dụng tính năng tìm kiếm.");
-
+        
         setIsSearchingDirector(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: currentApiKey });
             const prompt = `Analyze the cinematic and storytelling style of the director "${customDirectorName}". 
             Return a JSON object with:
             {
                 "description": "Short 1-sentence bio/style summary in Vietnamese",
                 "dna": "Comma-separated visual/technical keywords in English",
                 "quote": "A famous quote about their art in original language/English"
-            }`;
+            }
+            Respond ONLY with the JSON object.`;
 
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                config: { responseMimeType: "application/json" }
-            });
-
-            const responseText = response.text || '{}';
-            const data = JSON.parse(responseText);
+            const responseText = await callGroqText(prompt, 'You are an expert film scholar and cinematic analyst.', true);
+            const data = JSON.parse(responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
 
             const customDirector: DirectorPreset = {
                 id: `custom-${generateId()}`,

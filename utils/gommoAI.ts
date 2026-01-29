@@ -102,15 +102,15 @@ export interface GommoImageItem {
 }
 
 const GOMMO_ENDPOINTS = {
-    createImage: 'https://api.gommo.net/ai/generateImage',
-    checkImageStatus: 'https://api.gommo.net/ai/image',
-    accountInfo: 'https://api.gommo.net/api/apps/go-mmo/ai/me',
-    listModels: 'https://api.gommo.net/ai/models',
+    createImage: '/api/proxy/gommo/ai/generateImage',
+    checkImageStatus: '/api/proxy/gommo/ai/image',
+    accountInfo: '/api/proxy/gommo/api/apps/go-mmo/ai/me',
+    listModels: '/api/proxy/gommo/ai/models',
     // Library Management
-    generationGroups: 'https://api.gommo.net/ai/generationGroups',
-    listImages: 'https://api.gommo.net/ai/images', // List images from a group
-    listSpaces: 'https://api.gommo.net/api/apps/go-mmo/ai_spaces/getAll',
-    createSpace: 'https://api.gommo.net/api/apps/go-mmo/ai_spaces/create',
+    generationGroups: '/api/proxy/gommo/ai/generationGroups',
+    listImages: '/api/proxy/gommo/ai/images',
+    listSpaces: '/api/proxy/gommo/api/apps/go-mmo/ai_spaces/getAll',
+    createSpace: '/api/proxy/gommo/api/apps/go-mmo/ai_spaces/create',
 };
 
 /**
@@ -134,31 +134,18 @@ export class GommoAI {
     }
 
     /**
-     * Internal request method - all Gommo API calls use POST with form-urlencoded
+     * Internal request method - Redirected to local proxy
      */
     private async request<T>(endpoint: string, params: Record<string, any> = {}): Promise<T> {
-        const body = new URLSearchParams();
-
-        // Add authentication
-        body.append('access_token', this.accessToken);
-        body.append('domain', this.domain);
-
-        // Add method-specific parameters
-        for (const [key, value] of Object.entries(params)) {
-            if (value !== null && value !== undefined && value !== '') {
-                if (typeof value === 'object') {
-                    body.append(key, JSON.stringify(value));
-                } else {
-                    body.append(key, String(value));
-                }
-            }
-        }
-
         try {
             const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: body.toString(),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    domain: this.domain,
+                    access_token: this.accessToken,
+                    ...params
+                }),
             });
 
             const data = await response.json();
@@ -351,7 +338,9 @@ export class GommoAI {
             id_base,
         });
 
-        console.log('[Gommo AI] checkImageStatus raw response:', JSON.stringify(result).substring(0, 500));
+        if (result.error) {
+            console.error(`[Gommo AI] status check error: ${result.error} - ${result.message}`);
+        }
 
         // Response might be wrapped in imageInfo
         if (result.imageInfo) {
@@ -448,11 +437,23 @@ export class GommoAI {
 /**
  * Helper: Fetch image URL and convert to base64
  * Useful when downstream code expects base64 format
+ * Uses proxy to bypass browser CORS issues
  */
 export async function urlToBase64(imageUrl: string): Promise<string> {
     try {
-        const response = await fetch(imageUrl);
-        const blob = await response.blob();
+        // Try proxy first to bypass CORS
+        const response = await fetch(`/api/proxy/fetch-image?url=${encodeURIComponent(imageUrl)}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.base64) {
+                return data.base64;
+            }
+        }
+
+        // Fallback to direct fetch if proxy fails (might work if CORS is enabled on CDN)
+        console.warn('[Gommo AI] Proxy fetch failed, falling back to direct fetch');
+        const directResponse = await fetch(imageUrl);
+        const blob = await directResponse.blob();
 
         return new Promise((resolve, reject) => {
             const reader = new FileReader();

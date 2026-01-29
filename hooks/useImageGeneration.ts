@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { ProjectState, Scene, AgentStatus } from '../types';
 
 import {
@@ -9,7 +8,7 @@ import {
 import { DIRECTOR_PRESETS, DirectorCategory } from '../constants/directors';
 import { getPresetById } from '../utils/scriptPresets';
 import { uploadImageToSupabase, syncUserStatsToCloud } from '../utils/storageUtils';
-import { safeGetImageData, callGeminiVisionReasoning, preWarmImageCache, fixMimeType } from '../utils/geminiUtils';
+import { safeGetImageData, callGroqVision, preWarmImageCache, fixMimeType } from '../utils/geminiUtils';
 import { GommoAI, urlToBase64 } from '../utils/gommoAI';
 import { IMAGE_MODELS } from '../utils/appConstants';
 import { normalizePrompt, normalizePromptAsync, formatNormalizationLog, needsNormalization, containsVietnamese } from '../utils/promptNormalizer';
@@ -32,9 +31,13 @@ const cleanPromptForImageGen = (prompt: string): string => {
 };
 
 // Helper: Determine which provider to use based on model ID
-const getProviderFromModel = (modelId: string): 'gemini' | 'gommo' => {
+const getProviderFromModel = (modelId: string): 'gemini' | 'gommo' | 'fal' => {
     const model = IMAGE_MODELS.find(m => m.value === modelId);
-    return (model?.provider as 'gemini' | 'gommo') || 'gemini';
+    if (!model) return 'gemini';
+
+    const p = model.provider;
+    if (p === 'google') return 'gommo'; // Google models via Gommo Proxy
+    return (p as 'gemini' | 'gommo' | 'fal') || 'gemini';
 };
 
 // Helper: Delay function for retries
@@ -150,6 +153,40 @@ export function useImageGeneration(
     }, [userApiKey, state.projectName]);
 
     /**
+     * Pi Strategic Dispatcher - Backend Optimization
+     * Calls the backend Pi service to optimize the prompt based on model weaknesses
+     */
+    const callPiDispatcher = async (
+        prompt: string,
+        modelId: string,
+        mode: string,
+        isMannequin: boolean
+    ): Promise<string> => {
+        try {
+            console.log(`🧠 [Pi Dispatcher] Requesting intelligence for ${modelId}...`);
+            const response = await fetch('/api/proxy/pi/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt,
+                    modelId,
+                    mode,
+                    isMannequinMode: isMannequin
+                })
+            });
+            const data = await response.json();
+            if (data.success && data.optimizedPrompt) {
+                console.log(`✅ [Pi Dispatcher] Intelligence source: ${data.source}`);
+                return data.optimizedPrompt;
+            }
+            return prompt; // Fallback to original
+        } catch (err) {
+            console.warn('[Pi Dispatcher] Service unavailable, using basic normalization');
+            return prompt;
+        }
+    };
+
+    /**
      * Storyboard Mode: Find the best cascade reference image for visual consistency
      * Priority: Nearest KEY FRAME > Nearest any scene > Group conceptImage
      * - Looks for the nearest scene with an image in the SAME SceneGroup
@@ -246,27 +283,107 @@ export function useImageGeneration(
         });
 
         // ═══════════════════════════════════════════════════════════════
+        // FAL.AI PATH: Optimized for Flux.1 Sequential Consistency
+        // ═══════════════════════════════════════════════════════════════
+        if (provider === 'fal') {
+            console.log('[ImageGen] 🚀 Using FAL.AI provider');
+            try {
+                // Get references from parts
+                let face_id_url = undefined;
+                let image_url = undefined;
+
+                // Extract URLs from parts (logic for sequential passing)
+                // In this implementation, we assume the last image part is the continuity ref
+                // and character parts have specific labels
+                const facePart = parts.find(p => p.text?.includes('FACE ID LOCK') || p.text?.includes('IDENTITY'));
+                const continuityPart = parts.find(p => p.text?.includes('CONTINUITY_ANCHOR') || p.text?.includes('LOCATION CONTINUITY'));
+
+                // Log details for debugging
+                if (continuityPart) console.log(`[ImageGen] 🔗 Sequential reference detected: ${continuityPart.imageUrl?.substring(0, 50)}...`);
+                if (facePart) console.log(`[ImageGen] 🎭 Face ID reference detected: ${facePart.imageUrl?.substring(0, 50)}...`);
+
+                const response = await fetch('/api/proxy/fal/flux', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt,
+                        image_url: continuityPart?.imageUrl || undefined,
+                        face_id_url: facePart?.imageUrl || undefined,
+                        aspect_ratio: aspectRatio === '16:9' ? 'landscape_16_9' :
+                            aspectRatio === '9:16' ? 'portrait_16_9' : 'square'
+                    })
+                });
+
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || 'Fal.ai generation failed');
+
+                return { imageUrl: data.url };
+            } catch (error: any) {
+                console.error('[ImageGen] ❌ Fal.ai generation failed:', error.message);
+                throw error;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
         // GOMMO PATH: Supports subjects array for Face ID references
         // ═══════════════════════════════════════════════════════════════
         if (provider === 'gommo' && gommoCredentials?.domain && gommoCredentials?.accessToken) {
             console.log('[ImageGen] 🟡 Using GOMMO provider');
 
-            // Convert Gemini parts to Gommo subjects format
-            // Gommo expects: { id_base?, url?, data? } where data is base64 WITHOUT prefix
-            const subjects: Array<{ id_base?: string; url?: string; data?: string }> = [];
+            // ═══════════════════════════════════════════════════════════════
+            // SMART SUBJECT EXTRACTION: Prioritize Face ID > Body > Continuity
+            // This ensures character identity is preserved when limiting subjects
+            // ═══════════════════════════════════════════════════════════════
+
+            // Categorize parts by type for smart prioritization
+            const faceSubjects: Array<{ data: string; charName?: string }> = [];
+            const bodySubjects: Array<{ data: string; charName?: string }> = [];
+            const otherSubjects: Array<{ data: string }> = [];
 
             for (let i = 0; i < parts.length; i++) {
                 const part = parts[i];
-                if (part.inlineData?.data && part.inlineData?.mimeType) {
-                    // Gommo expects base64 WITHOUT the data:image/...;base64, prefix
-                    const base64Data = part.inlineData.data;
-                    subjects.push({ data: base64Data });
+
+                // Skip non-image parts
+                if (!part.inlineData?.data || !part.inlineData?.mimeType) continue;
+
+                const base64Data = part.inlineData.data;
+
+                // Look at the PREVIOUS part for context (text instruction)
+                const prevPart = i > 0 ? parts[i - 1] : null;
+                const prevText = prevPart?.text?.toUpperCase() || '';
+
+                // Categorize based on instruction text
+                if (prevText.includes('FACE ID') || prevText.includes('IDENTITY_') || prevText.includes('IDENTITY LOCK')) {
+                    // Extract character name from text like "[IDENTITY_JOHN]:" or "FACE ID LOCK - JOHN"
+                    const nameMatch = prevText.match(/(?:IDENTITY_|FACE ID LOCK[^A-Z]*)([\w\s]+)/);
+                    faceSubjects.push({ data: base64Data, charName: nameMatch?.[1]?.trim() });
+                    console.log(`[ImageGen] 🔒 Found FACE ID reference${nameMatch ? ` for ${nameMatch[1].trim()}` : ''}`);
+                } else if (prevText.includes('FULL BODY') || prevText.includes('FULLBODY_') || prevText.includes('COSTUME')) {
+                    const nameMatch = prevText.match(/(?:FULLBODY_|)([\w\s]+)\s*(?:FULL BODY|COSTUME)/);
+                    bodySubjects.push({ data: base64Data, charName: nameMatch?.[1]?.trim() });
+                    console.log(`[ImageGen] 👕 Found BODY reference${nameMatch ? ` for ${nameMatch[1].trim()}` : ''}`);
+                } else {
+                    otherSubjects.push({ data: base64Data });
                 }
             }
 
-            if (subjects.length > 0) {
-                console.log(`[ImageGen] 🎭 Converted ${subjects.length} reference image(s) to Gommo subjects`);
-            }
+            // Build prioritized subjects array: FACE first, then BODY, then others
+            // This ensures Face ID is never dropped when limiting
+            const prioritizedSubjects: Array<{ id_base?: string; url?: string; data?: string }> = [];
+
+            // 1. Add ALL Face IDs first (critical for identity)
+            faceSubjects.forEach(s => prioritizedSubjects.push({ data: s.data }));
+
+            // 2. Add Body references (important for clothing consistency)
+            bodySubjects.forEach(s => prioritizedSubjects.push({ data: s.data }));
+
+            // 3. Add other references (continuity, environment, etc.)
+            otherSubjects.forEach(s => prioritizedSubjects.push({ data: s.data }));
+
+            console.log(`[ImageGen] 📊 Subject breakdown: ${faceSubjects.length} Face, ${bodySubjects.length} Body, ${otherSubjects.length} Other = ${prioritizedSubjects.length} total`);
+
+            // Use prioritizedSubjects instead of simple array
+            const subjects = prioritizedSubjects;
 
             try {
                 const client = new GommoAI(gommoCredentials.domain, gommoCredentials.accessToken);
@@ -281,15 +398,52 @@ export function useImageGeneration(
                     console.log('[ImageGen] 🔒 Added IDENTITY LOCK prefix for Gommo');
                 }
 
-                // Limit subjects to first 3 (Face, Body, Continuity) - too many confuses API
-                const limitedSubjects = subjects.slice(0, 3);
-                if (subjects.length > 3) {
-                    console.log(`[ImageGen] ⚠️ Limiting subjects from ${subjects.length} to 3 for Gommo`);
+                // ═══════════════════════════════════════════════════════════════
+                // SMART SUBJECT LIMITING: Model-aware limits with clear logging
+                // Since we prioritized Face > Body > Other above, simple slice works correctly
+                // ═══════════════════════════════════════════════════════════════
+
+                // Get model-specific subject limit from appConstants (some models support more)
+                const modelInfo = IMAGE_MODELS.find(m => m.value === model);
+                const supportsSubject = modelInfo?.supportsSubject !== false;
+
+                // Most Gommo models support 3-9 subjects depending on model
+                // seedream_4_0, google_image_gen_banana: 9 subjects
+                // google_image_gen_banana_pro, seedream_4_5, o1: 6 subjects  
+                // google_image_gen_4_5: 3 subjects
+                const getSubjectLimit = (modelId: string): number => {
+                    if (modelId.includes('seedream_4_0') || modelId.includes('banana') && !modelId.includes('pro')) return 9;
+                    if (modelId.includes('banana_pro') || modelId.includes('seedream_4_5') || modelId === 'o1') return 6;
+                    if (modelId.includes('4_5')) return 3;
+                    return 6; // Default safe limit
+                };
+
+                const subjectLimit = supportsSubject ? getSubjectLimit(model) : 0;
+                const limitedSubjects = subjects.slice(0, subjectLimit);
+
+                if (subjects.length > subjectLimit) {
+                    console.log(`[ImageGen] ⚠️ Limiting subjects from ${subjects.length} to ${subjectLimit} for model ${model}`);
+                    console.log(`[ImageGen] 📊 Kept: ${Math.min(faceSubjects.length, subjectLimit)} Face IDs, ${Math.min(bodySubjects.length, Math.max(0, subjectLimit - faceSubjects.length))} Body refs`);
+                } else if (subjects.length > 0) {
+                    console.log(`[ImageGen] ✅ Using all ${subjects.length} subjects (limit: ${subjectLimit} for ${model})`);
                 }
 
                 // Map UI resolution to Gommo format
                 const gommoResolution = imageSize as '1K' | '2K' | '4K';
                 console.log(`[ImageGen] Gommo resolution setting: ${gommoResolution}`);
+
+                const generationParams = {
+                    prompt: gommoPrompt,
+                    ratio: gommoRatio,
+                    resolution: gommoResolution,
+                    model: model,
+                    subjects: limitedSubjects.length > 0 ? limitedSubjects : undefined,
+                };
+
+                console.log(`[ImageGen] 🚀 Calling Gommo generateImage with params:`, JSON.stringify({
+                    ...generationParams,
+                    subjects: generationParams.subjects?.map(s => ({ ...s, data: s.data ? 'base64...' : undefined }))
+                }));
 
                 // Generate image via Gommo (async with polling)
                 const cdnUrl = await client.generateImage(gommoPrompt, {
@@ -325,43 +479,34 @@ export function useImageGeneration(
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // GEMINI PATH: Full multi-modal generation with image references
+        // DEFAULT PATH: Fall back to Fal.ai for any other provider
+        // (Previously Gemini - now migrated to Fal.ai)
         // ═══════════════════════════════════════════════════════════════
-        // Use Gemini API for all Gemini-provider models
-        if (apiKey && provider === 'gemini') {
-            console.log('[ImageGen] 🔵 Using GEMINI provider');
-            const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+        console.log('[ImageGen] 🚀 Using FAL.AI provider (default fallback)');
+        try {
+            // Get references from parts for Fal.ai
+            const facePart = parts.find(p => p.text?.includes('FACE ID LOCK') || p.text?.includes('IDENTITY'));
+            const continuityPart = parts.find(p => p.text?.includes('CONTINUITY_ANCHOR') || p.text?.includes('LOCATION CONTINUITY'));
 
-            // Build parts in Google's recommended order: TEXT FIRST, then IMAGES
-            const fullParts: any[] = [];
-            if (prompt) fullParts.push({ text: prompt }); // Text FIRST per docs
-            fullParts.push(...parts); // Then all image references
+            const response = await fetch('/api/proxy/fal/flux', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt,
+                    image_url: continuityPart?.imageUrl || undefined,
+                    face_id_url: facePart?.imageUrl || undefined,
+                    aspect_ratio: aspectRatio === '16:9' ? 'landscape_16_9' :
+                        aspectRatio === '9:16' ? 'portrait_16_9' : 'square'
+                })
+            });
 
-            console.log(`[ImageGen] Generating with resolution: ${imageSize}, aspectRatio: ${aspectRatio}, parts: ${fullParts.length}`);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Fal.ai generation failed');
 
-            // Wrap API call with retry for transient errors (500, 503)
-            const response = await withRetry(async () => {
-                return await ai.models.generateContent({
-                    model: model,
-                    contents: [{ parts: fullParts }],
-                    config: {
-                        responseModalities: ["IMAGE"], // Enforce Image output
-                        imageConfig: {
-                            aspectRatio: aspectRatio || "16:9",
-                            imageSize: imageSize || '1K' // Pass resolution to API
-                        }
-                    },
-                });
-            }, 'ImageGeneration', 3);
-
-            const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-            if (imagePart?.inlineData) {
-                return { imageUrl: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}` };
-            } else {
-                throw new Error("Không nhận được ảnh từ API.");
-            }
-        } else {
-            throw new Error("Missing Credentials (API Key hoặc Gommo Token)");
+            return { imageUrl: data.url || data.imageUrl };
+        } catch (error: any) {
+            console.error('[ImageGen] ❌ Fal.ai generation failed:', error.message);
+            throw error;
         }
     };
 
@@ -519,11 +664,9 @@ ${refImgData ? "2. Analyze IMAGE 2 (Reference Object/Detail)." : ""}
 
 OUTPUT ONLY THE PROMPT. DO NOT OUTPUT MARKDOWN OR EXPLANATION.`;
 
-                        const reasonedPrompt = await callGeminiVisionReasoning(
-                            userApiKey,
+                        const reasonedPrompt = await callGroqVision(
                             analysisPrompt,
-                            imagesToSend,
-                            'gemini-2.5-flash' // "Gemini 3 Reasoning"
+                            imagesToSend
                         );
 
                         if (reasonedPrompt) {
@@ -1329,7 +1472,8 @@ COPY EXACTLY:
 - Mouth shape and lip fullness
 - Skin tone and texture
 ${isReentry ? '⚠️ CHARACTER RE-ENTERING - Reset to this exact face!' : ''}
-DO NOT generate a different face. DO NOT create a "similar" face. This EXACT face only.`
+DO NOT generate a different face. DO NOT create a "similar" face. This EXACT face only.`,
+                            imageUrl: char.faceImage // Added for Fal.ai proxy
                         });
                         parts.push(createInlineData(faceData.data, faceData.mimeType));
                         console.log(`[ImageGen] 🔒 FACE ID injected FIRST for ${char.name}`);
@@ -1449,16 +1593,9 @@ DO NOT generate a different face. DO NOT create a "similar" face. This EXACT fac
 INHERIT THESE:
 1. PHYSICAL LIGHTING: Match actual light source direction and shadow placement
 2. ENVIRONMENT: Fixed positions of furniture, architecture, and landmarks
-3. SUBJECTS: Character appearance (clothing, pose, physical features)
-
-!!! DO NOT INHERIT - CAMERA-SPECIFIC EFFECTS !!!:
-- Camera filters (CCTV, night vision, security camera, surveillance overlays)
-- Vignettes, scan lines, recording artifacts, grain patterns
-- Color grading specific to surveillance/special camera POV
-- Text overlays, timestamps, HUD elements, date stamps
-- Fish-eye distortion or lens artifacts from special cameras
-
-The NEW scene has its OWN camera style as specified in the current prompt. DO NOT apply previous scene's camera treatment.` });
+3. SUBJECTS: Character appearance (clothing, pose, physical features)`,
+                            imageUrl: prevSceneWithImage.generatedImage // Added for Fal.ai proxy
+                        });
 
                         parts.push(createInlineData(imgData.data, imgData.mimeType));
 
@@ -1545,6 +1682,19 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
             // Includes auto-translation from Vietnamese to English for non-Gemini models
             const modelToUse = currentState.imageModel || 'gemini-3-pro-image-preview';
             let promptToSend = finalImagePrompt;
+
+            // --- 6.1 PI STRATEGIC DISPATCHER (Intelligence Layer) ---
+            // Let Pi optimize the prompt specifically for the selected model
+            try {
+                const isMannequin = currentState.globalCharacterStyleId?.includes('mannequin') || false;
+                const piOptimized = await callPiDispatcher(promptToSend, modelToUse, 'scene', isMannequin);
+                if (piOptimized) {
+                    promptToSend = piOptimized;
+                    console.log('[ImageGen] 🧠 Pi Strategic Dispatcher: Prompt optimized');
+                }
+            } catch (piErr) {
+                console.warn('[ImageGen] 🧠 Pi Dispatcher failed, using raw prompt');
+            }
 
             // TIMING: Log prep phase duration with breakdown
             const prepTime = Date.now() - startTime;

@@ -9,10 +9,10 @@
  */
 
 import { useState, useCallback } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { Scene, SceneGroup, Character, CharacterStyleDefinition } from '../types';
 import { DirectorPreset, DIRECTOR_PRESETS } from '../constants/directors';
 import { resolveStyleWithInheritance } from '../constants/characterStyles';
+import { callGroqText } from '../utils/geminiUtils';
 
 // Analysis result types
 export interface ChapterAnalysis {
@@ -181,7 +181,7 @@ export function useScriptAnalysis(userApiKey: string | null) {
     const analyzeScript = useCallback(async (
         scriptText: string,
         readingSpeed: 'slow' | 'medium' | 'fast' = 'medium',
-        modelSelector: string = 'gemini-2.5-flash|none', // format: model|thinkingLevel
+        modelSelector: string = 'llama-3.3-70b-versatile|none', // format: model|thinkingLevel
         characterStyle?: CharacterStyleDefinition | null,
         director?: DirectorPreset | null,
         researchNotes?: { director?: string; dop?: string; story?: string } | null,
@@ -197,7 +197,6 @@ export function useScriptAnalysis(userApiKey: string | null) {
         setAnalysisError(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: userApiKey });
             const wpm = readingSpeed === 'slow' ? WPM_SLOW : readingSpeed === 'fast' ? WPM_FAST : WPM_MEDIUM;
             const wordCount = scriptText.split(/\s+/).length;
             const estimatedTotalDuration = Math.ceil((wordCount / wpm) * 60);
@@ -320,24 +319,6 @@ export function useScriptAnalysis(userApiKey: string | null) {
 
             // Parse model selector format: "model-name|thinking-level"
             const [modelName, thinkingLevel] = modelSelector.split('|');
-
-            // Map thinking level to budget tokens
-            const thinkingBudgets: Record<string, number | undefined> = {
-                'high': 24576,
-                'medium': 8192,
-                'low': 2048,
-                'minimal': 512,
-                'none': undefined
-            };
-
-            // Only apply thinking config to models that support it
-            // gemini-2.5-flash does NOT support thinkingConfig
-            const supportsThinking = modelName.includes('2.5-pro') || modelName.includes('thinking');
-            const thinkingBudget = supportsThinking ? (thinkingBudgets[thinkingLevel] ?? undefined) : undefined;
-
-            if (!supportsThinking && thinkingLevel !== 'none') {
-                console.warn(`[ScriptAnalysis] Model ${modelName} does not support thinking mode. Ignoring thinking level: ${thinkingLevel}`);
-            }
 
             // Context Injection
             let contextInstructions = "";
@@ -518,12 +499,7 @@ OUTPUT FORMAT:
             `;
 
             // Call Step 1 (Clustering)
-            // Use gemini-2.5-flash for speed if not generating JSON
-            const clusteringResponse = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [{ role: 'user', parts: [{ text: clusteringSystemPrompt + "\n\n" + clusteringUserPrompt }] }]
-            });
-            const visualPlan = clusteringResponse.text || '';
+            const visualPlan = await callGroqText(clusteringSystemPrompt + "\n\n" + clusteringUserPrompt, '', false, modelName);
             console.log('[ScriptAnalysis] 🧠 Visual Plan:', visualPlan);
 
 
@@ -680,22 +656,10 @@ RESPOND WITH JSON ONLY:
 }`;
 
             setAnalysisStage('connecting');
-            const response = await ai.models.generateContent({
-                model: modelName,
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                config: {
-                    temperature: 0.3,
-                    responseMimeType: 'application/json',
-                    maxOutputTokens: 65536,
-                    ...(thinkingBudget && {
-                        thinkingConfig: { thinkingBudget }
-                    })
-                }
-            });
+            const responseText = await callGroqText(prompt, 'You are a professional script analyst.', true, modelName);
 
             setAnalysisStage('post-processing');
-            const text = response.text || '';
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
             if (!jsonMatch) throw new Error('No JSON in response');
 
             const parsed = JSON.parse(jsonMatch[0]);

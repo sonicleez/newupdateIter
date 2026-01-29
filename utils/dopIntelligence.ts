@@ -8,7 +8,7 @@
  * - Suggest similar successful prompts
  */
 
-import { GoogleGenAI } from "@google/genai";
+import { callGroqText } from './geminiUtils';
 import {
     getModelLearnings,
     searchSimilarPrompts,
@@ -115,11 +115,11 @@ export async function analyzeAndEnhance(
  * NEW: Analyze scene continuity to ensure logical flow from previous shot
  */
 export async function analyzeSceneContinuity(
-    apiKey: string,
+    apiKey: string, // kept for backward compatibility, not used
     currentScene: { description: string; action: string; shotType?: string },
     previousScene: { description: string; action: string; shotType?: string; imageUrl?: string } | null
 ): Promise<string> {
-    if (!previousScene || !apiKey) return '';
+    if (!previousScene) return '';
 
     try {
         console.log('[DOP Intelligence] 🎬 Analyzing continuity...');
@@ -146,15 +146,9 @@ export async function analyzeSceneContinuity(
         OUTPUT FORMAT: Just the instruction text. No quotes.
         `;
 
-        const ai = new GoogleGenAI({ apiKey });
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [{ parts: [{ text: prompt }] }]
-        });
-
-        const transition = (response.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-        console.log(`[DOP Intelligence] 🔄 Transition: "${transition}"`);
-        return transition || '';
+        const transition = await callGroqText(prompt, 'You are a professional Director of Photography.', false);
+        console.log(`[DOP Intelligence] 🔄 Transition: "${transition.trim()}"`);
+        return transition.trim() || '';
 
     } catch (error) {
         console.warn('[DOP Intelligence] Continuity analysis failed:', error);

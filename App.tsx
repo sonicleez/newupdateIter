@@ -28,6 +28,10 @@ import { GommoLibraryModal } from './components/modals/GommoLibraryModal';
 import { KeyboardShortcuts } from './components/common/KeyboardShortcuts';
 import { LocationLibraryPanel } from './components/locations'; // NEW: Location Library
 import { AdminDashboard } from './components/admin/AdminDashboard';
+
+// Intelligence Module
+import { IntelligenceSidebar, IntelligenceWorkspace, AppMode } from './components/intelligence';
+import { SourcingWorkspace } from './components/sourcing';
 import { syncDirectorBrain } from './utils/directorBrain';
 import { APP_NAME, PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from './constants/presets';
 import { handleDownloadAll, saveProjectPackage } from './utils/zipUtils';
@@ -132,6 +136,10 @@ const App: React.FC = () => {
     const [isExcelImportModalOpen, setExcelImportModalOpen] = useState(false);
     const [isLocationLibraryOpen, setLocationLibraryOpen] = useState(false); // NEW: Location Library modal
     const [cloudProjects, setCloudProjects] = useState<any[]>([]);
+    
+    // Intelligence Mode State
+    const [appMode, setAppMode] = useState<AppMode>('production');
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
     const mainContentRef = useRef<HTMLDivElement>(null);
 
@@ -777,6 +785,49 @@ const App: React.FC = () => {
         handleDirectorCommand(command);
     }, [handleDirectorCommand]);
 
+    // Handle export from Intelligence Mode to Production
+    const handleExportFromIntelligence = useCallback((
+        characters: Partial<Character>[],
+        locations: Partial<Location>[]
+    ) => {
+        updateStateAndRecord(s => ({
+            ...s,
+            characters: [
+                ...s.characters,
+                ...characters.map(c => ({
+                    id: c.id || generateId(),
+                    name: c.name || 'Unnamed Character',
+                    description: c.description || '',
+                    masterImage: c.masterImage || null,
+                    faceImage: c.faceImage || null,
+                    bodyImage: c.bodyImage || null,
+                    sideImage: c.sideImage || null,
+                    backImage: c.backImage || null,
+                    props: c.props || [],
+                    isDefault: false,
+                    isAnalyzing: false
+                }))
+            ],
+            locations: [
+                ...(s.locations || []),
+                ...locations.map(l => ({
+                    id: l.id || generateId(),
+                    name: l.name || 'Unnamed Location',
+                    description: l.description || '',
+                    keywords: l.keywords || [],
+                    createdAt: l.createdAt || new Date().toISOString()
+                }))
+            ]
+        }));
+        
+        // Show success toast
+        setShowSuccessToast(`✓ Exported ${characters.length} characters and ${locations.length} locations to Production`);
+        setTimeout(() => setShowSuccessToast(null), 3000);
+        
+        // Optionally switch to production mode
+        // setAppMode('production');
+    }, [updateStateAndRecord]);
+
 
     return (
 
@@ -790,7 +841,21 @@ const App: React.FC = () => {
                 <ActivationScreen email={session.user.email} onSignOut={handleSignOut} />
             ) : (
                 <>
-                    {/* Cloud Operation Overlay */}
+                    {/* Intelligence Sidebar - Always visible when logged in */}
+                    {session && (
+                        <IntelligenceSidebar
+                            currentMode={appMode}
+                            onModeChange={setAppMode}
+                            isCollapsed={isSidebarCollapsed}
+                            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                        />
+                    )}
+
+                    {/* Main Content Wrapper - shifts based on sidebar */}
+                    <div
+                        className={`h-full w-full transition-all duration-300 ${session ? (isSidebarCollapsed ? 'pl-16' : 'pl-56') : ''}`}
+                    >
+                        {/* Cloud Operation Overlay */}
                     {projectLoading && (
                         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in">
                             <div className="w-16 h-16 border-4 border-brand-orange border-t-transparent rounded-full animate-spin mb-6"></div>
@@ -836,7 +901,11 @@ const App: React.FC = () => {
                         onSavePackage={() => saveProjectPackage(state)}
                     />
 
-                    <main ref={mainContentRef} className="h-full w-full overflow-auto pt-20">
+                    {/* Conditional Workspace Rendering */}
+                    {appMode === 'production' && (
+                        <>
+                        {/* Production Mode - Original App */}
+                        <main ref={mainContentRef} className="h-full w-full overflow-auto pt-20">
                         <div className="transition-transform duration-200 ease-out" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
                             <div className="container mx-auto px-6 pb-24">
                                 <ProjectNameInput value={state.projectName} onChange={handleProjectNameChange} />
@@ -1038,6 +1107,23 @@ const App: React.FC = () => {
                             </span>
                         )}
                     </button>
+                    </>
+                    )}
+
+                    {/* Intelligence Mode Workspace */}
+                    {appMode === 'intelligence' && (
+                        <IntelligenceWorkspace
+                            onExportToProduction={handleExportFromIntelligence}
+                            serverUrl="http://localhost:3001"
+                        />
+                    )}
+
+                    {/* Sourcing Mode Workspace */}
+                    {appMode === 'sourcing' && (
+                        <SourcingWorkspace
+                            serverUrl="http://localhost:3001"
+                        />
+                    )}
 
                     {zoom !== 1 && (
                         <button
@@ -1047,6 +1133,7 @@ const App: React.FC = () => {
                             Reset Zoom (100%)
                         </button>
                     )}
+                    </div> {/* End of Main Content Wrapper */}
 
                     <UserProfileModal
                         isOpen={isProfileModalOpen}

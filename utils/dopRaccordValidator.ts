@@ -2,14 +2,13 @@
  * DOP Raccord Validator
  * 
  * Validates visual continuity between consecutive shots.
- * Uses Gemini Vision to detect raccord breaks:
+ * Uses Groq Vision (llama-3.2-11b-vision-preview) to detect raccord breaks:
  * - Character identity changes
  * - Outfit/clothing changes
  * - Lighting direction changes
  * - Background inconsistencies
  */
 
-import { GoogleGenAI } from "@google/genai";
 import { safeGetImageData } from "./geminiUtils";
 
 export interface RaccordValidationResult {
@@ -64,12 +63,38 @@ IMPORTANT:
 Respond ONLY with valid JSON, no markdown.`;
 
 /**
+ * Call Groq Vision API via proxy
+ */
+async function callGroqVision(
+    prompt: string,
+    images: string[] // array of data URLs or http URLs
+): Promise<string> {
+    const response = await fetch('/api/proxy/groq/vision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            prompt,
+            images,
+            model: 'llama-3.2-11b-vision-preview',
+            temperature: 0.3,
+            max_tokens: 2048
+        })
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Groq Vision API call failed');
+    }
+    return data.text;
+}
+
+/**
  * Validate raccord between two consecutive images
  */
 export async function validateRaccord(
     previousImage: string,
     currentImage: string,
-    apiKey: string,
+    apiKey: string, // kept for backward compatibility, but no longer used
     options: ValidationOptions = {}
 ): Promise<RaccordValidationResult> {
     const {
@@ -79,7 +104,7 @@ export async function validateRaccord(
     } = options;
 
     try {
-        // Get image data
+        // Get image data and convert to data URLs for the API
         const [prevData, currData] = await Promise.all([
             safeGetImageData(previousImage),
             safeGetImageData(currentImage)
@@ -95,24 +120,20 @@ export async function validateRaccord(
             };
         }
 
-        // Call Gemini Vision
-        const ai = new GoogleGenAI({ apiKey });
+        // Convert to data URLs
+        const prevDataUrl = `data:${prevData.mimeType};base64,${prevData.data}`;
+        const currDataUrl = `data:${currData.mimeType};base64,${currData.data}`;
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
-            contents: [{
-                role: 'user',
-                parts: [
-                    { text: RACCORD_VALIDATION_PROMPT },
-                    { text: "[PREVIOUS SHOT - Reference]:" },
-                    { inlineData: { data: prevData.data, mimeType: prevData.mimeType } },
-                    { text: "[CURRENT SHOT - Validate this]:" },
-                    { inlineData: { data: currData.data, mimeType: currData.mimeType } }
-                ]
-            }]
-        });
+        // Build the prompt with image context
+        const fullPrompt = `${RACCORD_VALIDATION_PROMPT}
 
-        const text = response.text?.trim() || '';
+The first image is the PREVIOUS SHOT (reference).
+The second image is the CURRENT SHOT (to validate).
+
+Analyze these two consecutive shots and check for visual continuity issues.`;
+
+        // Call Groq Vision
+        const text = await callGroqVision(fullPrompt, [prevDataUrl, currDataUrl]);
 
         // Parse JSON response
         let result: RaccordValidationResult;
@@ -192,4 +213,4 @@ export function formatValidationResult(result: RaccordValidationResult): string 
     return `⚠️ Raccord Issues (${Math.round(result.score * 100)}%): ${issues || 'Minor issues detected'}`;
 }
 
-console.log('[DOP Raccord Validator] Module loaded');
+console.log('[DOP Raccord Validator] Module loaded (Groq Vision)');

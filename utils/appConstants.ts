@@ -129,93 +129,89 @@ export const TRANSITION_TYPES = [
 export const IMAGE_PROVIDERS = [
     { value: 'gemini', label: 'Gemini (Google AI Studio)', description: 'Direct API - requires Gemini API key' },
     { value: 'gommo', label: 'Gommo AI', description: 'Proxy API - requires Gommo credentials' },
+    { value: 'fal', label: 'Fal.ai (Flux.1)', description: 'Fast and high quality open-source models' },
 ];
 
-// IMAGE_MODELS - All available models with provider info
-// User can select any model regardless of imageProvider setting
-// The hook will automatically use the correct provider based on model.provider
+// IMAGE_MODELS - Reorganized by Provider with Colors (Real-time from Gommo API)
 export const IMAGE_MODELS = [
     // ═══════════════════════════════════════════════════════════════════════════
-    // 🖌️ EDIT MODELS - Support image editing, reference images, face/body ID
+    // 🔵 GOOGLE / GEMINI - Direct API
     // ═══════════════════════════════════════════════════════════════════════════
-    { value: '__header_edit__', label: '─── 🖌️ EDIT MODELS ───', provider: 'header', description: 'Supports editing, references, Face ID', isHeader: true },
-
-    // Gemini Direct
-    { value: 'gemini-3-pro-image-preview', label: '🔵 Nano Banana Pro', provider: 'gemini', description: 'Gemini Direct - Via Google AI Studio API', supportsEdit: true, supportsSubject: true, group: 'edit' },
-
-    // Google Imagen via Gommo (EDIT)
-    { value: 'google_image_gen_banana_pro', label: '🟡 Nano Banana Pro', provider: 'gommo', description: 'Google - 1k/2k/4k - 300 credits', supportsEdit: true, supportsSubject: true, group: 'edit' },
-    { value: 'google_image_gen_banana_pro_cheap', label: '🟡 Nano Banana Pro Cheap', provider: 'gommo', description: 'Google - Budget - 150 credits', supportsEdit: true, supportsSubject: true, group: 'edit' },
-    { value: 'google_image_gen_banana_pro_reason', label: '🟡 Nano Banana Pro Reason', provider: 'gommo', description: 'Google + AI Reasoning - 150 credits', supportsEdit: true, supportsSubject: true, group: 'edit' },
-    { value: 'google_image_gen_banana', label: '🟡 Nano Banana', provider: 'gommo', description: 'Google - Best for Edit - 150 credits', supportsEdit: true, supportsSubject: true, group: 'edit' },
-    { value: 'google_image_gen_4_5', label: '🟡 Imagen 4.5', provider: 'gommo', description: 'Google - Smart & Fast - FREE', supportsEdit: true, supportsSubject: true, group: 'edit' },
-    { value: 'google_image_gen_3_5', label: '🟡 Imagen 4', provider: 'gommo', description: 'Google - Best Quality - 50 credits', supportsEdit: true, supportsSubject: true, group: 'edit' },
-    { value: 'google_image_gen_3_1', label: '🟡 Imagen 3', provider: 'gommo', description: 'Google - 50 credits', supportsEdit: true, supportsSubject: true, group: 'edit' },
-
-    // ByteDance Seedream (EDIT)
-    { value: 'seedream_4_5', label: '🟡 Seedream 4.5', provider: 'gommo', description: 'ByteDance - 2k/4k - 250 credits', supportsEdit: true, supportsSubject: true, group: 'edit' },
-    { value: 'seedream_4_0', label: '🟡 Seedream 4.0', provider: 'gommo', description: 'ByteDance - Best for Edit - FREE', supportsEdit: true, supportsSubject: true, group: 'edit' },
-
-    // Kling AI (EDIT)
-    { value: 'o1', label: '🟡 IMAGE O1', provider: 'gommo', description: 'Kling - High consistency - 150 credits', supportsEdit: true, supportsSubject: true, group: 'edit' },
-    { value: 'kling_colors_2_1', label: '🟡 COLORS 2.1', provider: 'gommo', description: 'Kling - 100 credits', supportsEdit: true, supportsSubject: false, group: 'edit' },
-    { value: 'kling_colors_2_0', label: '🟡 COLORS 2.0', provider: 'gommo', description: 'Kling - Style/Scene - 100 credits', supportsEdit: true, supportsSubject: true, group: 'edit' },
-    { value: 'kling_colors_1_5', label: '🟡 COLORS 1.5', provider: 'gommo', description: 'Kling - Face support - 100 credits', supportsEdit: true, supportsSubject: false, group: 'edit' },
-
-    // Other Edit Models
-    { value: 'z_image', label: '🟡 Z-Image', provider: 'gommo', description: 'Alibaba - Fast & Cheap - 100 credits', supportsEdit: true, supportsSubject: false, group: 'edit' },
-    { value: 'dreamina_3_1', label: '🟡 Dreamina 3.1', provider: 'gommo', description: 'ByteDance - 150 credits', supportsEdit: true, supportsSubject: false, group: 'edit' },
-    { value: 'hailuo_image_1', label: '🟡 Image-01', provider: 'gommo', description: 'Hailuo - 50 credits', supportsEdit: true, supportsSubject: true, group: 'edit' },
+    { value: '__header_google__', label: '─── 🔵 GOOGLE / GEMINI ───', provider: 'google', isHeader: true, color: 'blue' },
+    { value: 'gemini-3-pro-image-preview', label: '🔵 Nano Banana Pro (Direct)', provider: 'gemini', description: 'Gemini Direct - Highest intelligence', supportsEdit: true, supportsSubject: true, color: 'blue' },
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 🎨 TEXT-TO-IMAGE ONLY - No editing, pure generation from text
+    // 🚀 FAL.AI - High-End Flux Models
     // ═══════════════════════════════════════════════════════════════════════════
-    { value: '__header_noedit__', label: '─── 🎨 TEXT-TO-IMAGE ONLY ───', provider: 'header', description: 'Text prompt only, no editing support', isHeader: true },
+    { value: '__header_fal__', label: '─── 🚀 FAL.AI (FLUX) ───', provider: 'fal', isHeader: true, color: 'purple' },
+    { value: 'fal-ai/flux-general', label: '🚀 Flux.1 [Dev] Consistency', provider: 'fal', description: 'Fal.ai - Character Master', supportsEdit: true, supportsSubject: true, color: 'purple' },
+    { value: 'fal-ai/flux-pro/v1.1-ultra', label: '🚀 Flux.1.1 Ultra', provider: 'fal', description: 'Fal.ai - 4K High Detail', supportsEdit: true, supportsSubject: true, color: 'purple' },
+    { value: 'fal-ai/flux-pro/v1.1', label: '🚀 Flux.1.1 Pro', provider: 'fal', description: 'Fal.ai - Balanced Quality', supportsEdit: true, supportsSubject: true, color: 'purple' },
+    { value: 'fal-ai/flux/schnell', label: '🚀 Flux Schnell (Fast)', provider: 'fal', description: 'Fal.ai - Instant Generation', supportsEdit: true, supportsSubject: true, color: 'purple' },
 
-    // Midjourney
-    { value: 'midjourney_7_0', label: '🟡 Midjourney 7.0', provider: 'gommo', description: '4 images/request - 400 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
-    { value: 'midjourney_6_1', label: '🟡 Midjourney 6.1', provider: 'gommo', description: 'Previous version - 300 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🟡 GOMMO PROXY - Multi-Provider Hub
+    // ═══════════════════════════════════════════════════════════════════════════
+    { value: '__header_gommo__', label: '─── 🟡 GOMMO PROXY ───', provider: 'gommo', isHeader: true, color: 'yellow' },
+    
+    // Google via Gommo
+    { value: 'google_image_gen_banana_pro', label: '🟡 Nano Banana Pro (4K)', provider: 'gommo', description: 'High Quality - 250 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
+    { value: 'google_image_gen_banana_pro_reason', label: '🟡 Nano Banana Pro Reason', provider: 'gommo', description: 'AI Reasoning - 150 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
+    { value: 'google_image_gen_4_5', label: '🟡 Imagen 4.5 (Fast)', provider: 'gommo', description: 'Smart & Fast - 70 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
+    { value: 'google_image_gen_3_5', label: '🟡 Imagen 4 (Realism)', provider: 'gommo', description: 'Best Realism - 50 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
+    { value: 'google_image_gen_banana', label: '🟡 Nano Banana (Edit)', provider: 'gommo', description: 'Best for Edit - 150 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
+    { value: 'google_image_gen_banana_pro_cheap', label: '🟡 Nano Banana Pro Cheap', provider: 'gommo', description: 'Backup - 150 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
 
-    // FLUX
-    { value: 'flux_1_1_ultra', label: '🟡 FLUX 1.1 Ultra', provider: 'gommo', description: 'Black Forest - Premium - 200 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
-    { value: 'flux_1_1_pro', label: '🟡 FLUX 1.1 Pro', provider: 'gommo', description: 'Black Forest - 150 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
-    { value: 'flux_dev', label: '🟡 FLUX Dev', provider: 'gommo', description: 'Black Forest - Open Source - 50 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
-    { value: 'flux_schnell', label: '🟡 FLUX Schnell', provider: 'gommo', description: 'Black Forest - Fast - FREE', supportsEdit: false, supportsSubject: false, group: 'noedit' },
+    // ByteDance
+    { value: 'seedream_4_5', label: '🟡 Seedream 4.5', provider: 'gommo', description: 'ByteDance 4K - 250 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
+    { value: 'seedream_4_0', label: '🟡 Seedream 4.0 (Edit)', provider: 'gommo', description: 'Best for Edit - 200 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
+    { value: 'dreamina_3_1', label: '🟡 Dreamina 3.1', provider: 'gommo', description: 'ByteDance - 150 credits', supportsEdit: true, supportsSubject: false, color: 'yellow' },
 
-    // Ideogram
-    { value: 'ideogram_v3', label: '🟡 Ideogram V3', provider: 'gommo', description: 'Best for text in images - 150 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
-    { value: 'ideogram_v2_turbo', label: '🟡 Ideogram V2 Turbo', provider: 'gommo', description: 'Fast - 100 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
+    // Kling AI
+    { value: 'o1', label: '🟡 IMAGE O1 - Kling', provider: 'gommo', description: 'Consistency - 150 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
+    { value: 'kling_colors_2_0', label: '🟡 COLORS 2.0', provider: 'gommo', description: 'Kling AI - 100 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
+    { value: 'kling_colors_2_1', label: '🟡 COLORS 2.1', provider: 'gommo', description: 'Kling AI - 100 credits', supportsEdit: true, supportsSubject: false, color: 'yellow' },
+    { value: 'kling_colors_1_5', label: '🟡 COLORS 1.5 (Face)', provider: 'gommo', description: 'Face Focus - 100 credits', supportsEdit: true, supportsSubject: false, color: 'yellow' },
 
-    // Recraft
-    { value: 'recraft_v3', label: '🟡 Recraft V3', provider: 'gommo', description: 'Vector & illustrations - 150 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
-
-    // Stable Diffusion
-    { value: 'sd_3_5_large', label: '🟡 SD 3.5 Large', provider: 'gommo', description: 'Stability AI - 100 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
-    { value: 'sd_3_5_medium', label: '🟡 SD 3.5 Medium', provider: 'gommo', description: 'Stability AI - 50 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
-
-    // Other
-    { value: 'dalle_3', label: '🟡 DALL-E 3', provider: 'gommo', description: 'OpenAI - 200 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
-    { value: 'playground_v3', label: '🟡 Playground V3', provider: 'gommo', description: 'Creative - 100 credits', supportsEdit: false, supportsSubject: false, group: 'noedit' },
+    // Others
+    { value: 'z_image', label: '🟡 Z-Image Realism', provider: 'gommo', description: 'Alibaba Wanx - 100 credits', supportsEdit: true, supportsSubject: false, color: 'yellow' },
+    { value: 'hailuo_image_1', label: '🟡 Image-01 (Hailuo)', provider: 'gommo', description: 'High Detail - 50 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
+    { value: 'midjourney_7_0', label: '🟡 Midjourney 7.0', provider: 'gommo', description: '4 images/req - 400 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'midjourney_6_1', label: '🟡 Midjourney 6.1', provider: 'gommo', description: '300 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'ideogram_v3', label: '🟡 Ideogram V3', provider: 'gommo', description: 'Best for Text - 150 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'ideogram_v2_turbo', label: '🟡 Ideogram V2 Turbo', provider: 'gommo', description: '100 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'recraft_v3', label: '🟡 Recraft V3', provider: 'gommo', description: 'Vector Art - 150 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'flux_1_1_ultra', label: '🟡 FLUX 1.1 Ultra (Gommo)', provider: 'gommo', description: '200 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'flux_1_1_pro', label: '🟡 FLUX 1.1 Pro (Gommo)', provider: 'gommo', description: '150 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'flux_dev', label: '🟡 FLUX Dev (Gommo)', provider: 'gommo', description: '50 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'flux_schnell', label: '🟡 FLUX Schnell (Gommo)', provider: 'gommo', description: 'FREE', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'sd_3_5_large', label: '🟡 SD 3.5 Large', provider: 'gommo', description: 'Stability AI - 100 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'sd_3_5_medium', label: '🟡 SD 3.5 Medium', provider: 'gommo', description: '50 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'dalle_3', label: '🟡 DALL-E 3', provider: 'gommo', description: 'OpenAI - 200 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
+    { value: 'playground_v3', label: '🟡 Playground V3', provider: 'gommo', description: 'Creative - 100 credits', supportsEdit: false, supportsSubject: false, color: 'yellow' },
 ];
 
 // CHARACTER_MODELS - Models for character/lora generation
-// Used in CharacterDetailModal for Face ID and body sheet generation
-// Only models with supportsSubject: true are suitable
+// Fixed to include all models that support consistency
 export const CHARACTER_MODELS = [
-    // Gemini Direct
+    // Fal.ai Flux (Recommended)
+    { value: 'fal-ai/flux-general', label: '🚀 Flux.1 [Dev] Consistency', provider: 'fal', supportsLora: true },
+    { value: 'fal-ai/flux-pro/v1.1-ultra', label: '🚀 Flux.1.1 Ultra', provider: 'fal', supportsLora: true },
+
+    // Google/Gemini Direct
     { value: 'gemini-3-pro-image-preview', label: '🔵 Nano Banana Pro', provider: 'gemini', supportsLora: true },
 
-    // Gommo - Models that support subjects (withSubject: true)
-    { value: 'google_image_gen_banana_pro', label: '🟡 Nano Banana Pro', provider: 'gommo', supportsLora: true },
-    { value: 'google_image_gen_banana_pro_reason', label: '🟡 Nano Banana Pro Reason', provider: 'gommo', supportsLora: true },
-    { value: 'seedream_4_5', label: '🟡 Seedream 4.5', provider: 'gommo', supportsLora: true },
-    { value: 'seedream_4_0', label: '🟡 Seedream 4.0 - FREE', provider: 'gommo', supportsLora: true },
-    { value: 'o1', label: '🟡 IMAGE O1', provider: 'gommo', supportsLora: true },
-    { value: 'google_image_gen_4_5', label: '🟡 Imagen 4.5 - FREE', provider: 'gommo', supportsLora: true },
+    // Gommo
+    { value: 'seedream_4_0', label: '🟡 Seedream 4.0 (9 subjects)', provider: 'gommo', supportsLora: true },
+    { value: 'google_image_gen_banana', label: '🟡 Nano Banana (9 subjects)', provider: 'gommo', supportsLora: true },
+    { value: 'google_image_gen_banana_pro_reason', label: '🟡 Nano Banana Pro Reason (8 subjects)', provider: 'gommo', supportsLora: true },
+    { value: 'google_image_gen_banana_pro', label: '🟡 Nano Banana Pro (6 subjects)', provider: 'gommo', supportsLora: true },
+    { value: 'seedream_4_5', label: '🟡 Seedream 4.5 (6 subjects)', provider: 'gommo', supportsLora: true },
+    { value: 'o1', label: '🟡 IMAGE O1 (6 subjects)', provider: 'gommo', supportsLora: true },
+    { value: 'google_image_gen_4_5', label: '🟡 Imagen 4.5 (3 subjects)', provider: 'gommo', supportsLora: true },
 ];
 
 // EDIT_MODELS - Models that support image editing (mask, upscale, expand)
-// Used in AdvancedImageEditor
 export const EDIT_MODELS = IMAGE_MODELS.filter(m => m.supportsEdit && !m.isHeader);
 
 // NOEDIT_MODELS - Text-to-image only models
@@ -224,11 +220,11 @@ export const NOEDIT_MODELS = IMAGE_MODELS.filter(m => !m.supportsEdit && !m.isHe
 // Get selectable models (exclude headers)
 export const SELECTABLE_IMAGE_MODELS = IMAGE_MODELS.filter(m => !m.isHeader);
 
+// SCRIPT_MODELS - Updated decommissioned models
 export const SCRIPT_MODELS = [
-    { value: 'gemini-3-pro-high', label: 'Gemini 3 Pro (High)' },
-    { value: 'gemini-3-pro-low', label: 'Gemini 3 Pro (Low)' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 3 Flash (New)' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Default)' },
+    { value: 'llama-3.3-70b-versatile', label: '🚀 Llama 3.3 70B (Groq) - Recommended' },
+    { value: 'llama-3.1-8b-instant', label: '🚀 Llama 3.1 8B Fast (Groq)' },
+    { value: 'mixtral-8x7b-32768', label: '🚀 Mixtral 8x7B (Groq)' },
 ];
 
 export const ASPECT_RATIOS = [
@@ -276,8 +272,8 @@ export const CHARACTER_STYLES = [
 export const createInitialState = (): ProjectState => ({
     projectName: '',
     stylePrompt: 'cinematic-realistic',
-    imageModel: 'gemini-3-pro-image-preview',
-    scriptModel: 'gemini-2.5-flash',
+    imageModel: 'fal-ai/flux-general', // Default to Fal.ai Flux for best consistency
+    scriptModel: 'llama-3.3-70b-versatile', // Default to Groq Llama 3.3
     aspectRatio: '16:9',
     genyuToken: '',
     resolution: '1K',

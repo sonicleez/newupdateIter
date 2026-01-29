@@ -1,4 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
+/**
+ * Utility functions for image handling and caching
+ * Migrated from Google AI to Groq/Fal.ai - SDK removed
+ */
 
 // ═══════════════════════════════════════════════════════════════
 // IMAGE CACHE - Avoids re-fetching same images during generation
@@ -158,184 +161,121 @@ export const getCacheStats = () => ({
     ageMinutes: Math.round((Date.now() - cacheTimestamp) / 60000)
 });
 
-export const callGeminiAPI = async (
-    apiKey: string,
-    prompt: string,
-    aspectRatio: string,
-    imageModel: string = 'gemini-3-pro-image-preview',
-    imageContext: string | null = null
-): Promise<string | null> => {
-    const trimmedKey = apiKey?.trim();
-    if (!trimmedKey) {
-        console.error('[Gemini Gen] ❌ No API key provided');
-        return null;
+// ═══════════════════════════════════════════════════════════════
+// GROQ API HELPERS (Replacing Gemini SDK calls)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Call Groq Chat API for text generation via proxy
+ */
+export const callGroqText = async (
+    promptOrApiKey: string,
+    systemPromptOrPrompt: string = '',
+    jsonModeOrSystemPrompt: boolean | string = false,
+    modelId?: string,
+    jsonMode?: boolean
+): Promise<string> => {
+    // Detect which signature is being used
+    let prompt: string;
+    let systemPrompt: string;
+    let isJsonMode: boolean;
+    
+    if (modelId !== undefined) {
+        // Old 5-argument signature: (apiKey, prompt, systemPrompt, model, jsonMode)
+        prompt = systemPromptOrPrompt;
+        systemPrompt = typeof jsonModeOrSystemPrompt === 'string' ? jsonModeOrSystemPrompt : '';
+        isJsonMode = jsonMode ?? false;
+    } else {
+        // New 3-argument signature: (prompt, systemPrompt, jsonMode)
+        prompt = promptOrApiKey;
+        systemPrompt = systemPromptOrPrompt;
+        isJsonMode = typeof jsonModeOrSystemPrompt === 'boolean' ? jsonModeOrSystemPrompt : false;
     }
 
-    // Validate and map model names
-    let finalModel = imageModel;
-    if (imageModel === 'gemini-2.0-flash') {
-        finalModel = 'gemini-2.0-flash-preview-image-generation';
+    const messages: Array<{ role: string; content: string }> = [];
+    
+    if (systemPrompt) {
+        messages.push({ role: 'system', content: systemPrompt });
     }
+    messages.push({ role: 'user', content: prompt });
 
-    console.log('[Gemini Gen] 🎨 Calling Gemini API...', {
-        model: finalModel,
-        aspectRatio,
-        hasContext: !!imageContext,
-        promptLength: prompt.length
+    const response = await fetch('/api/proxy/groq/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            messages,
+            model: 'llama-3.3-70b-versatile',
+            temperature: 0.7,
+            max_tokens: 8192,
+            ...(isJsonMode && { response_format: { type: 'json_object' } })
+        })
     });
 
-    try {
-        const ai = new GoogleGenAI({ apiKey: trimmedKey });
-        const parts: any[] = [];
-
-        if (imageContext) {
-            console.log('[Gemini Gen] 📎 Processing Reference Image...');
-            const contextData = await safeGetImageData(imageContext);
-            if (contextData) {
-                console.log('[Gemini Gen] ✅ Reference image loaded:', contextData.mimeType);
-                parts.push({ inlineData: { data: contextData.data, mimeType: contextData.mimeType } });
-            } else {
-                console.error('[Gemini Gen] ❌ Failed to load reference image!');
-            }
-        }
-
-        parts.push({ text: prompt });
-
-        const response = await ai.models.generateContent({
-            model: finalModel,
-            contents: { parts: parts },
-            config: {
-                responseModalities: ['IMAGE'],
-                imageConfig: {
-                    aspectRatio: aspectRatio
-                }
-            }
-        });
-
-        const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-        if (imagePart?.inlineData) {
-            console.log('[Gemini Gen] ✅ Image generated successfully!');
-            return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
-        }
-
-        console.error('[Gemini Gen] ❌ No image in response:', response);
-        return null;
-    } catch (err: any) {
-        console.error('[Gemini Gen] ❌ Error:', err.message, err);
-        return null;
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Groq API call failed');
     }
+    return data.text;
 };
 
-export interface TextGenerationResult {
-    text: string;
-    tokenUsage?: {
-        promptTokens: number;
-        candidateTokens: number;
-        totalTokens: number;
-    };
-}
-
-export const callGeminiText = async (
-    apiKey: string,
+/**
+ * Call Groq Vision API for image analysis via proxy
+ */
+export const callGroqVision = async (
     prompt: string,
-    systemPrompt: string = '',
-    model: string = 'gemini-2.5-flash',
-    jsonMode: boolean = false
+    images: { data: string; mimeType: string }[]
 ): Promise<string> => {
-    const trimmedKey = apiKey?.trim();
-    if (!trimmedKey) throw new Error('Missing API Key');
+    // Convert to data URLs
+    const imageUrls = images.map(img => `data:${img.mimeType};base64,${img.data}`);
 
-    try {
-        const ai = new GoogleGenAI({ apiKey: trimmedKey });
+    const response = await fetch('/api/proxy/groq/vision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            prompt,
+            images: imageUrls,
+            model: 'meta-llama/llama-4-scout-17b-16e-instruct', // Groq recommendation
+            temperature: 0.5,
+            max_tokens: 2048
+        })
+    });
 
-        const response = await ai.models.generateContent({
-            model: model,
-            contents: [{
-                role: 'user',
-                parts: [{ text: `${systemPrompt}\n\nUSER COMMAND: ${prompt}` }]
-            }],
-            config: jsonMode ? { responseMimeType: "application/json" } : {}
-        });
-
-        // Log token usage if available
-        const usage = response.usageMetadata;
-        if (usage) {
-            console.log('[Gemini Text] Token Usage:', {
-                prompt: usage.promptTokenCount,
-                candidates: usage.candidatesTokenCount,
-                total: usage.totalTokenCount
-            });
-            // Store in global for tracking (will be picked up by syncUserStatsToCloud)
-            (window as any).__lastTextTokenUsage = {
-                promptTokens: usage.promptTokenCount || 0,
-                candidateTokens: usage.candidatesTokenCount || 0,
-                totalTokens: usage.totalTokenCount || 0
-            };
-        }
-
-        const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) {
-            console.warn('[Gemini Text] ⚠️ Empty response text (check candidate blocked?)');
-            return '';
-        }
-        return text;
-    } catch (err: any) {
-        console.error('[Gemini Text] ❌ Error:', err.message);
-        throw err;
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Groq Vision API call failed');
     }
+    return data.text;
 };
 
-export const callGeminiVisionReasoning = async (
-    apiKey: string,
-    prompt: string,
-    images: { data: string; mimeType: string }[],
-    model: string = 'gemini-2.5-flash', // Gemini 3 Standard
-): Promise<string> => {
-    const trimmedKey = apiKey?.trim();
-    if (!trimmedKey) throw new Error('Missing API Key');
+// Legacy compatibility exports (for code that still references these)
+export const callGeminiText = callGroqText;
+export const callGeminiVisionReasoning = callGroqVision;
 
-    try {
-        const ai = new GoogleGenAI({ apiKey: trimmedKey });
-
-        const parts: any[] = [{ text: prompt }];
-
-        // Add all images
-        images.forEach(img => {
-            parts.push({ inlineData: { data: img.data, mimeType: img.mimeType } });
-        });
-
-        const response = await ai.models.generateContent({
-            model: model,
-            contents: [{ parts: parts }],
-        });
-
-        const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
-        return text || '';
-    } catch (err: any) {
-        console.error('[Gemini Vision] ❌ Reasoning Error:', err.message);
-        throw err;
-    }
-};
-
-// Import GommoAI if needed for callCharacterImageAPI
+// GommoAI import for character generation
 import { GommoAI, urlToBase64 } from './gommoAI';
 import { IMAGE_MODELS } from './appConstants';
 
 /**
- * Character Image API with Gemini/Gommo routing
+ * Character Image API with Gommo/Fal routing
  * Used for Lora generation (Face ID, Body sheets)
+ * Note: This now routes to Gommo or Fal.ai, not Gemini
  */
 export const callCharacterImageAPI = async (
-    apiKey: string | null,
+    apiKey: string | null, // kept for backward compatibility
     prompt: string,
     aspectRatio: string,
-    imageModel: string = 'gemini-3-pro-image-preview',
+    imageModel: string = 'fal-ai/flux-general',
     imageContext: string | null = null,
     gommoCredentials?: { domain: string; accessToken: string }
 ): Promise<string | null> => {
     // Determine provider from model
-    const model = IMAGE_MODELS.find(m => m.value === imageModel);
-    const provider = model?.provider || 'gemini';
+    const modelInfo = IMAGE_MODELS.find(m => m.value === imageModel);
+    let provider = modelInfo?.provider || 'fal';
+
+    // If it's a Google model being used via Gommo Proxy
+    if (provider === 'google' && gommoCredentials?.domain && gommoCredentials?.accessToken) {
+        provider = 'gommo';
+    }
 
     console.log(`[CharacterGen] Provider: ${provider}, Model: ${imageModel}`);
 
@@ -343,7 +283,6 @@ export const callCharacterImageAPI = async (
     // GOMMO PATH
     // ═══════════════════════════════════════════════════════════════
     if (provider === 'gommo') {
-        // STRICT CHECK: Only use Gommo if provider is explicitly Gommo
         if (gommoCredentials?.domain && gommoCredentials?.accessToken) {
             console.log('[CharacterGen] 🟡 Using GOMMO provider');
             try {
@@ -364,6 +303,13 @@ export const callCharacterImageAPI = async (
                         subjects.push({ data: base64Data });
                     }
                 }
+                
+                console.log(`[CharacterGen] 🚀 Calling Gommo generateImage with params:`, JSON.stringify({
+                    prompt,
+                    ratio: gommoRatio,
+                    model: imageModel,
+                    subjects: subjects.map(s => ({ ...s, data: s.data ? 'base64...' : undefined }))
+                }));
 
                 const cdnUrl = await client.generateImage(prompt, {
                     ratio: gommoRatio,
@@ -383,20 +329,40 @@ export const callCharacterImageAPI = async (
                 throw error;
             }
         } else {
-            // Gommo selected but no creds
             console.error('[CharacterGen] ❌ Gommo model selected but credentials missing!');
             throw new Error('Gommo credentials chưa được cấu hình. Vào Profile → Gommo AI để nhập Domain và Access Token.');
         }
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // GEMINI PATH (Default or fallback)
+    // FAL.AI PATH (Default or Fallback)
     // ═══════════════════════════════════════════════════════════════
-    if (!apiKey?.trim()) {
-        console.error('[CharacterGen] ❌ No API key');
-        return null;
-    }
+    console.log('[CharacterGen] 🚀 Using FAL.AI provider');
+    try {
+        const response = await fetch('/api/proxy/fal/flux', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt,
+                image_url: imageContext || undefined,
+                aspect_ratio: aspectRatio === '16:9' ? 'landscape_16_9' : 
+                              aspectRatio === '9:16' ? 'portrait_16_9' : 'square'
+            })
+        });
 
-    console.log('[CharacterGen] 🔵 Using GEMINI provider');
-    return callGeminiAPI(apiKey, prompt, aspectRatio, imageModel, imageContext);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Fal.ai generation failed');
+        
+        // Convert URL to base64 for consistency
+        const base64Image = await urlToBase64(data.url || data.imageUrl);
+        console.log('[CharacterGen] ✅ Fal.ai image generated successfully');
+        return base64Image;
+    } catch (error: any) {
+        console.error('[CharacterGen] ❌ Fal.ai error:', error.message);
+        // If it was supposed to be Google but failed, try last-ditch fallback
+        throw error;
+    }
 };
+
+// Legacy alias for backward compatibility
+export const callGeminiAPI = callCharacterImageAPI;

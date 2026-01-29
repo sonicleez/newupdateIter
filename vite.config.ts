@@ -8,6 +8,12 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: '0.0.0.0',
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        }
+      }
     },
     plugins: [react()],
     define: {
@@ -19,24 +25,19 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        // Redirect @google/genai to our compatibility shim
+        '@google/genai': path.resolve(__dirname, './utils/shims/googleGenai.ts')
       }
     },
     build: {
       rollupOptions: {
         output: {
           manualChunks(id) {
-            // Only split large, standalone vendor libraries
+            // Supabase is large and self-contained
             if (id.includes('node_modules')) {
-              // Google AI SDK is large and self-contained
-              if (id.includes('@google/genai')) {
-                return 'vendor-ai';
-              }
-              // Supabase is large and self-contained
               if (id.includes('@supabase')) {
                 return 'vendor-supabase';
               }
-              // Keep all other node_modules together to avoid React dependency issues
-              // This includes react, react-dom, lucide-react, and other small libs
             }
             // App code splitting - only for non-critical paths
             if (id.includes('/modals/')) {

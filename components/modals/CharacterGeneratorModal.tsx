@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import Modal from '../Modal';
 import { Character } from '../../types';
 import { IMAGE_MODELS, CHARACTER_STYLES, PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from '../../constants/presets';
@@ -70,8 +69,12 @@ export const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = (
     const handleGenerate = async () => {
         if (!prompt.trim() || !charId) return;
 
-        if (!apiKey) {
-            setError("Vui lòng nhập API Key (Gemini).");
+        const selectedModelInfo = IMAGE_MODELS.find(m => m.value === selectedModel);
+        const provider = selectedModelInfo?.provider || 'fal';
+
+        // Only require Gemini API Key for Gemini models
+        if (provider === 'gemini' && !apiKey) {
+            setError("Vui lòng nhập API Key (Gemini) để sử dụng model này.");
             return;
         }
 
@@ -216,11 +219,6 @@ export const CharacterGeneratorModal: React.FC<CharacterGeneratorModalProps> = (
                     {!generatedImage ? (
                         <button
                             onClick={() => {
-                                if (!prompt.trim()) return;
-                                if (!apiKey) {
-                                    setError("Vui lòng nhập API Key (Gemini).");
-                                    return;
-                                }
                                 handleGenerate();
                             }}
                             disabled={isGenerating || !prompt}

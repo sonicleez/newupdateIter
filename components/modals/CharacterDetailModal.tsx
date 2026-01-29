@@ -125,12 +125,15 @@ export const CharacterDetailModal: React.FC<CharacterDetailModalProps> = ({
                             <div className="mb-3">
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Model tạo Lora:</label>
                                 <select
-                                    value={character.preferredModel || 'gemini-3-pro-image-preview'}
+                                    value={character.preferredModel || 'fal-ai/flux-general'}
                                     onChange={(e) => updateCharacter(character.id, { preferredModel: e.target.value })}
                                     className="w-full bg-brand-dark/80 border border-gray-600 rounded px-3 py-2 text-sm text-brand-cream focus:outline-none focus:border-brand-orange"
                                 >
-                                    <option value="gemini-3-pro-image-preview">🔵 Nano Banana Pro [Gemini]</option>
-                                    <option value="google_nano_banana_pro">🟡 Nano Banana Pro [Gommo]</option>
+                                    <option value="fal-ai/flux-general">🚀 Flux.1 [Dev] Consistency (Tốt nhất)</option>
+                                    <option value="gemini-3-pro-image-preview">🔵 Nano Banana Pro [Direct]</option>
+                                    <option value="google_image_gen_banana_pro">🟡 Nano Banana Pro [Gommo]</option>
+                                    <option value="seedream_4_0">🟡 Seedream 4.0 [Gommo] (9 Subjects)</option>
+                                    <option value="o1">🟡 IMAGE O1 [Gommo]</option>
                                 </select>
                             </div>
 

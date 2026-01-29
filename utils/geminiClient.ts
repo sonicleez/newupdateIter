@@ -1,47 +1,31 @@
-// Singleton Gemini AI Client
-// Tránh tạo nhiều GoogleGenAI instances - giảm memory overhead
-
-import { GoogleGenAI } from "@google/genai";
-
-let aiInstance: GoogleGenAI | null = null;
-let cachedApiKey: string | null = null;
+// Legacy Gemini AI Client - Migrated to Groq
+// This file is kept for backward compatibility but now uses Groq via proxy
 
 /**
- * Get or create a singleton GoogleGenAI client
- * Only creates new instance if API key changes
+ * Get or create a Groq-compatible client stub
+ * Note: All actual API calls now go through the server proxy
  */
-export function getGeminiClient(apiKey: string): GoogleGenAI {
+export function getGeminiClient(apiKey: string): { apiKey: string } {
     const trimmedKey = apiKey?.trim();
 
     if (!trimmedKey) {
         throw new Error('API key is required');
     }
 
-    // Reuse existing instance if key hasn't changed
-    if (aiInstance && cachedApiKey === trimmedKey) {
-        return aiInstance;
-    }
-
-    // Create new instance
-    aiInstance = new GoogleGenAI({ apiKey: trimmedKey });
-    cachedApiKey = trimmedKey;
-
-    console.log('[GeminiClient] Created new singleton instance');
-    return aiInstance;
+    console.log('[GeminiClient] Using Groq proxy (legacy compatibility mode)');
+    return { apiKey: trimmedKey };
 }
 
 /**
- * Clear the cached client (useful for logout)
+ * Clear the cached client (no-op in new architecture)
  */
 export function clearGeminiClient(): void {
-    aiInstance = null;
-    cachedApiKey = null;
-    console.log('[GeminiClient] Cleared singleton instance');
+    console.log('[GeminiClient] Cleared (no-op in Groq mode)');
 }
 
 /**
- * Check if client exists
+ * Check if client exists (always true in new architecture)
  */
 export function hasGeminiClient(): boolean {
-    return aiInstance !== null;
+    return true;
 }
