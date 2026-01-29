@@ -165,100 +165,6 @@ app.post('/api/proxy/groq/vision', async (req, res) => {
 // ==================== PI STRATEGIC DISPATCHER (Intelligence Service) ====================
 // This endpoint analyzes the request and optimizes it for the specific model
 // PRIORITY: Groq (Fast) -> FALLBACK: Local (if configured/needed)
-app.post('/api/proxy/pi/analyze', async (req, res) => {
-    try {
-        const { prompt, modelId, mode, aspectRatio, isMannequinMode } = req.body;
-
-        if (!prompt || !modelId) {
-            return res.status(400).json({ error: 'Prompt and modelId are required' });
-        }
-
-        console.log(`🧠 [Pi Dispatcher] Analyzing prompt for model: ${modelId}`);
-
-        // 1. Identify Model Strategy
-        const isFlux = modelId.toLowerCase().includes('flux');
-        const isZImage = modelId.toLowerCase().includes('z_image') || modelId.toLowerCase().includes('alibaba');
-        const isNano = modelId.toLowerCase().includes('banana') || modelId.toLowerCase().includes('3_5') || modelId.toLowerCase().includes('imagen');
-
-        let strategicRules = "";
-        if (isFlux) {
-            // Flux weakness: "Too clean/plastic". Strategy: Inject heavy texture & grain anchors.
-            strategicRules = `
-            - CRITICAL: Avoid "plastic" or "too clean" render look.
-            - ACTION: Inject realism anchors: 'raw photo', 'analog film grain', 'fujifilm xt4', 'overexposed highlights', 'highly detailed fabric texture', '8k uhd'.
-            - STRUCTURE: Descriptive cinematic paragraph.`;
-        } else if (isZImage) {
-            // Z-Image strength: Physical textures. Strategy: Technical comma-separated keywords.
-            strategicRules = `
-            - CRITICAL: Emphasize physical material details.
-            - ACTION: Use technical tags: 'weathered wood grain', 'suede fabric texture', 'matte resin', 'soft shadows', 'raytraced lighting'.
-            - STRUCTURE: Comma-separated keyword string.`;
-        } else if (isNano) {
-            // Nano strength: Photorealism. Strategy: Photography specs.
-            strategicRules = `
-            - CRITICAL: Maximize photorealistic output.
-            - ACTION: Focus on camera specs: 'ARRI Alexa 35', '35mm lens', 'T1.8 aperture', 'volumetric lighting', 'cinematic color grading'.
-            - STRUCTURE: Concise, photography-first description.`;
-        }
-
-        if (isMannequinMode || prompt.toUpperCase().includes('MANNEQUIN')) {
-            strategicRules += `
-            - SPECIAL: Faceless Mannequin Protocol ACTIVE.
-            - ACTION: Enforce 'matte white resin material', 'smooth humanoid shape', 'ABSOLUTELY NO EYES', 'featureless face'.`;
-        }
-
-        const systemPrompt = `You are Itera's Strategic AI Advisor (Pi). 
-        Your task is to REWRITE and OPTIMIZE the user's prompt for the ${modelId} image model to ensure maximum realism and material depth.
-        
-        STRATEGIC RULES FOR THIS REQUEST:
-        ${strategicRules}
-        
-        - Preserve the user's core subject and intent.
-        - Translate to English if the input is Vietnamese.
-        - Output ONLY the optimized prompt. No conversation.`;
-
-        // 2. TRY GROQ FIRST (High Speed path)
-        try {
-            if (!groqClient) throw new Error("Groq not configured");
-
-            const chatCompletion = await groqClient.chat.completions.create({
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: `Original Prompt: "${prompt}"` }
-                ],
-                model: 'llama-3.3-70b-versatile',
-                temperature: 0.4,
-                max_tokens: 1000
-            });
-
-            const optimized = chatCompletion.choices[0]?.message?.content?.trim();
-            if (optimized) {
-                console.log(`✅ [Pi Dispatcher] Optimized via Groq (${optimized.length} chars)`);
-                return res.json({ 
-                    success: true, 
-                    optimizedPrompt: optimized, 
-                    source: 'groq',
-                    modelUsed: 'llama-3.3-70b-versatile'
-                });
-            }
-        } catch (groqErr) {
-            console.warn("⚠️ [Pi Dispatcher] Groq failed or congested. Checking local fallback...");
-        }
-
-        // 3. FALLBACK: Return original with basic cleanup if AI fails
-        res.json({ 
-            success: true, 
-            optimizedPrompt: prompt, 
-            source: 'fallback',
-            error: 'AI optimization failed, using original' 
-        });
-
-    } catch (error) {
-        console.error('[Pi Dispatcher] Critical Error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // ==================== EXTENSION TOKEN STORAGE ====================
 const EXTENSION_TOKENS = {
     recaptchaToken: null,
@@ -488,6 +394,7 @@ app.get('/api/get-pooled-token', async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
+});
 
 // ==================== PUPPETEER AUTO-GENERATE ====================
 
