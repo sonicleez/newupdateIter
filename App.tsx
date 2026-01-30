@@ -1121,14 +1121,14 @@ const App: React.FC = () => {
                         {appMode === 'intelligence' && (
                             <IntelligenceWorkspace
                                 onExportToProduction={handleExportFromIntelligence}
-                                serverUrl="http://localhost:3001"
+                                serverUrl=""
                             />
                         )}
 
                         {/* Sourcing Mode Workspace */}
                         {appMode === 'sourcing' && (
                             <SourcingWorkspace
-                                serverUrl="http://localhost:3001"
+                                serverUrl=""
                             />
                         )}
 
