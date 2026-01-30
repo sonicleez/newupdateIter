@@ -381,6 +381,13 @@ export function useScriptAnalysis(userApiKey: string | null) {
 You are NOT a text splitter. You are a CINEMATIC ADAPTER.
 Your job is to read the raw input and restructure it into VISUAL BLOCKS (Shots).
 
+*** LONG SCRIPT PROTOCOL (CRITICAL) ***
+If the script is long, do NOT summarize. You MUST account for EVERY sentence. 
+Every individual narrative action or description MUST have its own Shot.
+DO NOT merge different locations or time jumps into a single scene.
+If you skip text, the production WILL FAIL.
+
+
 *** BEAT DETECTION (CRITICAL - DO NOT SKIP IMPORTANT ACTIONS) ***
 Each of these patterns MUST become its OWN separate shot:
 
@@ -483,9 +490,12 @@ Input VO: "He felt the eyes of everyone on him." (Location: Dark Alley)
 Do NOT hide important actions inside B-rolls. They need to be MAIN scenes.
             `;
 
-            const clusteringUserPrompt = `
+            let clusteringUserPrompt = `
 Analyze and REWRITE the following voice-over script into a list of "VISUAL SHOTS".
 Don't worry about JSON format yet. Just simple text blocks.
+
+*** STYLISTIC GOAL ***: Be extremely detailed but keep scenes small. 
+A single paragraph should likely result in 3-5 individual shots.
 
 INPUT SCRIPT:
 """
@@ -496,7 +506,12 @@ OUTPUT FORMAT:
 - Shot 1: [Visual Description] (Covers text: "...")
 - Shot 2: [Visual Description] (Covers text: "...")
 ...
-            `;
+             `;
+
+            // If using Llama 3.3, increase the weight of chapter instructions
+            if (modelName.includes('llama')) {
+                clusteringUserPrompt += `\n\nREMINDER: Pay EXTREME attention to Location/Time headers. They MUST create NEW Chapters. Do not merge them!`;
+            }
 
             // Call Step 1 (Clustering)
             const visualPlan = await callGroqText(clusteringSystemPrompt + "\n\n" + clusteringUserPrompt, '', false, modelName);

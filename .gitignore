@@ -25,3 +25,5 @@ dist-ssr
 *.sln
 *.sw?
 BlogAI Example/
+sourcing_outputs/
+sourcing_uploads/

@@ -229,7 +229,7 @@ export const callGroqText = async (
         body: JSON.stringify({
             messages,
             model: modelToUse,
-            temperature: 0.7,
+            temperature: 0.5,
             max_tokens: 8192,
             ...(isJsonMode && { response_format: { type: 'json_object' } })
         })

@@ -331,7 +331,7 @@ export const IMAGE_MODELS = [
     // 🟡 GOMMO PROXY - Multi-Provider Hub
     // ═══════════════════════════════════════════════════════════════════════════
     { value: '__header_gommo__', label: '─── 🟡 GOMMO PROXY ───', provider: 'gommo', isHeader: true, color: 'yellow' },
-    
+
     // Google via Gommo
     { value: 'google_image_gen_banana_pro', label: '🟡 Nano Banana Pro (4K)', provider: 'gommo', description: 'High Quality - 250 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
     { value: 'google_image_gen_banana_pro_reason', label: '🟡 Nano Banana Pro Reason', provider: 'gommo', description: 'AI Reasoning - 150 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
@@ -363,9 +363,11 @@ export const IMAGE_MODELS = [
 ];
 
 export const SCRIPT_MODELS = [
-    { value: 'llama-3.3-70b-versatile', label: '🚀 Llama 3.3 70B (Groq) - Recommended' },
-    { value: 'llama-3.1-8b-instant', label: '🚀 Llama 3.1 8B Fast (Groq)' },
-    { value: 'mixtral-8x7b-32768', label: '🚀 Mixtral 8x7B (Groq)' },
+    { value: 'llama-3.3-70b-versatile', label: '🚀 Llama 3.3 70B (Groq) - Best All-rounder' },
+    { value: 'qwen/qwen3-32b', label: '🧠 Qwen 3 32B (Groq) - Best for Logic' },
+    { value: 'openai/gpt-oss-120b', label: '🏟️ GPT-OSS 120B (Groq) - Large Scale' },
+    { value: 'llama-3.1-70b-versatile', label: '🚀 Llama 3.1 70B (Groq)' },
+    { value: 'llama-3.1-8b-instant', label: '⚡ Llama 3.1 8B (Groq) - Fast' },
 ];
 
 export const ASPECT_RATIOS = [
