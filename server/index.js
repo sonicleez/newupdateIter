@@ -62,8 +62,16 @@ if (FAL_KEY) {
 // Uses llama-3.3-70b-versatile for script generation
 app.post('/api/proxy/groq/chat', async (req, res) => {
     try {
-        if (!groqClient) {
-            return res.status(500).json({ error: 'Groq client not configured. Check GROQ_API_KEY.' });
+        const customKey = req.headers['x-groq-api-key'];
+        let clientToUse = groqClient;
+
+        if (customKey) {
+            // console.log('[Groq Proxy] Using Custom API Key from User');
+            clientToUse = new Groq({ apiKey: customKey });
+        }
+
+        if (!clientToUse) {
+            return res.status(500).json({ error: 'Groq client not configured. Check GROQ_API_KEY or provide custom key.' });
         }
 
         const { messages, model = 'llama-3.3-70b-versatile', temperature = 0.7, max_tokens = 8192, response_format } = req.body;
@@ -72,9 +80,9 @@ app.post('/api/proxy/groq/chat', async (req, res) => {
             return res.status(400).json({ error: 'Messages array is required' });
         }
 
-        console.log(`🎬 [Groq Chat] Request with model: ${model}, messages: ${messages.length}`);
+        console.log(`🎬 [Groq Chat] Request with model: ${model}, messages: ${messages.length} ${customKey ? '(Custom Key)' : '(Server Key)'}`);
 
-        const chatCompletion = await groqClient.chat.completions.create({
+        const chatCompletion = await clientToUse.chat.completions.create({
             messages,
             model,
             temperature,
@@ -332,12 +340,12 @@ app.post('/api/update-tokens', (req, res) => {
     if (token) {
         EXTENSION_TOKENS.recaptchaToken = token;
         EXTENSION_TOKENS.lastUpdated = Date.now();
-        
+
         // Also add to pool for consistency
         if (!TOKEN_POOL.includes(token)) {
             TOKEN_POOL.push(token);
         }
-        
+
         console.log(`✅ [Extension] Token updated in memory (${token.length} chars)`);
     }
 
@@ -476,7 +484,7 @@ app.post('/api/proxy/fal/flux', async (req, res) => {
 
         // Extract image URL from result
         const imageUrl = result.data?.images?.[0]?.url;
-        
+
         if (!imageUrl) {
             console.error('[Fal.ai] No image in response:', result);
             return res.status(500).json({ error: 'No image generated', details: result });
@@ -495,7 +503,7 @@ app.post('/api/proxy/fal/flux', async (req, res) => {
 
     } catch (error) {
         console.error('[Fal.ai] ❌ Generation error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: error.message || 'Fal.ai generation failed',
             details: error.body || error
         });
@@ -712,22 +720,22 @@ app.post(/^\/api\/proxy\/gommo\/(.*)/, async (req, res) => {
         }
 
         console.log(`[Gommo Proxy] 🚀 Request to: ${path}`);
-        
+
         // AUTO-INJECT TOKEN FROM POOL IF MISSING (for generation)
         const isGen = path.includes('generateImage');
         let injectedToken = null;
-        
+
         if (isGen && !req.body.token) {
             // Check pool first
             if (TOKEN_POOL.length > 0) {
                 injectedToken = TOKEN_POOL.shift();
                 console.log(`[Gommo Proxy] 🔑 Injected fresh token from pool (Remaining: ${TOKEN_POOL.length})`);
-            } 
+            }
             // Check if we have a single token
             else if (EXTENSION_TOKENS.recaptchaToken) {
                 injectedToken = EXTENSION_TOKENS.recaptchaToken;
                 console.log(`[Gommo Proxy] 🔑 Injected token from EXTENSION_TOKENS`);
-            } 
+            }
             // SMART WAIT: If no token available, try to wait for a few seconds
             // This handles cases where the extension hasn't pushed yet
             else {
@@ -755,7 +763,7 @@ app.post(/^\/api\/proxy\/gommo\/(.*)/, async (req, res) => {
 
         // STRICT ADHERENCE TO GOMMO DOCS: Use application/x-www-form-urlencoded
         const formData = new URLSearchParams();
-        
+
         // Add basic auth/routing fields
         formData.append('domain', domain);
         formData.append('access_token', access_token);
@@ -778,7 +786,7 @@ app.post(/^\/api\/proxy\/gommo\/(.*)/, async (req, res) => {
 
         const response = await fetch(`https://api.gommo.net/${path}`, {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             },
@@ -786,7 +794,7 @@ app.post(/^\/api\/proxy\/gommo\/(.*)/, async (req, res) => {
         });
 
         const data = await response.json();
-        
+
         if (data.error || !response.ok) {
             console.error(`[Gommo Proxy] ❌ API Error (${response.status}) on path ${path}:`, JSON.stringify(data));
         } else {
@@ -895,9 +903,9 @@ app.post('/api/proxy/pi/analyze', async (req, res) => {
             const optimized = chatCompletion.choices[0]?.message?.content?.trim();
             if (optimized) {
                 console.log(`✅ [Pi Dispatcher] Optimized via Groq (${optimized.length} chars)`);
-                return res.json({ 
-                    success: true, 
-                    optimizedPrompt: optimized, 
+                return res.json({
+                    success: true,
+                    optimizedPrompt: optimized,
                     source: 'groq',
                     modelUsed: 'llama-3.3-70b-versatile'
                 });
@@ -907,11 +915,11 @@ app.post('/api/proxy/pi/analyze', async (req, res) => {
         }
 
         // 3. FALLBACK: Return original with basic cleanup if AI fails
-        res.json({ 
-            success: true, 
-            optimizedPrompt: prompt, 
+        res.json({
+            success: true,
+            optimizedPrompt: prompt,
             source: 'fallback',
-            error: 'AI optimization failed, using original' 
+            error: 'AI optimization failed, using original'
         });
 
     } catch (error) {
@@ -932,8 +940,8 @@ const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadDir),
     filename: (req, file, cb) => cb(null, `${uuidv4()}-${file.originalname}`)
 });
-const upload = multer({ 
-    storage, 
+const upload = multer({
+    storage,
     limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('video/')) cb(null, true);
@@ -954,7 +962,7 @@ app.post('/api/intelligence/process-video', upload.single('video'), async (req, 
         const minDuration = parseFloat(req.body.minDuration) || 1.0;
         const projectId = uuidv4();
         const framesDir = `./uploads/frames/${projectId}`;
-        
+
         fs.mkdirSync(framesDir, { recursive: true });
 
         console.log(`🎬 [Intelligence] Processing video: ${req.file.originalname}`);
@@ -968,7 +976,7 @@ app.post('/api/intelligence/process-video', upload.single('video'), async (req, 
                 '-of', 'csv=p=0',
                 videoPath
             ]);
-            
+
             let output = '';
             ffprobe.stdout.on('data', (data) => output += data.toString());
             ffprobe.on('close', (code) => {
@@ -990,23 +998,23 @@ app.post('/api/intelligence/process-video', upload.single('video'), async (req, 
 
             let stderr = '';
             ffmpeg.stderr.on('data', (data) => stderr += data.toString());
-            
+
             ffmpeg.on('close', (code) => {
                 // Parse scene detection output
                 const timestamps = [0]; // Always start with 0
                 const regex = /pts_time:([0-9.]+)/g;
                 let match;
-                
+
                 while ((match = regex.exec(stderr)) !== null) {
                     const time = parseFloat(match[1]);
                     const lastTime = timestamps[timestamps.length - 1];
-                    
+
                     // Only add if gap is >= minDuration
                     if (time - lastTime >= minDuration) {
                         timestamps.push(time);
                     }
                 }
-                
+
                 // Add video end
                 timestamps.push(duration);
                 resolve(timestamps);
@@ -1017,7 +1025,7 @@ app.post('/api/intelligence/process-video', upload.single('video'), async (req, 
 
         // Step 3: Extract representative frame for each scene
         const scenes = [];
-        
+
         for (let i = 0; i < sceneTimestamps.length - 1; i++) {
             const startTime = sceneTimestamps[i];
             const endTime = sceneTimestamps[i + 1];
@@ -1033,7 +1041,7 @@ app.post('/api/intelligence/process-video', upload.single('video'), async (req, 
                     '-y',
                     framePath
                 ]);
-                
+
                 ffmpeg.on('close', (code) => {
                     if (code === 0) resolve();
                     else reject(new Error(`Failed to extract frame ${i}`));
@@ -1118,7 +1126,7 @@ Respond in this exact JSON format:
         });
 
         const responseText = response.choices[0]?.message?.content || '{}';
-        
+
         // Try to parse JSON from response
         let parsed = {};
         try {
@@ -1150,7 +1158,7 @@ Respond in this exact JSON format:
 app.post('/api/intelligence/find-source', async (req, res) => {
     try {
         const { description, characters, locations, possibleSource } = req.body;
-        
+
         if (!description) {
             return res.status(400).json({ error: 'Description required' });
         }
@@ -1260,7 +1268,7 @@ Respond in this exact JSON format only:
 app.post('/api/proxy/perplexity', async (req, res) => {
     try {
         const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
-        
+
         const { messages, model = 'sonar', temperature = 0.7, max_tokens = 1000 } = req.body;
 
         if (!messages || !Array.isArray(messages)) {
@@ -1289,7 +1297,7 @@ app.post('/api/proxy/perplexity', async (req, res) => {
         }
 
         const data = await response.json();
-        
+
         res.json({
             success: true,
             text: data.choices?.[0]?.message?.content || '',
@@ -1322,7 +1330,7 @@ const sourcingStorage = multer.diskStorage({
     }
 });
 
-const sourcingUpload = multer({ 
+const sourcingUpload = multer({
     storage: sourcingStorage,
     limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2GB limit
     fileFilter: (req, file, cb) => {
@@ -1340,9 +1348,9 @@ app.post('/api/sourcing/upload', sourcingUpload.single('video'), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No video file provided' });
         }
-        
+
         console.log(`📤 [Sourcing] Video uploaded: ${req.file.path}`);
-        
+
         res.json({
             success: true,
             videoPath: req.file.path,
@@ -1359,7 +1367,7 @@ app.post('/api/sourcing/upload', sourcingUpload.single('video'), (req, res) => {
 app.post('/api/sourcing/detect-scenes', async (req, res) => {
     try {
         const { projectId, videoPath } = req.body;
-        
+
         if (!videoPath || !fs.existsSync(videoPath)) {
             return res.status(400).json({ error: 'Invalid video path' });
         }
@@ -1369,7 +1377,7 @@ app.post('/api/sourcing/detect-scenes', async (req, res) => {
         // Use FFmpeg scene detection filter
         // Threshold 0.3 is a good balance between detecting too many and too few scenes
         const ffmpegCmd = `ffmpeg -i "${videoPath}" -filter:v "select='gt(scene,0.3)',showinfo" -f null - 2>&1`;
-        
+
         const { stdout, stderr } = await execAsync(ffmpegCmd, { maxBuffer: 50 * 1024 * 1024 });
         const output = stdout + stderr;
 
@@ -1395,11 +1403,11 @@ app.post('/api/sourcing/detect-scenes', async (req, res) => {
         // Get video duration for the last scene
         const durationMatch = output.match(/Duration: (\d+):(\d+):(\d+\.\d+)/);
         if (durationMatch) {
-            const totalDuration = 
-                parseInt(durationMatch[1]) * 3600 + 
-                parseInt(durationMatch[2]) * 60 + 
+            const totalDuration =
+                parseInt(durationMatch[1]) * 3600 +
+                parseInt(durationMatch[2]) * 60 +
                 parseFloat(durationMatch[3]);
-            
+
             if (prevTime < totalDuration) {
                 scenes.push({
                     index: scenes.length,
@@ -1464,7 +1472,7 @@ app.post('/api/sourcing/split-and-capture', async (req, res) => {
             // Split clip using FFmpeg
             const duration = scene.endTime - scene.startTime;
             const splitCmd = `ffmpeg -y -ss ${scene.startTime} -i "${videoPath}" -t ${duration} -c copy "${clipPath}"`;
-            
+
             try {
                 await execAsync(splitCmd, { maxBuffer: 50 * 1024 * 1024 });
             } catch (splitErr) {
@@ -1575,7 +1583,7 @@ app.post('/api/sourcing/export-excel', async (req, res) => {
                 try {
                     // Extract base64 data
                     const base64Data = footage.thumbnailBase64.replace(/^data:image\/\w+;base64,/, '');
-                    
+
                     const imageId = workbook.addImage({
                         base64: base64Data,
                         extension: 'jpeg'
@@ -1632,7 +1640,7 @@ app.post('/api/sourcing/export-excel', async (req, res) => {
 app.delete('/api/sourcing/cleanup/:projectId', async (req, res) => {
     try {
         const { projectId } = req.params;
-        
+
         const uploadDir = path.join(UPLOADS_DIR, projectId);
         const outputDir = path.join(OUTPUTS_DIR, projectId);
 
@@ -1659,10 +1667,14 @@ const PORT = process.env.PORT || 3001;
 const distPath = path.join(__dirname, '../dist');
 if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
-    // SPA Routing
-    app.get('*', (req, res, next) => {
-        if (req.path.startsWith('/api')) return next();
-        res.sendFile(path.join(distPath, 'index.html'));
+    // SPA Routing: Serve index.html for any unknown non-API routes
+    // Express 5.x compatibility: Use general middleware instead of '*' wildcard
+    app.use((req, res, next) => {
+        if (req.method === 'GET' && !req.path.startsWith('/api')) {
+            res.sendFile(path.join(distPath, 'index.html'));
+        } else {
+            next();
+        }
     });
     console.log(`✅ [Static] Serving frontend from ${distPath}`);
 } else {

@@ -140,15 +140,20 @@ export function useStateManager() {
     }, [state]);
 
     const updateStateAndRecord = useCallback((updater: (prevState: ProjectState) => ProjectState) => {
-        setState(prevState => {
-            const newState = updater(prevState);
-            stateRef.current = newState; // Ensure ref is updated immediately for loops/async functions
-            setHistory(h => {
-                const newPast = [...h.past, prevState];
-                if (newPast.length > 50) newPast.shift();
-                return { past: newPast, future: [] };
-            });
+        // Capture previous state from the ref, which is guaranteed to be current
+        const prevState = stateRef.current;
+
+        setState(current => {
+            const newState = updater(current);
+            stateRef.current = newState; // Update ref immediately
             return newState;
+        });
+
+        // Update history in a separate transaction
+        setHistory(h => {
+            const newPast = [...h.past, prevState];
+            if (newPast.length > 50) newPast.shift();
+            return { past: newPast, future: [] };
         });
     }, []);
 

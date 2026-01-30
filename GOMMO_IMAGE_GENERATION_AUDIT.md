@@ -588,80 +588,39 @@ SD_Itera/
 | 🟢 Low | Verbose console logs | Add LOG_LEVEL |
 | 🟢 Low | Subject limit hardcoded (3) | Make configurable |
 
-### Recommended Next Steps
-1. **Run tests** to validate current functionality
-2. **Fix critical issues** (duplicate code, busy wait)
-3. **Add monitoring** for credit usage and error rates
-4. **Document API** for team reference
+### Fix 3: Critical Bug - Reference Images Skipped for Non-Gemini Models
 
----
+**File:** `hooks/useImageGeneration.ts` (Lines 616, 1829)
 
-## 🔧 FIXES IMPLEMENTED (2026-01-29)
-
-### Fix 1: Smart Subject Prioritization for Gommo
-
-**File:** `hooks/useImageGeneration.ts` (Lines 333-386)
-
-**Problem:** Khi chuyển đổi `parts` array sang Gommo `subjects`, code cũ chỉ đơn giản loop qua tất cả images mà không phân biệt Face ID vs Body vs Other. Khi limit xuống 3 subjects, có thể mất Face ID quan trọng.
+**Problem:** Có một bug nghiêm trọng khiến tất cả các model không phải Gemini (như Gommo, Fal.ai) bị bỏ qua toàn bộ ảnh tham chiếu (Face ID, Body). Tình trạng này xảy ra do biến `isHighRes` được hardcode chỉ dành riêng cho Gemini, và mảng `parts` (chứa các references) chỉ được gửi đi nếu `isHighRes` là true.
 
 **Solution:** 
+1. Thay đổi logic kiểm tra: Chuyển từ việc kiểm tra model cụ thể sang kiểm tra tính năng `supportsSubject` của model đó từ `IMAGE_MODELS` constants.
+2. Cập nhật lệnh gọi API: Luôn gửi `parts` nếu model hỗ trợ visual references.
+
 ```typescript
-// Categorize parts by type for smart prioritization
-const faceSubjects: Array<{ data: string; charName?: string }> = [];
-const bodySubjects: Array<{ data: string; charName?: string }> = [];
-const otherSubjects: Array<{ data: string }> = [];
+// Trước:
+isHighRes ? parts : []
 
-// Look at the PREVIOUS part for context (text instruction)
-const prevText = prevPart?.text?.toUpperCase() || '';
-
-// Categorize based on instruction text
-if (prevText.includes('FACE ID') || prevText.includes('IDENTITY_')) {
-    faceSubjects.push({ data: base64Data });
-} else if (prevText.includes('FULL BODY') || prevText.includes('COSTUME')) {
-    bodySubjects.push({ data: base64Data });
-} else {
-    otherSubjects.push({ data: base64Data });
-}
-
-// Build prioritized: FACE first, then BODY, then others
-const prioritizedSubjects = [...faceSubjects, ...bodySubjects, ...otherSubjects];
+// Sau:
+supportsVisualRefs ? parts : []
 ```
 
-**Result:** Face ID images giờ luôn được đặt đầu tiên trong subjects array, đảm bảo không bị drop khi limiting.
+**Result:** Các model Gommo (như Banana Pro Cheap) giờ đây đã nhận được đầy đủ dữ liệu Face ID và Body để duy trì tính nhất quán nhân vật.
 
 ---
 
-### Fix 2: Model-Aware Subject Limits
+### Summary of All Fixes (2026-01-30)
 
-**File:** `hooks/useImageGeneration.ts` (Lines 401-430)
+| Fix | File | Description | Impact |
+|-----|------|-------------|--------|
+| 1 | `hooks/useImageGeneration.ts` | Smart prioritizing (Face > Body) | Character Identity consistency |
+| 2 | `hooks/useImageGeneration.ts` | Model-aware subject limits | Maximize consistency per model capacity |
+| 3 | `hooks/useImageGeneration.ts` | **Global Parts Passing Fix** | **CRITICAL: Fixes references not working on all Gommo/Fal models** |
 
-**Problem:** Hardcoded limit = 3 subjects cho tất cả models, trong khi nhiều Gommo models hỗ trợ đến 9 subjects.
-
-**Solution:**
-```typescript
-// Model-specific subject limits
-const getSubjectLimit = (modelId: string): number => {
-    if (modelId.includes('seedream_4_0') || modelId.includes('banana') && !modelId.includes('pro')) return 9;
-    if (modelId.includes('banana_pro') || modelId.includes('seedream_4_5') || modelId === 'o1') return 6;
-    if (modelId.includes('4_5')) return 3;
-    return 6; // Default safe limit
-};
-```
-
-**Result:** Mỗi model sẽ sử dụng đúng số subjects tối đa mà nó hỗ trợ, tối ưu character consistency.
+**Total files modified:** 2 (including this audit)
 
 ---
 
-### Summary of Changes
-
-| File | Lines Changed | Description |
-|------|---------------|-------------|
-| `hooks/useImageGeneration.ts` | 333-386 | Smart subject categorization (Face > Body > Other) |
-| `hooks/useImageGeneration.ts` | 401-430 | Model-aware subject limits |
-
-**Total lines modified:** ~70 lines
-
----
-
-*Audit completed: 2026-01-29*  
+*Audit completed: 2026-01-30*  
 *Auditor: Antigravity AI Assistant*

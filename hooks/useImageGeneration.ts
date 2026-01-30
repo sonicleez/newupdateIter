@@ -393,9 +393,19 @@ export function useImageGeneration(
                 // Gommo models need explicit instruction to use subjects for face/body
                 let gommoPrompt = prompt;
                 if (subjects.length > 0) {
-                    const identityPrefix = `[IDENTITY LOCK] Use the provided reference image(s) as the ONLY source for character face and body. Match the face structure, features, and clothing EXACTLY from the reference. Do NOT generate a different face. `;
+                    // Build character summary for identity lock
+                    const faceNames = faceSubjects.map(s => s.charName).filter(Boolean).join(', ');
+                    const bodyNames = bodySubjects.map(s => s.charName).filter(Boolean).join(', ');
+
+                    let identityPrefix = `[IDENTITY LOCK] Use the provided reference image(s) as the ONLY source for character identity. Match the face structure, features, bone structure, and eyes EXACTLY from the first reference image(s). `;
+
+                    if (faceNames) identityPrefix += `Strictly maintain identity for: ${faceNames}. `;
+                    if (bodyNames) identityPrefix += `Strictly maintain outfit/physique for: ${bodyNames}. `;
+
+                    identityPrefix += `Do NOT generate generic or different faces. The visual references are the absolute truth. `;
+
                     gommoPrompt = identityPrefix + prompt;
-                    console.log('[ImageGen] 🔒 Added IDENTITY LOCK prefix for Gommo');
+                    console.log(`[ImageGen] 🔒 Added IDENTITY LOCK prefix for Gommo (${faceSubjects.length} face, ${bodySubjects.length} body)`);
                 }
 
                 // ═══════════════════════════════════════════════════════════════
@@ -613,7 +623,10 @@ export function useImageGeneration(
             }
 
 
-            const isHighRes = (currentState.imageModel || 'gemini-3-pro-image-preview') === 'gemini-3-pro-image-preview';
+            const modelToUse = currentState.imageModel || 'gemini-3-pro-image-preview';
+            const modelInfo = IMAGE_MODELS.find(m => m.value === modelToUse);
+            const isHighRes = modelToUse === 'gemini-3-pro-image-preview';
+            const supportsVisualRefs = modelInfo?.supportsSubject !== false;
 
             // --- REASONING STEP (Refinement/Edit Mode) ---
             // If we have a Base Image (Edit Mode) and a Command, we use "Gemini 3 Reasoning" to plan the edit first.
@@ -1680,7 +1693,7 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
             // --- 6. PROMPT NORMALIZATION (DOP Layer) ---
             // Optimize prompt for the specific model being used
             // Includes auto-translation from Vietnamese to English for non-Gemini models
-            const modelToUse = currentState.imageModel || 'gemini-3-pro-image-preview';
+
             let promptToSend = finalImagePrompt;
 
             // --- 6.1 PI STRATEGIC DISPATCHER (Intelligence Layer) ---
@@ -1826,7 +1839,7 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                 userApiKey,
                 modelToUse,
                 currentState.aspectRatio,
-                isHighRes ? parts : [],
+                supportsVisualRefs ? parts : [], // FIXED: Was hardcoded to isHighRes (Gemini only)
                 currentState.resolution || '1K',
                 { domain: currentState.gommoDomain || '', accessToken: currentState.gommoAccessToken || '' }
             );

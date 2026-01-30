@@ -64,11 +64,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     const [gommoMsg, setGommoMsg] = useState('');
     const [gommoCredits, setGommoCredits] = useState<number | null>(null);
 
+    // Groq state
+    const [localGroqApiKey, setLocalGroqApiKey] = useState('');
+    const [groqCheckStatus, setGroqCheckStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
+    const [groqStatusMsg, setGroqStatusMsg] = useState('');
+
     useEffect(() => {
         if (isOpen) {
             setCheckStatus('idle');
             setStatusMsg('');
             setLocalApiKey(apiKey);
+            setLocalGroqApiKey(localStorage.getItem('groqApiKey') || '');
         }
     }, [isOpen, apiKey]);
 
@@ -171,6 +177,47 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         } catch (error: any) {
             setGommoStatus('error');
             setGommoMsg(error.message || 'Không thể kết nối Gommo API');
+        }
+    };
+
+    const handleGroqVerify = async () => {
+        const trimmedKey = localGroqApiKey.trim();
+        if (!trimmedKey) {
+            setGroqCheckStatus('error');
+            setGroqStatusMsg("Vui lòng nhập API Key.");
+            return;
+        }
+
+        setGroqCheckStatus('checking');
+        try {
+            // Test connection using proxy with custom header
+            const response = await fetch('/api/proxy/groq/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-groq-api-key': trimmedKey
+                },
+                body: JSON.stringify({
+                    messages: [{ role: 'user', content: 'Test connection' }],
+                    model: 'llama-3.1-8b-instant',
+                    max_tokens: 10
+                })
+            });
+
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Groq connection failed');
+            }
+
+            // Save to localStorage
+            localStorage.setItem('groqApiKey', trimmedKey);
+
+            setGroqCheckStatus('success');
+            setGroqStatusMsg("✅ Groq API Key hợp lệ!");
+
+        } catch (error: any) {
+            setGroqCheckStatus('error');
+            setGroqStatusMsg(error.message || "Lỗi kết nối Groq.");
         }
     };
 
@@ -352,6 +399,43 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                             <span>{statusMsg}</span>
                         </div>
                     )}
+
+                    {/* Groq API Key Section */}
+                    <div className="pt-4 border-t border-gray-700/50 mt-4">
+                        <div className="flex items-center space-x-2 mb-2">
+                            <div className="p-1.5 bg-orange-500/10 rounded">
+                                <Zap className="text-orange-400" size={14} />
+                            </div>
+                            <h4 className="text-xs font-bold text-gray-300 uppercase">Groq Cloud API (Llama 3)</h4>
+                        </div>
+                        <p className="text-[11px] text-gray-500 mb-2">Optional. Use your own key for faster script generation.</p>
+
+                        <div className="relative">
+                            <input
+                                type="password"
+                                value={localGroqApiKey}
+                                onChange={(e) => setLocalGroqApiKey(e.target.value)}
+                                placeholder="gsk_..."
+                                className="w-full px-3 py-2.5 bg-gray-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/50 transition-all text-sm"
+                            />
+                            <button
+                                onClick={handleGroqVerify}
+                                disabled={groqCheckStatus === 'checking'}
+                                className={`absolute right-1.5 top-1.5 bottom-1.5 px-3 rounded-md font-bold text-[10px] uppercase tracking-wider transition-all ${groqCheckStatus === 'checking' ? 'bg-gray-700 text-gray-500' : `bg-gray-700 hover:bg-gray-600 text-white`}`}
+                            >
+                                {groqCheckStatus === 'checking' ? '...' : 'Save'}
+                            </button>
+                        </div>
+
+                        {groqCheckStatus !== 'idle' && (
+                            <div className={`mt-2 text-[11px] p-2 rounded-lg border flex items-center ${groqCheckStatus === 'success' ? 'bg-green-900/10 border-green-800/30 text-green-400' :
+                                    groqCheckStatus === 'error' ? 'bg-red-900/10 border-red-800/30 text-red-400' :
+                                        'bg-blue-900/10 border-blue-800/30 text-blue-400'
+                                }`}>
+                                {groqStatusMsg}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Gommo AI Section */}

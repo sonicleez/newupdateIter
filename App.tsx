@@ -136,7 +136,7 @@ const App: React.FC = () => {
     const [isExcelImportModalOpen, setExcelImportModalOpen] = useState(false);
     const [isLocationLibraryOpen, setLocationLibraryOpen] = useState(false); // NEW: Location Library modal
     const [cloudProjects, setCloudProjects] = useState<any[]>([]);
-    
+
     // Intelligence Mode State
     const [appMode, setAppMode] = useState<AppMode>('production');
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -785,10 +785,17 @@ const App: React.FC = () => {
         handleDirectorCommand(command);
     }, [handleDirectorCommand]);
 
+    const handleManualScriptStateChange = useCallback((manualScriptState: any) => {
+        updateStateAndRecord(s => ({
+            ...s,
+            manualScriptState
+        }));
+    }, [updateStateAndRecord]);
+
     // Handle export from Intelligence Mode to Production
     const handleExportFromIntelligence = useCallback((
         characters: Partial<Character>[],
-        locations: Partial<Location>[]
+        locations: any[]
     ) => {
         updateStateAndRecord(s => ({
             ...s,
@@ -819,11 +826,11 @@ const App: React.FC = () => {
                 }))
             ]
         }));
-        
+
         // Show success toast
         setShowSuccessToast(`✓ Exported ${characters.length} characters and ${locations.length} locations to Production`);
         setTimeout(() => setShowSuccessToast(null), 3000);
-        
+
         // Optionally switch to production mode
         // setAppMode('production');
     }, [updateStateAndRecord]);
@@ -856,283 +863,283 @@ const App: React.FC = () => {
                         className={`h-full w-full transition-all duration-300 ${session ? (isSidebarCollapsed ? 'pl-16' : 'pl-56') : ''}`}
                     >
                         {/* Cloud Operation Overlay */}
-                    {projectLoading && (
-                        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in">
-                            <div className="w-16 h-16 border-4 border-brand-orange border-t-transparent rounded-full animate-spin mb-6"></div>
-                            <h2 className="text-2xl font-bold text-white mb-2 tracking-widest uppercase">Cloud Syncing</h2>
-                            <p className="text-brand-cream/60 animate-pulse text-sm">Đang tải dữ liệu và hình ảnh lên đám mây...</p>
-                        </div>
-                    )}
-
-                    {/* Success Toast */}
-                    {showSuccessToast && (
-                        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[101] bg-brand-orange text-white px-8 py-4 rounded-2xl shadow-2xl animate-slide-up flex items-center space-x-3 border border-white/20">
-                            <div className="bg-white/20 p-1 rounded-full text-white">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                        {projectLoading && (
+                            <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in">
+                                <div className="w-16 h-16 border-4 border-brand-orange border-t-transparent rounded-full animate-spin mb-6"></div>
+                                <h2 className="text-2xl font-bold text-white mb-2 tracking-widest uppercase">Cloud Syncing</h2>
+                                <p className="text-brand-cream/60 animate-pulse text-sm">Đang tải dữ liệu và hình ảnh lên đám mây...</p>
                             </div>
-                            <span className="font-bold text-lg">{showSuccessToast}</span>
+                        )}
+
+                        {/* Success Toast */}
+                        {showSuccessToast && (
+                            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[101] bg-brand-orange text-white px-8 py-4 rounded-2xl shadow-2xl animate-slide-up flex items-center space-x-3 border border-white/20">
+                                <div className="bg-white/20 p-1 rounded-full text-white">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                </div>
+                                <span className="font-bold text-lg">{showSuccessToast}</span>
+                            </div>
+                        )}
+                        <div className="absolute inset-0 z-0 pointer-events-none">
+                            <div className="absolute top-0 left-1/4 w-1/2 h-1/2 bg-brand-orange/20 rounded-full filter blur-3xl animate-pulse-slow"></div>
+                            <div className="absolute bottom-0 right-1/4 w-1/3 h-1/3 bg-brand-red/10 rounded-full filter blur-3xl animate-pulse-slow delay-1000"></div>
                         </div>
-                    )}
-                    <div className="absolute inset-0 z-0 pointer-events-none">
-                        <div className="absolute top-0 left-1/4 w-1/2 h-1/2 bg-brand-orange/20 rounded-full filter blur-3xl animate-pulse-slow"></div>
-                        <div className="absolute bottom-0 right-1/4 w-1/3 h-1/3 bg-brand-red/10 rounded-full filter blur-3xl animate-pulse-slow delay-1000"></div>
-                    </div>
 
-                    <Header
-                        isSticky={headerSticky}
-                        onSave={handleSave}
-                        onOpen={handleOpen}
-                        onNewProject={handleNewProject}
-                        onDownloadAll={() => handleDownloadAll(state)}
-                        canDownload={state.scenes.some(s => s.generatedImage) || state.characters.some(c => c.masterImage) || state.products.some(p => p.masterImage)}
-                        isContinuityMode={isContinuityMode}
-                        toggleContinuityMode={() => setIsContinuityMode(!isContinuityMode)}
-                        onUndo={undo}
-                        onRedo={redo}
-                        canUndo={history.past.length > 0}
-                        canRedo={history.future.length > 0}
-                        isLoggedIn={!!session}
-                        onCloudSave={handleCloudSave}
-                        onCloudOpen={handleCloudOpen}
-                        onProfileClick={() => setProfileModalOpen(true)}
-                        onAdminClick={isAdmin ? () => setAdminOpen(true) : undefined}
-                        profile={profile}
-                        subscriptionExpired={subscriptionExpired}
-                        onSavePackage={() => saveProjectPackage(state)}
-                    />
+                        <Header
+                            isSticky={headerSticky}
+                            onSave={handleSave}
+                            onOpen={handleOpen}
+                            onNewProject={handleNewProject}
+                            onDownloadAll={() => handleDownloadAll(state)}
+                            canDownload={state.scenes.some(s => s.generatedImage) || state.characters.some(c => c.masterImage) || state.products.some(p => p.masterImage)}
+                            isContinuityMode={isContinuityMode}
+                            toggleContinuityMode={() => setIsContinuityMode(!isContinuityMode)}
+                            onUndo={undo}
+                            onRedo={redo}
+                            canUndo={history.past.length > 0}
+                            canRedo={history.future.length > 0}
+                            isLoggedIn={!!session}
+                            onCloudSave={handleCloudSave}
+                            onCloudOpen={handleCloudOpen}
+                            onProfileClick={() => setProfileModalOpen(true)}
+                            onAdminClick={isAdmin ? () => setAdminOpen(true) : undefined}
+                            profile={profile}
+                            subscriptionExpired={subscriptionExpired}
+                            onSavePackage={() => saveProjectPackage(state)}
+                        />
 
-                    {/* Conditional Workspace Rendering */}
-                    {appMode === 'production' && (
-                        <>
-                        {/* Production Mode - Original App */}
-                        <main ref={mainContentRef} className="h-full w-full overflow-auto pt-20">
-                        <div className="transition-transform duration-200 ease-out" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
-                            <div className="container mx-auto px-6 pb-24">
-                                <ProjectNameInput value={state.projectName} onChange={handleProjectNameChange} />
+                        {/* Conditional Workspace Rendering */}
+                        {appMode === 'production' && (
+                            <>
+                                {/* Production Mode - Original App */}
+                                <main ref={mainContentRef} className="h-full w-full overflow-auto pt-20">
+                                    <div className="transition-transform duration-200 ease-out" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
+                                        <div className="container mx-auto px-6 pb-24">
+                                            <ProjectNameInput value={state.projectName} onChange={handleProjectNameChange} />
 
-                                <CharactersConsistencySection
-                                    characters={state.characters}
-                                    onSetDefaultCharacter={setDefaultCharacter}
-                                    onDeleteCharacter={deleteCharacter}
-                                    onUpdateCharacter={updateCharacter}
-                                    onSetEditingCharacterId={setEditingCharacterId}
-                                    onAddCharacter={addCharacter}
-                                />
+                                            <CharactersConsistencySection
+                                                characters={state.characters}
+                                                onSetDefaultCharacter={setDefaultCharacter}
+                                                onDeleteCharacter={deleteCharacter}
+                                                onUpdateCharacter={updateCharacter}
+                                                onSetEditingCharacterId={setEditingCharacterId}
+                                                onAddCharacter={addCharacter}
+                                            />
 
-                                <WeaponProductPropsSection
-                                    products={state.products}
-                                    onEditProduct={setEditingProductId}
-                                    onDeleteProduct={deleteProduct}
-                                    onAddProduct={addProduct}
-                                />
+                                            <WeaponProductPropsSection
+                                                products={state.products}
+                                                onEditProduct={setEditingProductId}
+                                                onDeleteProduct={deleteProduct}
+                                                onAddProduct={addProduct}
+                                            />
 
-                                <StyleSettingsSection
-                                    stylePrompt={state.stylePrompt}
-                                    onStylePromptChange={handleStylePromptChange}
-                                    customStyleInstruction={state.customStyleInstruction || ''}
-                                    onCustomStyleInstructionChange={(val) => updateStateAndRecord(s => ({ ...s, customStyleInstruction: val }))}
-                                    isContinuityMode={isContinuityMode}
-                                    toggleContinuityMode={() => setIsContinuityMode(!isContinuityMode)}
-                                    isOutfitLockMode={isOutfitLockMode}
-                                    toggleOutfitLockMode={() => setIsOutfitLockMode(!isOutfitLockMode)}
-                                    onAnalyzeStyleFromImage={analyzeStyleFromImage}
-                                    isAnalyzingStyle={isAnalyzingStyle}
-                                    imageModel={state.imageModel}
-                                    onImageModelChange={handleImageModelChange}
-                                    scriptModel={state.scriptModel || 'gemini-2.5-flash'}
-                                    onScriptModelChange={(e) => updateStateAndRecord(s => ({ ...s, scriptModel: e.target.value }))}
-                                    resolution={state.resolution}
-                                    onResolutionChange={(val) => updateStateAndRecord(s => ({ ...s, resolution: val }))}
-                                    aspectRatio={state.aspectRatio}
-                                    onAspectRatioChange={handleAspectRatioChange}
-                                    scriptLanguage={state.scriptLanguage}
-                                    onScriptLanguageChange={handleScriptLanguageChange}
-                                    customScriptLanguage={state.customScriptLanguage || ''}
-                                    onCustomScriptLanguageChange={(val) => updateStateAndRecord(s => ({ ...s, customScriptLanguage: val }))}
-                                    cameraModel={state.cameraModel || 'auto'}
-                                    onCameraModelChange={(val) => updateStateAndRecord(s => ({ ...s, cameraModel: val }))}
-                                    customCameraModel={state.customCameraModel || ''}
-                                    onCustomCameraModelChange={(val) => updateStateAndRecord(s => ({ ...s, customCameraModel: val }))}
-                                    defaultLens={state.defaultLens || 'auto'}
-                                    onDefaultLensChange={(val) => updateStateAndRecord(s => ({ ...s, defaultLens: val }))}
-                                    customDefaultLens={state.customDefaultLens || ''}
-                                    onCustomDefaultLensChange={(val) => updateStateAndRecord(s => ({ ...s, customDefaultLens: val }))}
-                                    customMetaTokens={state.customMetaTokens || ''}
-                                    onCustomMetaTokensChange={(val) => updateStateAndRecord(s => ({ ...s, customMetaTokens: val }))}
+                                            <StyleSettingsSection
+                                                stylePrompt={state.stylePrompt}
+                                                onStylePromptChange={handleStylePromptChange}
+                                                customStyleInstruction={state.customStyleInstruction || ''}
+                                                onCustomStyleInstructionChange={(val) => updateStateAndRecord(s => ({ ...s, customStyleInstruction: val }))}
+                                                isContinuityMode={isContinuityMode}
+                                                toggleContinuityMode={() => setIsContinuityMode(!isContinuityMode)}
+                                                isOutfitLockMode={isOutfitLockMode}
+                                                toggleOutfitLockMode={() => setIsOutfitLockMode(!isOutfitLockMode)}
+                                                onAnalyzeStyleFromImage={analyzeStyleFromImage}
+                                                isAnalyzingStyle={isAnalyzingStyle}
+                                                imageModel={state.imageModel}
+                                                onImageModelChange={handleImageModelChange}
+                                                scriptModel={state.scriptModel || 'gemini-2.5-flash'}
+                                                onScriptModelChange={(e) => updateStateAndRecord(s => ({ ...s, scriptModel: e.target.value }))}
+                                                resolution={state.resolution}
+                                                onResolutionChange={(val) => updateStateAndRecord(s => ({ ...s, resolution: val }))}
+                                                aspectRatio={state.aspectRatio}
+                                                onAspectRatioChange={handleAspectRatioChange}
+                                                scriptLanguage={state.scriptLanguage}
+                                                onScriptLanguageChange={handleScriptLanguageChange}
+                                                customScriptLanguage={state.customScriptLanguage || ''}
+                                                onCustomScriptLanguageChange={(val) => updateStateAndRecord(s => ({ ...s, customScriptLanguage: val }))}
+                                                cameraModel={state.cameraModel || 'auto'}
+                                                onCameraModelChange={(val) => updateStateAndRecord(s => ({ ...s, cameraModel: val }))}
+                                                customCameraModel={state.customCameraModel || ''}
+                                                onCustomCameraModelChange={(val) => updateStateAndRecord(s => ({ ...s, customCameraModel: val }))}
+                                                defaultLens={state.defaultLens || 'auto'}
+                                                onDefaultLensChange={(val) => updateStateAndRecord(s => ({ ...s, defaultLens: val }))}
+                                                customDefaultLens={state.customDefaultLens || ''}
+                                                onCustomDefaultLensChange={(val) => updateStateAndRecord(s => ({ ...s, customDefaultLens: val }))}
+                                                customMetaTokens={state.customMetaTokens || ''}
+                                                onCustomMetaTokensChange={(val) => updateStateAndRecord(s => ({ ...s, customMetaTokens: val }))}
 
-                                    onOpenScriptGenerator={() => setScriptModalOpen(true)}
-                                    isScriptGenerating={isScriptGenerating}
-                                    onTriggerFileUpload={triggerFileUpload}
-                                    onOpenManualScript={() => setManualScriptModalOpen(true)}
-                                    onOpenExcelImport={() => setExcelImportModalOpen(true)}
-                                    generationConfig={state.generationConfig || {
-                                        imageDelay: 500,
-                                        veoDelay: 200,
-                                        insertAngleDelay: 1000,
-                                        concurrencyLimit: 1
-                                    }}
-                                    onGenerationConfigChange={(config) => updateStateAndRecord(s => ({ ...s, generationConfig: config }))}
-                                />
+                                                onOpenScriptGenerator={() => setScriptModalOpen(true)}
+                                                isScriptGenerating={isScriptGenerating}
+                                                onTriggerFileUpload={triggerFileUpload}
+                                                onOpenManualScript={() => setManualScriptModalOpen(true)}
+                                                onOpenExcelImport={() => setExcelImportModalOpen(true)}
+                                                generationConfig={state.generationConfig || {
+                                                    imageDelay: 500,
+                                                    veoDelay: 200,
+                                                    insertAngleDelay: 1000,
+                                                    concurrencyLimit: 1
+                                                }}
+                                                onGenerationConfigChange={(config) => updateStateAndRecord(s => ({ ...s, generationConfig: config }))}
+                                            />
 
 
 
-                                <div id="scenes-map-section">
-                                    <ScenesMapSection
-                                        scenes={state.scenes}
-                                        viewMode={viewMode}
-                                        setViewMode={setViewMode}
-                                        characters={state.characters}
-                                        products={state.products}
-                                        sceneGroups={state.sceneGroups || []}
-                                        updateScene={updateScene}
-                                        removeScene={removeScene}
-                                        insertScene={insertScene}
-                                        moveScene={moveScene}
-                                        performImageGeneration={performImageGeneration}
-                                        handleOpenImageViewer={handleOpenImageViewer}
-                                        handleGenerateAllImages={handleGenerateAllImages}
-                                        isBatchGenerating={isBatchGenerating}
-                                        isStopping={isStopping}
-                                        stopBatchGeneration={stopBatchGeneration}
-                                        handleGenerateAllVeoPrompts={handleGenerateAllVeoPrompts}
-                                        generateVeoPrompt={generateVeoPrompt}
-                                        suggestVeoPresets={suggestVeoPresets}
-                                        applyPresetToAll={applyPresetToAll}
-                                        analyzeRaccord={analyzeRaccord}
-                                        suggestNextShot={suggestNextShot}
-                                        isVeoGenerating={isVeoGenerating}
-                                        isVeoStopping={isVeoStopping}
-                                        stopVeoGeneration={stopVeoGeneration}
-                                        handleGenerateAllVideos={handleGenerateAllVideos}
-                                        isVideoGenerating={isVideoGenerating}
-                                        addScene={addScene}
-                                        detailedScript={state.detailedScript || ''}
-                                        onDetailedScriptChange={(val) => updateStateAndRecord(s => ({ ...s, detailedScript: val }))}
-                                        onCleanAll={() => updateStateAndRecord(s => ({ ...s, scenes: [] }))}
-                                        createGroup={addSceneGroup}
-                                        updateGroup={updateSceneGroup}
-                                        deleteGroup={deleteSceneGroup}
-                                        assignSceneToGroup={assignSceneToGroup}
-                                        draggedSceneIndex={draggedSceneIndex}
-                                        setDraggedSceneIndex={setDraggedSceneIndex}
-                                        dragOverIndex={dragOverIndex}
-                                        setDragOverIndex={setDragOverIndex}
-                                        onClearAllImages={() => {
-                                            if (confirm('⚠️ Delete ALL images? This action cannot be undone.')) {
-                                                updateStateAndRecord(s => ({
-                                                    ...s,
-                                                    scenes: s.scenes.map(sc => ({
-                                                        ...sc,
-                                                        generatedImage: null,
-                                                        endFrameImage: null,
-                                                        mediaId: null
-                                                    }))
-                                                }));
-                                            }
-                                        }}
-                                        onInsertAngles={handleInsertAngles}
-                                        onExpandScene={handleExpandScene}
-                                        isExpandingSequence={isSequenceExpanding}
-                                        scriptLanguage={state.scriptLanguage}
-                                        customScriptLanguage={state.customScriptLanguage}
-                                        onOpenLocationLibrary={() => setLocationLibraryOpen(true)}
-                                        locationCount={state.locations?.length || 0}
-                                    />
+                                            <div id="scenes-map-section">
+                                                <ScenesMapSection
+                                                    scenes={state.scenes}
+                                                    viewMode={viewMode}
+                                                    setViewMode={setViewMode}
+                                                    characters={state.characters}
+                                                    products={state.products}
+                                                    sceneGroups={state.sceneGroups || []}
+                                                    updateScene={updateScene}
+                                                    removeScene={removeScene}
+                                                    insertScene={insertScene}
+                                                    moveScene={moveScene}
+                                                    performImageGeneration={performImageGeneration}
+                                                    handleOpenImageViewer={handleOpenImageViewer}
+                                                    handleGenerateAllImages={handleGenerateAllImages}
+                                                    isBatchGenerating={isBatchGenerating}
+                                                    isStopping={isStopping}
+                                                    stopBatchGeneration={stopBatchGeneration}
+                                                    handleGenerateAllVeoPrompts={handleGenerateAllVeoPrompts}
+                                                    generateVeoPrompt={generateVeoPrompt}
+                                                    suggestVeoPresets={suggestVeoPresets}
+                                                    applyPresetToAll={applyPresetToAll}
+                                                    analyzeRaccord={analyzeRaccord}
+                                                    suggestNextShot={suggestNextShot}
+                                                    isVeoGenerating={isVeoGenerating}
+                                                    isVeoStopping={isVeoStopping}
+                                                    stopVeoGeneration={stopVeoGeneration}
+                                                    handleGenerateAllVideos={handleGenerateAllVideos}
+                                                    isVideoGenerating={isVideoGenerating}
+                                                    addScene={addScene}
+                                                    detailedScript={state.detailedScript || ''}
+                                                    onDetailedScriptChange={(val) => updateStateAndRecord(s => ({ ...s, detailedScript: val }))}
+                                                    onCleanAll={() => updateStateAndRecord(s => ({ ...s, scenes: [] }))}
+                                                    createGroup={addSceneGroup}
+                                                    updateGroup={updateSceneGroup}
+                                                    deleteGroup={deleteSceneGroup}
+                                                    assignSceneToGroup={assignSceneToGroup}
+                                                    draggedSceneIndex={draggedSceneIndex}
+                                                    setDraggedSceneIndex={setDraggedSceneIndex}
+                                                    dragOverIndex={dragOverIndex}
+                                                    setDragOverIndex={setDragOverIndex}
+                                                    onClearAllImages={() => {
+                                                        if (confirm('⚠️ Delete ALL images? This action cannot be undone.')) {
+                                                            updateStateAndRecord(s => ({
+                                                                ...s,
+                                                                scenes: s.scenes.map(sc => ({
+                                                                    ...sc,
+                                                                    generatedImage: null,
+                                                                    endFrameImage: null,
+                                                                    mediaId: null
+                                                                }))
+                                                            }));
+                                                        }
+                                                    }}
+                                                    onInsertAngles={handleInsertAngles}
+                                                    onExpandScene={handleExpandScene}
+                                                    isExpandingSequence={isSequenceExpanding}
+                                                    scriptLanguage={state.scriptLanguage}
+                                                    customScriptLanguage={state.customScriptLanguage}
+                                                    onOpenLocationLibrary={() => setLocationLibraryOpen(true)}
+                                                    locationCount={state.locations?.length || 0}
+                                                />
+                                            </div>
+
+
+
+
+                                            <div className="flex justify-end mt-8 gap-4">
+                                                <button
+                                                    onClick={() => setScreenplayModalOpen(true)}
+                                                    className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 rounded-lg flex items-center gap-2 border border-purple-500/30 transition-all active:scale-95 text-xs font-bold"
+                                                >
+                                                    📄 XUẤT KỊCH BẢN
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </main>
+
+                                {/* Right Sidebar: Asset Library */}
+                                <div className={`fixed right-0 top-16 bottom-0 z-40 transition-all duration-300 ease-in-out ${isLibraryOpen ? 'w-96' : 'w-0'}`}>
+                                    {isLibraryOpen && (
+                                        <AssetLibrary
+                                            assets={state.assetGallery || []}
+                                            scenes={state.scenes}
+                                            characters={state.characters}
+                                            products={state.products}
+                                            usageStats={state.usageStats}
+                                            onDeleteAsset={handleDeleteAsset}
+                                            onClose={() => setLibraryOpen(false)}
+                                            onReplaceScene={(id, img) => updateScene(id, { generatedImage: img })}
+                                            onReplaceCharacterView={(id, img, view) => updateCharacter(id, { [`${view}Image`]: img })}
+                                            onReplaceProductView={(id, img, view) => {
+                                                const prod = state.products.find(p => p.id === id);
+                                                if (prod) {
+                                                    if (view === 'master') updateProduct(id, { masterImage: img });
+                                                    else updateProduct(id, { views: { ...prod.views, [view]: img } });
+                                                }
+                                            }}
+                                            hasGommoCredentials={!!(state.gommoDomain && state.gommoAccessToken)}
+                                            onOpenGommoLibrary={() => setGommoLibraryOpen(true)}
+                                            onUploadForEdit={(base64) => {
+                                                openEditor('upload-' + Date.now(), base64, 'scene');
+                                            }}
+                                            onOpenStudio={() => {
+                                                // Open editor in create mode (no source image)
+                                                openEditor('studio-' + Date.now(), '', 'scene');
+                                            }}
+                                            onEditInStudio={(base64, prompt) => {
+                                                // Open editor with selected gallery image
+                                                openEditor('gallery-' + Date.now(), base64, 'scene');
+                                            }}
+                                        />
+                                    )}
                                 </div>
 
+                                {/* Floating Gallery Button */}
+                                <button
+                                    onClick={() => setLibraryOpen(!isLibraryOpen)}
+                                    className={`fixed right-6 bottom-24 z-50 p-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-95 ${isLibraryOpen
+                                        ? 'bg-purple-600 text-white rotate-90'
+                                        : 'bg-brand-dark text-white border border-gray-700 hover:border-purple-500'
+                                        }`}
+                                >
+                                    <ImageIcon size={24} />
+                                    {state.assetGallery && state.assetGallery.length > 0 && !isLibraryOpen && (
+                                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ring-2 ring-brand-dark">
+                                            {state.assetGallery.length}
+                                        </span>
+                                    )}
+                                </button>
+                            </>
+                        )}
 
-
-
-                                <div className="flex justify-end mt-8 gap-4">
-                                    <button
-                                        onClick={() => setScreenplayModalOpen(true)}
-                                        className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 rounded-lg flex items-center gap-2 border border-purple-500/30 transition-all active:scale-95 text-xs font-bold"
-                                    >
-                                        📄 XUẤT KỊCH BẢN
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </main>
-
-                    {/* Right Sidebar: Asset Library */}
-                    <div className={`fixed right-0 top-16 bottom-0 z-40 transition-all duration-300 ease-in-out ${isLibraryOpen ? 'w-96' : 'w-0'}`}>
-                        {isLibraryOpen && (
-                            <AssetLibrary
-                                assets={state.assetGallery || []}
-                                scenes={state.scenes}
-                                characters={state.characters}
-                                products={state.products}
-                                usageStats={state.usageStats}
-                                onDeleteAsset={handleDeleteAsset}
-                                onClose={() => setLibraryOpen(false)}
-                                onReplaceScene={(id, img) => updateScene(id, { generatedImage: img })}
-                                onReplaceCharacterView={(id, img, view) => updateCharacter(id, { [`${view}Image`]: img })}
-                                onReplaceProductView={(id, img, view) => {
-                                    const prod = state.products.find(p => p.id === id);
-                                    if (prod) {
-                                        if (view === 'master') updateProduct(id, { masterImage: img });
-                                        else updateProduct(id, { views: { ...prod.views, [view]: img } });
-                                    }
-                                }}
-                                hasGommoCredentials={!!(state.gommoDomain && state.gommoAccessToken)}
-                                onOpenGommoLibrary={() => setGommoLibraryOpen(true)}
-                                onUploadForEdit={(base64) => {
-                                    openEditor('upload-' + Date.now(), base64, 'scene');
-                                }}
-                                onOpenStudio={() => {
-                                    // Open editor in create mode (no source image)
-                                    openEditor('studio-' + Date.now(), '', 'scene');
-                                }}
-                                onEditInStudio={(base64, prompt) => {
-                                    // Open editor with selected gallery image
-                                    openEditor('gallery-' + Date.now(), base64, 'scene');
-                                }}
+                        {/* Intelligence Mode Workspace */}
+                        {appMode === 'intelligence' && (
+                            <IntelligenceWorkspace
+                                onExportToProduction={handleExportFromIntelligence}
+                                serverUrl="http://localhost:3001"
                             />
                         )}
-                    </div>
 
-                    {/* Floating Gallery Button */}
-                    <button
-                        onClick={() => setLibraryOpen(!isLibraryOpen)}
-                        className={`fixed right-6 bottom-24 z-50 p-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-95 ${isLibraryOpen
-                            ? 'bg-purple-600 text-white rotate-90'
-                            : 'bg-brand-dark text-white border border-gray-700 hover:border-purple-500'
-                            }`}
-                    >
-                        <ImageIcon size={24} />
-                        {state.assetGallery && state.assetGallery.length > 0 && !isLibraryOpen && (
-                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ring-2 ring-brand-dark">
-                                {state.assetGallery.length}
-                            </span>
+                        {/* Sourcing Mode Workspace */}
+                        {appMode === 'sourcing' && (
+                            <SourcingWorkspace
+                                serverUrl="http://localhost:3001"
+                            />
                         )}
-                    </button>
-                    </>
-                    )}
 
-                    {/* Intelligence Mode Workspace */}
-                    {appMode === 'intelligence' && (
-                        <IntelligenceWorkspace
-                            onExportToProduction={handleExportFromIntelligence}
-                            serverUrl="http://localhost:3001"
-                        />
-                    )}
-
-                    {/* Sourcing Mode Workspace */}
-                    {appMode === 'sourcing' && (
-                        <SourcingWorkspace
-                            serverUrl="http://localhost:3001"
-                        />
-                    )}
-
-                    {zoom !== 1 && (
-                        <button
-                            onClick={() => setZoom(1)}
-                            className={`absolute top-24 right-6 px-4 py-2 text-sm font-semibold text-white rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} transition-all shadow-lg animate-fade-in`}
-                        >
-                            Reset Zoom (100%)
-                        </button>
-                    )}
+                        {zoom !== 1 && (
+                            <button
+                                onClick={() => setZoom(1)}
+                                className={`absolute top-24 right-6 px-4 py-2 text-sm font-semibold text-white rounded-lg bg-gradient-to-r ${PRIMARY_GRADIENT} hover:${PRIMARY_GRADIENT_HOVER} transition-all shadow-lg animate-fade-in`}
+                            >
+                                Reset Zoom (100%)
+                            </button>
+                        )}
                     </div> {/* End of Main Content Wrapper */}
 
                     <UserProfileModal
@@ -1399,12 +1406,7 @@ const App: React.FC = () => {
                         userApiKey={userApiKey}
                         userId={session?.user?.id || null}
                         initialState={state.manualScriptState}
-                        onStateChange={(manualScriptState) => {
-                            updateStateAndRecord(s => ({
-                                ...s,
-                                manualScriptState
-                            }));
-                        }}
+                        onStateChange={handleManualScriptStateChange}
                     />
 
                     <ExcelImportModal

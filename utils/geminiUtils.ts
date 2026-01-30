@@ -179,32 +179,56 @@ export const callGroqText = async (
     let prompt: string;
     let systemPrompt: string;
     let isJsonMode: boolean;
-    
-    if (modelId !== undefined) {
+    let modelToUse = modelId || 'llama-3.3-70b-versatile';
+
+    if (modelId !== undefined && typeof promptOrApiKey === 'string' && typeof systemPromptOrPrompt === 'string') {
         // Old 5-argument signature: (apiKey, prompt, systemPrompt, model, jsonMode)
-        prompt = systemPromptOrPrompt;
-        systemPrompt = typeof jsonModeOrSystemPrompt === 'string' ? jsonModeOrSystemPrompt : '';
-        isJsonMode = jsonMode ?? false;
+        // Actually, looking at the usage, it seems some calls use:
+        // callGroqText(prompt, systemPrompt, jsonMode, modelId)
+        // Let's make it robust.
+
+        if (typeof jsonModeOrSystemPrompt === 'boolean') {
+            // Signature: (prompt, systemPrompt, isJsonMode, modelId)
+            prompt = promptOrApiKey;
+            systemPrompt = systemPromptOrPrompt;
+            isJsonMode = jsonModeOrSystemPrompt;
+        } else {
+            // Signature: (apiKey, prompt, systemPrompt, modelId, isJsonMode)
+            prompt = systemPromptOrPrompt;
+            systemPrompt = typeof jsonModeOrSystemPrompt === 'string' ? jsonModeOrSystemPrompt : '';
+            isJsonMode = jsonMode ?? false;
+        }
     } else {
         // New 3-argument signature: (prompt, systemPrompt, jsonMode)
         prompt = promptOrApiKey;
         systemPrompt = systemPromptOrPrompt;
         isJsonMode = typeof jsonModeOrSystemPrompt === 'boolean' ? jsonModeOrSystemPrompt : false;
+        if (jsonMode !== undefined) isJsonMode = jsonMode;
     }
 
     const messages: Array<{ role: string; content: string }> = [];
-    
+
     if (systemPrompt) {
         messages.push({ role: 'system', content: systemPrompt });
     }
     messages.push({ role: 'user', content: prompt });
 
+    console.log(`[Groq] Calling ${modelToUse} (JSON: ${isJsonMode})`);
+
+    // Retrieve Groq API Key from localStorage (User Setting)
+    const customGroqKey = typeof window !== 'undefined' ? localStorage.getItem('groqApiKey') : null;
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (customGroqKey) {
+        headers['x-groq-api-key'] = customGroqKey;
+    }
+
     const response = await fetch('/api/proxy/groq/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify({
             messages,
-            model: 'llama-3.3-70b-versatile',
+            model: modelToUse,
             temperature: 0.7,
             max_tokens: 8192,
             ...(isJsonMode && { response_format: { type: 'json_object' } })
@@ -303,7 +327,7 @@ export const callCharacterImageAPI = async (
                         subjects.push({ data: base64Data });
                     }
                 }
-                
+
                 console.log(`[CharacterGen] 🚀 Calling Gommo generateImage with params:`, JSON.stringify({
                     prompt,
                     ratio: gommoRatio,
@@ -345,14 +369,14 @@ export const callCharacterImageAPI = async (
             body: JSON.stringify({
                 prompt,
                 image_url: imageContext || undefined,
-                aspect_ratio: aspectRatio === '16:9' ? 'landscape_16_9' : 
-                              aspectRatio === '9:16' ? 'portrait_16_9' : 'square'
+                aspect_ratio: aspectRatio === '16:9' ? 'landscape_16_9' :
+                    aspectRatio === '9:16' ? 'portrait_16_9' : 'square'
             })
         });
 
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Fal.ai generation failed');
-        
+
         // Convert URL to base64 for consistency
         const base64Image = await urlToBase64(data.url || data.imageUrl);
         console.log('[CharacterGen] ✅ Fal.ai image generated successfully');
