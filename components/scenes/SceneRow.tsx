@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { GripVertical, Copy, Download, Layers, Play, Plus, RefreshCw, Trash, User, Box, Sparkles, Wand2, Image as ImageIcon } from 'lucide-react';
+import { GripVertical, Copy, Download, Layers, Play, Plus, RefreshCw, Trash, User, Box, Sparkles, Wand2, Image as ImageIcon, Upload } from 'lucide-react';
 import { Scene, Character, Product } from '../../types';
 import { QualityRating } from '../common/QualityRating';
 
@@ -73,11 +73,32 @@ export const SceneRow: React.FC<SceneRowProps> = ({
     customScriptLanguage
 }) => {
     const endFrameInputRef = useRef<HTMLInputElement>(null);
+    const imageUploadInputRef = useRef<HTMLInputElement>(null);
     const [showAnglesDropdown, setShowAnglesDropdown] = useState(false);
     const [showScenePicker, setShowScenePicker] = useState(false);
     const [selectedAngles, setSelectedAngles] = useState<string[]>([]);
     const [customAnglePrompt, setCustomAnglePrompt] = useState('');
     const [showSecondaryLang, setShowSecondaryLang] = useState(false);
+
+    // Handle main image upload
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const base64 = event.target?.result as string;
+            if (base64) {
+                updateScene(scene.id, { generatedImage: base64 });
+            }
+        };
+        reader.readAsDataURL(file);
+
+        // Reset input
+        if (imageUploadInputRef.current) {
+            imageUploadInputRef.current.value = '';
+        }
+    };
 
 
     const handleEndFrameUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -512,11 +533,23 @@ export const SceneRow: React.FC<SceneRowProps> = ({
                                 </div>
                             </>
                         ) : (
-                            <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-xs flex-col">
-                                <span className="text-2xl mb-1">🖼️</span>
-                                <span>{scene.veoMode === 'start-end-frame' ? 'Start Frame' : 'Image'}</span>
+                            <div
+                                className="absolute inset-0 flex items-center justify-center text-gray-600 text-xs flex-col cursor-pointer hover:bg-gray-800/50 transition-colors group/upload"
+                                onClick={(e) => { e.stopPropagation(); imageUploadInputRef.current?.click(); }}
+                            >
+                                <Upload size={24} className="text-gray-500 mb-1 group-hover/upload:text-brand-orange transition-colors" />
+                                <span className="group-hover/upload:text-brand-orange transition-colors">{scene.veoMode === 'start-end-frame' ? 'Upload Start Frame' : 'Upload Image'}</span>
                             </div>
                         )}
+
+                        {/* Hidden File Input */}
+                        <input
+                            ref={imageUploadInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                            className="hidden"
+                        />
                     </div>
 
                     {scene.veoMode === 'start-end-frame' && (

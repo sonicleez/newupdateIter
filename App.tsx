@@ -1044,6 +1044,11 @@ const App: React.FC = () => {
                                                     customScriptLanguage={state.customScriptLanguage}
                                                     onOpenLocationLibrary={() => setLocationLibraryOpen(true)}
                                                     locationCount={state.locations?.length || 0}
+                                                    onEditSceneImage={(scene) => {
+                                                        if (scene.generatedImage) {
+                                                            openEditor(scene.id, scene.generatedImage, 'scene');
+                                                        }
+                                                    }}
                                                 />
                                             </div>
 

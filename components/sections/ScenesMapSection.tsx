@@ -54,6 +54,7 @@ interface ScenesMapSectionProps {
     customScriptLanguage?: string;
     onOpenLocationLibrary?: () => void;  // NEW: Open Location Library panel
     locationCount?: number;               // NEW: Number of locations in library
+    onEditSceneImage?: (scene: any) => void; // NEW: Edit scene image in Advanced Image Editor
 }
 
 export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
@@ -103,7 +104,8 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
     scriptLanguage,
     customScriptLanguage,
     onOpenLocationLibrary,
-    locationCount = 0
+    locationCount = 0,
+    onEditSceneImage
 }) => {
     const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
     const [activeGroupMenu, setActiveGroupMenu] = React.useState<string | null>(null);
@@ -765,6 +767,7 @@ export const ScenesMapSection: React.FC<ScenesMapSectionProps> = ({
                                         onInsertAngles={onInsertAngles}
                                         generateVeoPrompt={generateVeoPrompt}
                                         scenes={scenes}
+                                        onEditImage={onEditSceneImage}
                                     />
                                 )}
                             </React.Fragment>

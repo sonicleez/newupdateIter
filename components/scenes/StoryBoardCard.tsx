@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Trash2, Brush, GripVertical, Download, Pencil, Layers, X, Eye, Sparkles } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Trash2, Brush, GripVertical, Download, Pencil, Layers, X, Eye, Sparkles, Upload } from 'lucide-react';
 import { SceneRowProps } from './SceneRow';
 import { ExpandableTextarea } from '../common/ExpandableTextarea';
 
@@ -29,6 +29,27 @@ export const StoryBoardCard: React.FC<StoryBoardCardProps> = ({
     isExpandingSequence
 }) => {
     const [showAnglesMenu, setShowAnglesMenu] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Handle image upload
+    const handleUploadImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const base64 = event.target?.result as string;
+            if (base64) {
+                updateScene(scene.id, { generatedImage: base64 });
+            }
+        };
+        reader.readAsDataURL(file);
+
+        // Reset input
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
 
     // Download image with sequential numbering
     const handleDownloadImage = () => {
@@ -73,14 +94,35 @@ export const StoryBoardCard: React.FC<StoryBoardCardProps> = ({
                 ) : scene.generatedImage ? (
                     <img src={scene.generatedImage} alt={`Scene ${index + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110" />
                 ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 space-y-2">
-                        <span className="text-3xl">🖼️</span>
-                        <span className="text-[10px] uppercase tracking-wider font-bold">No Image</span>
+                    <div
+                        className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 space-y-2 cursor-pointer hover:bg-gray-800/50 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                    >
+                        <Upload size={24} className="text-gray-500" />
+                        <span className="text-[10px] uppercase tracking-wider font-bold">Upload Image</span>
                     </div>
                 )}
 
+                {/* Hidden File Input */}
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadImage}
+                    className="hidden"
+                />
+
                 {/* Actions Overlay */}
                 <div className="absolute inset-0 bg-black/70 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-2">
+                    {/* Upload Button - Always show */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                        className="p-2 bg-gray-600 text-white rounded-full hover:scale-110 transition-transform shadow-lg"
+                        title="Upload ảnh mới"
+                    >
+                        <Upload size={14} />
+                    </button>
+
                     {/* Download Button */}
                     {scene.generatedImage && (
                         <button
@@ -161,8 +203,8 @@ export const StoryBoardCard: React.FC<StoryBoardCardProps> = ({
                 <button
                     onClick={(e) => { e.stopPropagation(); updateScene(scene.id, { isKeyFrame: !scene.isKeyFrame }); }}
                     className={`absolute top-2 right-2 px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wide transition-all ${scene.isKeyFrame
-                            ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/30'
-                            : 'bg-black/50 text-gray-400 opacity-0 group-hover/card:opacity-100 hover:bg-yellow-500/20 hover:text-yellow-400'
+                        ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/30'
+                        : 'bg-black/50 text-gray-400 opacity-0 group-hover/card:opacity-100 hover:bg-yellow-500/20 hover:text-yellow-400'
                         }`}
                     title={scene.isKeyFrame ? 'Remove Key Frame (scenes will use previous anchor)' : 'Mark as Key Frame (hero shot for nearby scenes)'}
                 >
