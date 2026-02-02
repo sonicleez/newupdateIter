@@ -120,7 +120,7 @@ app.post('/api/proxy/groq/vision', async (req, res) => {
             return res.status(500).json({ error: 'Groq client not configured. Check GROQ_API_KEY or provide custom key.' });
         }
 
-        const { prompt, images, model = 'llama-3.2-11b-vision-preview', temperature = 0.5, max_tokens = 2048 } = req.body;
+        const { prompt, images, model = 'meta-llama/llama-4-scout-17b-16e-instruct', temperature = 0.5, max_tokens = 2048 } = req.body;
 
         if (!prompt) {
             return res.status(400).json({ error: 'Prompt is required' });
