@@ -377,16 +377,24 @@ export const callSmartVision = async (
     // ═══════════════════════════════════════════════════════════════
     console.log(`[SmartVision] ⚡ Routing to Groq Vision (Llama 3.2)`);
 
+    // Retrieve Groq API Key from localStorage (User Setting)
+    const customGroqKey = typeof window !== 'undefined' ? localStorage.getItem('groqApiKey') : null;
+
     // Convert to data URLs for Groq Proxy
     const imageUrls = images.map(img => `data:${img.mimeType};base64,${img.data}`);
 
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (customGroqKey) {
+        headers['x-groq-api-key'] = customGroqKey;
+    }
+
     const response = await fetch('/api/proxy/groq/vision', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
             prompt,
             images: imageUrls,
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct', // Keep or update to 3.2-11b/90b-vision-preview if preferred, but existing code used this
+            model: 'llama-3.2-11b-vision-preview',
             temperature: 0.5,
             max_tokens: 2048
         })

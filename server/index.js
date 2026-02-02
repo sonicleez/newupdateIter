@@ -106,14 +106,21 @@ app.post('/api/proxy/groq/chat', async (req, res) => {
 });
 
 // ==================== GROQ VISION PROXY (DOP - Raccord Validation) ====================
-// Uses meta-llama/llama-4-scout-17b-16e-instruct for image analysis
+// Uses llama-3.2-11b-vision-preview for image analysis
 app.post('/api/proxy/groq/vision', async (req, res) => {
     try {
-        if (!groqClient) {
-            return res.status(500).json({ error: 'Groq client not configured. Check GROQ_API_KEY.' });
+        const customKey = req.headers['x-groq-api-key'];
+        let clientToUse = groqClient;
+
+        if (customKey) {
+            clientToUse = new Groq({ apiKey: customKey });
         }
 
-        const { prompt, images, model = 'meta-llama/llama-4-scout-17b-16e-instruct', temperature = 0.5, max_tokens = 2048 } = req.body;
+        if (!clientToUse) {
+            return res.status(500).json({ error: 'Groq client not configured. Check GROQ_API_KEY or provide custom key.' });
+        }
+
+        const { prompt, images, model = 'llama-3.2-11b-vision-preview', temperature = 0.5, max_tokens = 2048 } = req.body;
 
         if (!prompt) {
             return res.status(400).json({ error: 'Prompt is required' });
@@ -143,7 +150,7 @@ app.post('/api/proxy/groq/vision', async (req, res) => {
             }
         }
 
-        const chatCompletion = await groqClient.chat.completions.create({
+        const chatCompletion = await clientToUse.chat.completions.create({
             messages: [
                 {
                     role: 'user',
