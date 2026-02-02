@@ -520,12 +520,12 @@ export const AdvancedImageEditor: React.FC<AdvancedImageEditorProps> = ({
                 setLoadingMessage('Editing with Mask...');
                 const maskBase64 = await canvasRef.current?.getMaskDataURL();
                 if (!maskBase64) throw new Error("Failed to generate mask");
-                result = await editImageWithMask(apiKey, data, mimeType, maskBase64, prompt, imageAspectRatio, currentResolution);
+                result = await editImageWithMask(apiKey, data, mimeType, maskBase64, prompt, imageAspectRatio, currentResolution, editModel);
                 canvasRef.current?.clear();
             } else {
                 // No mask - use text-to-image regeneration
                 setLoadingMessage('Regenerating with prompt...');
-                result = await generateImageFromImage(apiKey, data, mimeType, prompt, imageAspectRatio, currentResolution);
+                result = await generateImageFromImage(apiKey, data, mimeType, prompt, imageAspectRatio, currentResolution, editModel);
             }
 
             if (result.base64) {

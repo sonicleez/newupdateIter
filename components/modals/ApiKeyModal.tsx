@@ -35,7 +35,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKe
         try {
             const ai = new GoogleGenAI({ apiKey: trimmedKey });
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-1.5-flash',
                 contents: 'Test connection'
             });
 

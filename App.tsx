@@ -946,7 +946,7 @@ const App: React.FC = () => {
                                                 isAnalyzingStyle={isAnalyzingStyle}
                                                 imageModel={state.imageModel}
                                                 onImageModelChange={handleImageModelChange}
-                                                scriptModel={state.scriptModel || 'gemini-2.5-flash'}
+                                                scriptModel={state.scriptModel || 'gemini-1.5-flash'}
                                                 onScriptModelChange={(e) => updateStateAndRecord(s => ({ ...s, scriptModel: e.target.value }))}
                                                 resolution={state.resolution}
                                                 onResolutionChange={(val) => updateStateAndRecord(s => ({ ...s, resolution: val }))}
@@ -1199,7 +1199,7 @@ const App: React.FC = () => {
                         onApplyGenerated={applyGeneratedScript}
                         onRegenerateGroup={handleRegenerateGroup}
                         onGenerateMoodboard={generateGroupConcept}
-                        scriptModel={state.scriptModel || 'gemini-2.5-flash'}
+                        scriptModel={state.scriptModel || 'gemini-1.5-flash'}
                         onScriptModelChange={(e) => updateStateAndRecord(s => ({ ...s, scriptModel: e.target.value }))}
                         onSmartMapAssets={handleSmartMapAssets}
                         apiKey={userApiKey}

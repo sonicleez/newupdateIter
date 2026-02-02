@@ -4,65 +4,7 @@ import { getPresetById } from '../utils/scriptPresets';
 import { buildScriptPrompt, buildGroupRegenerationPrompt } from '../utils/promptBuilder';
 import { generateId } from '../utils/helpers';
 
-// Helper to call Groq Chat API via proxy
-async function callGroqChat(
-    messages: Array<{ role: string; content: string }>,
-    options: {
-        model?: string;
-        temperature?: number;
-        max_tokens?: number;
-        response_format?: { type: string };
-    } = {}
-): Promise<string> {
-    // Map internal reasoning format to Groq model if needed
-    // UI might send "gemini-3-pro-preview|high", we strip it to just modelId
-    const targetModel = options.model?.split('|')[0] || 'llama-3.3-70b-versatile';
-
-    const response = await fetch('/api/proxy/groq/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            messages,
-            model: targetModel,
-            temperature: options.temperature ?? 0.7,
-            max_tokens: options.max_tokens ?? 8192,
-            response_format: options.response_format
-        })
-    });
-
-    const data = await response.json();
-    if (!data.success) {
-        throw new Error(data.error || 'Groq API call failed');
-    }
-    return data.text;
-}
-
-// Helper to call Groq for text generation (Director tasks)
-async function callDirectorText(
-    prompt: string,
-    systemPrompt: string = '',
-    jsonMode: boolean = false,
-    model: string = 'deepseek-r1-distill-llama-70b'
-): Promise<string> {
-    const messages: Array<{ role: string; content: string }> = [];
-    
-    if (systemPrompt) {
-        messages.push({ role: 'system', content: systemPrompt });
-    }
-    messages.push({ role: 'user', content: prompt });
-
-    const options: any = {
-        model: model,
-        temperature: 0.7,
-        max_tokens: 8192
-    };
-
-    if (jsonMode) {
-        options.response_format = { type: 'json_object' };
-    }
-
-    return callGroqChat(messages, options);
-}
+import { callGeminiText } from '../utils/geminiUtils';
 
 
 export function useScriptGeneration(
@@ -134,7 +76,7 @@ OUTPUT FORMAT:
             `;
 
             // Call Step 1 via Groq
-            const visualPlan = await callDirectorText(clusteringUserPrompt, clusteringSystemPrompt, false, state.scriptModel);
+            const visualPlan = await callGeminiText(clusteringUserPrompt, clusteringSystemPrompt, false, state.scriptModel);
             console.log("Visual Plan:", visualPlan);
 
             // ═══════════════════════════════════════════════════════════════
@@ -188,7 +130,7 @@ ${sceneSchemaDescription}
 
 Generate the script now. Respond ONLY with valid JSON.`;
 
-            const rawText = await callDirectorText(fullPrompt, 'You are an expert film director and screenwriter.', true, state.scriptModel);
+            const rawText = await callGeminiText(fullPrompt, 'You are an expert film director and screenwriter.', true, state.scriptModel);
 
             // Parse JSON - handle potential markdown wrapping
             let jsonResponse;
@@ -225,7 +167,7 @@ Generate the script now. Respond ONLY with valid JSON.`;
             Respond with ONLY the JSON array, no explanation.`;
 
             try {
-                const auditedTextsRaw = await callDirectorText(auditPrompt, 'System: Expert Film Director.', true, state.scriptModel);
+                const auditedTextsRaw = await callGeminiText(auditPrompt, 'System: Expert Film Director.', true, state.scriptModel);
 
                 let auditedTexts;
                 try {
@@ -258,7 +200,7 @@ Generate the script now. Respond ONLY with valid JSON.`;
                     OUTPUT: Just the comma-separated words.`;
 
                     try {
-                        const kit = await callDirectorText(kitPrompt, 'System: Expert Technical Director.', false, state.scriptModel);
+                        const kit = await callGeminiText(kitPrompt, 'System: Expert Technical Director.', false, state.scriptModel);
 
                         updateStateAndRecord(s => ({
                             ...s,
@@ -327,7 +269,7 @@ Respond with a JSON object containing a "scenes" array with the regenerated scen
 Each scene should have: scene_number, group_id, prompt_name, visual_context, character_ids, product_ids.
 Respond ONLY with valid JSON.`;
 
-            const rawText = await callDirectorText(fullPrompt, 'You are an expert film director.', true, state.scriptModel);
+            const rawText = await callGeminiText(fullPrompt, 'You are an expert film director.', true, state.scriptModel);
 
             let jsonResponse;
             try {
@@ -384,7 +326,7 @@ Respond ONLY with valid JSON.`;
             }
             `;
 
-            const rawText = await callDirectorText(mappingPrompt, 'You are an expert script supervisor.', true, state.scriptModel);
+            const rawText = await callGeminiText(mappingPrompt, 'You are an expert script supervisor.', true, state.scriptModel);
 
             let result;
             try {

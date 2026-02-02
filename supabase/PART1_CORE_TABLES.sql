@@ -88,4 +88,18 @@ CREATE TABLE IF NOT EXISTS public.gommo_credentials (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 6. RESEARCH PRESETS TABLE
+CREATE TABLE IF NOT EXISTS public.research_presets (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+    name TEXT NOT NULL,
+    director_notes TEXT,
+    dop_notes TEXT,
+    category TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_research_presets_user ON research_presets(user_id);
+
 SELECT 'PART 1 COMPLETE - Core tables created' AS status;

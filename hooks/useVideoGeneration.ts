@@ -1,11 +1,10 @@
 import { useState, useCallback, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { ProjectState, AgentStatus } from '../types';
 
 import { CAMERA_ANGLES, LENS_OPTIONS, VEO_PRESETS, VEO_CAMERA_MOTIONS } from '../constants/presets';
 import { DIRECTOR_PRESETS, DirectorPreset } from '../constants/directors';
 import { Scene } from '../types';
-import { fixMimeType } from '../utils/geminiUtils';
+import { fixMimeType, callGeminiText, callSmartVision } from '../utils/geminiUtils';
 
 export function useVideoGeneration(
     state: ProjectState,
@@ -43,13 +42,7 @@ export function useVideoGeneration(
             return;
         }
 
-        const rawApiKey = userApiKey || (process.env as any).API_KEY;
-        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
-        if (!apiKey) {
-            setApiKeyModalOpen(true);
-            console.warn('[Veo] No API key available');
-            return;
-        }
+        // No strict API key check - callSmartVision handles fallback
 
         // Mark scene as generating (for UI feedback)
         updateStateAndRecord(s => ({
@@ -59,7 +52,6 @@ export function useVideoGeneration(
 
         try {
             console.log('[Veo] Starting prompt generation for scene:', sceneId);
-            const ai = new GoogleGenAI({ apiKey });
             let data: string;
             let mimeType: string = 'image/jpeg';
 
@@ -278,49 +270,34 @@ ${characterIdentityContext}
 - ✅ Only action verbs: walks, turns, reaches, looks, breathes, pauses, sits, opens
 - ✅ Only real SFX: wind, footsteps, breath, traffic, nature, room tone
 - ✅ PRIORITIZE Director's signature camera style when choosing movement
-
-Return ONLY the video prompt. Maximum 2 sentences.
 `;
 
             // STANDARD MODE: Full cinematic prompt
             const standardPromptText = `
-Role: Expert Video Prompt Designer for Google Veo 3.1 IMAGE-TO-VIDEO mode.
+Role: You are a Veo 3.1 Video Prompt Generator. You MUST analyze the provided image and generate a VIDEO MOTION prompt.
 
-**CRITICAL: IMAGE-TO-VIDEO MODE**
-You are generating a prompt to ANIMATE the provided keyframe image. The image is your PRIMARY REFERENCE.
-- DESCRIBE what you SEE in the image (subject, environment, lighting, colors)
-- ANIMATE what's ALREADY visible - don't invent new elements
-- MAINTAIN the exact visual style, colors, and composition from the image
+**DIRECTOR STYLE: ${directorName}**
+${directorDNA ? `Visual DNA: ${directorDNA}` : ''}
+${directorSignatureCameraStyle ? `Signature Camera Style: ${directorSignatureCameraStyle}` : ''}
 
-**THE OFFICIAL VEO 3.1 FORMULA:**
-[Cinematography] + [Subject from image] + [Animation/Action] + [Context from image] + [Style matching image] + [SFX/Ambient] + [Emotion]
-
-**SOURCE IMAGE CONTEXT (from user):**
-- Scene Description: "${context}"
-- Scene Intent: "${promptName}"
-// NOTE: Voice Over is NOT included in VEO prompts - user has pre-recorded VO track
-${finalDialogue ? `- Character Dialogue (ON-SCREEN character speaking, ${effectiveLanguage}): "${finalDialogue}"` : '- Character Dialogue: **NO DIALOGUE IN THIS SCENE** (characters should NOT speak)'}
-- Products visible: "${productContext}"
-- Camera Angle: "${scene.cameraAngleOverride === 'custom' ? scene.customCameraAngle : (CAMERA_ANGLES.find(a => a.value === scene.cameraAngleOverride)?.label || 'Auto')}"
-- Lens Style: "${scene.lensOverride === 'custom' ? scene.customLensOverride : (LENS_OPTIONS.find(l => l.value === scene.lensOverride)?.label || 'Auto')}"
-${cameraMotionPrompt ? `- **USER SELECTED CAMERA MOTION:** ${cameraMotionPrompt}` : '- Camera Motion: Auto (AI selects based on Director DNA and scene context)'}
-
-**DIRECTOR DNA (${directorName}):**
-${directorDNA ? `- Visual DNA: ${directorDNA}` : '- Visual DNA: Default cinematic style'}
-${directorSignatureCameraStyle ? `- **SIGNATURE CAMERA TECHNIQUES:** ${directorSignatureCameraStyle}` : '- Signature Camera: Standard cinematic coverage'}
-- PRIORITY: When choosing camera movement, PRIORITIZE the Director's signature techniques above. This gives consistency to the overall film.
-
-**SCENE CONTEXT:**
-- Scene Type: ${hasDialogue ? 'DIALOGUE SCENE' : hasVoiceOver ? 'VOICE-OVER/NARRATION SCENE' : 'VISUAL SCENE'}
-- Character Count: ${characterCount > 0 ? characterCount : 'Auto-detect from image'}
+**IMPORTANT - VEO 3.1 BEST PRACTICES:**
+1. DO NOT describe what's already visible in the image (clothing, setting, lighting, colors)
+2. ONLY describe CHARACTER ACTIONS and CAMERA MOVEMENTS that should happen
+3. Keep prompts SHORT and ACTION-focused (ideal: 30-50 words)
+4. Use present tense verbs: "walks", "turns", "reaches", "looks at"
+5. Focus on MOTION, not appearance
 
 ${characterIdentityContext}
 
-**CHARACTER ACTING RULES:**
-- ANALYZE THE IMAGE to determine character emotion and action
-- Follow the scene description for what characters are doing
-- Use NATURAL, SUBTLE movement appropriate to the context
-- Do NOT add exaggerated expressions unless explicitly described
+**SCENE CONTEXT:**
+- Story Context: "${context}"
+- Scene Intent: "${promptName}"
+${hasVoiceOver ? `- Voice-Over: "${voiceOverText}"` : ''}
+${hasDialogue ? `- Dialogue: "${finalDialogue}"` : ''}
+${productContext ? `- Products: ${productContext}` : ''}
+
+**CAMERA MOTION:**
+${cameraMotionPrompt ? `User Selected: ${cameraMotionPrompt}` : `Auto-suggest based on Director style (${directorName}): ${directorSignatureCameraStyle || 'Cinematic smooth movements'}`}
 
 **PRESET MODE: ${selectedPreset.label}**
 ${selectedPreset.prompt}
@@ -358,24 +335,17 @@ Return ONLY the video prompt string. NO explanations, NO markdown.
             // Use documentary or standard prompt based on preset
             const promptText = isDocumentaryMode ? documentaryPromptText : standardPromptText;
 
-            console.log('[Veo] Calling Gemini API to generate prompt...');
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: {
-                    parts: [
-                        { inlineData: { data, mimeType } },
-                        { text: promptText }
-                    ]
-                }
-            });
+            console.log('[Veo] Calling SmartVision API to generate prompt...');
 
-            // Extract text from response correctly
-            const veoPrompt = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
-                (response as any).text?.trim?.() ||
-                '';
+            // Use callSmartVision with fallback (prioritizes Gemini, falls back to Groq Vision)
+            const veoPrompt = await callSmartVision(
+                promptText,
+                [{ data, mimeType }],
+                'gemini-1.5-flash'
+            );
 
             if (!veoPrompt) {
-                console.error('[Veo] Empty response from Gemini:', response);
+                console.error('[Veo] Empty response from Vision API');
                 updateStateAndRecord(s => ({
                     ...s,
                     scenes: s.scenes.map(sc => sc.id === sceneId ? { ...sc, veoPrompt: '❌ Không nhận được prompt' } : sc)
@@ -386,7 +356,7 @@ Return ONLY the video prompt string. NO explanations, NO markdown.
             console.log('[Veo] Generated prompt:', veoPrompt.substring(0, 100) + '...');
             updateStateAndRecord(s => ({
                 ...s,
-                scenes: s.scenes.map(sc => sc.id === sceneId ? { ...sc, veoPrompt } : sc)
+                scenes: s.scenes.map(sc => sc.id === sceneId ? { ...sc, veoPrompt: veoPrompt.trim() } : sc)
             }));
         } catch (e: any) {
             console.error("[Veo] Prompt generation failed:", e);
@@ -421,8 +391,6 @@ Return ONLY the video prompt string. NO explanations, NO markdown.
                 setAgentState('dop', 'thinking', 'Đang tự động đề xuất phong cách (Presets) dựa trên phân tích hình ảnh...');
                 console.log('[DOP Veo] Auto-suggesting presets for', scenesNeedingPreset.length, 'scenes...');
 
-
-                const ai = new GoogleGenAI({ apiKey });
                 const scenesInfo = scenesNeedingPreset.map(s =>
                     `ID: ${s.id}, Context: ${s.contextDescription}, Script: ${s.vietnamese || s.language1}, Angle: ${s.cameraAngleOverride || 'auto'}`
                 ).join('\n');
@@ -448,14 +416,9 @@ Return ONLY the video prompt string. NO explanations, NO markdown.
                 Return ONLY a JSON object: {"scene_id": "preset_value", ...}
                 `;
 
-                const result = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: [{ parts: [{ text: dopPrompt }] }],
-                    config: { responseMimeType: "application/json" }
-                });
-
-                const text = (result as any).text?.trim?.() || (result as any).text || '';
+                // Use callGeminiText with fallback
                 try {
+                    const text = await callGeminiText(dopPrompt, 'You are a DOP expert.', true, 'gemini-1.5-flash');
                     const mapping = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
                     console.log('[DOP Veo] Preset suggestions:', mapping);
 
@@ -504,16 +467,9 @@ Return ONLY the video prompt string. NO explanations, NO markdown.
     }, []);
 
     const suggestVeoPresets = useCallback(async () => {
-        const rawApiKey = userApiKey || (process.env as any).API_KEY;
-        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
-        if (!apiKey) {
-            setApiKeyModalOpen(true);
-            return;
-        }
+        // No strict API key check - callGeminiText handles fallback
 
         try {
-            const ai = new GoogleGenAI({ apiKey });
-
             const scenesInfo = state.scenes.map(s => `ID: ${s.id}, Context: ${s.contextDescription}, Script: ${s.vietnamese || s.language1}`).join('\n');
             const presetsInfo = VEO_PRESETS.map(p => `${p.value}: ${p.label} - ${p.prompt}`).join('\n');
 
@@ -535,15 +491,8 @@ Return ONLY the video prompt string. NO explanations, NO markdown.
             Return ONLY a JSON object mapping scene ID to preset value: {"scene_id": "preset_value", ...}
             `;
 
-            const result = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [{ parts: [{ text: suggestionPrompt }] }],
-                config: {
-                    responseMimeType: "application/json"
-                }
-            });
-
-            const text = (result as any).text?.trim?.() || (result as any).text || '';
+            // Use callGeminiText with fallback
+            const text = await callGeminiText(suggestionPrompt, 'You are a video production expert.', true, 'gemini-1.5-flash');
             const mapping = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
 
             updateStateAndRecord(s => ({

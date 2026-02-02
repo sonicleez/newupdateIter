@@ -13,7 +13,7 @@ import { BUILT_IN_CHARACTER_STYLES, getStylesByCategory } from '../../constants/
 import { SCRIPT_MODELS } from '../../constants/presets';
 import { useScriptAnalysis, ScriptAnalysisResult } from '../../hooks/useScriptAnalysis';
 import { useResearchPresets, ResearchPreset } from '../../hooks/useResearchPresets';
-import { GoogleGenAI } from "@google/genai";
+import { callGeminiText } from '../../utils/geminiUtils';
 import { generateId } from '../../utils/helpers';
 
 interface ManualScriptModalProps {
@@ -199,12 +199,10 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
     // Custom Director Search Handler (NEW)
     const handleSearchCustomDirector = async () => {
         if (!customDirectorName.trim()) return;
-        const currentApiKey = userApiKey || (process.env as any).API_KEY;
-        if (!currentApiKey) return alert("Vui lòng nhập API Key để sử dụng tính năng tìm kiếm.");
 
         setIsSearchingDirector(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: currentApiKey });
+            // Use callGeminiText with fallback (no longer requires API key check - utility handles it)
             const prompt = `Analyze the cinematic and storytelling style of the director "${customDirectorName}". 
             Return a JSON object with:
             {
@@ -214,14 +212,9 @@ export const ManualScriptModal: React.FC<ManualScriptModalProps> = ({
                 "signatureCameraStyle": "Their signature camera technique in English"
             }`;
 
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                config: { responseMimeType: "application/json" }
-            });
+            const responseText = await callGeminiText(prompt, 'You are a film historian expert.', true, 'gemini-1.5-flash');
 
-            const responseText = response.text || '{}';
-            const data = JSON.parse(responseText);
+            const data = JSON.parse(responseText.replace(/```json/g, '').replace(/```/g, '').trim());
 
             const newCustomDirector: DirectorPreset = {
                 id: `custom-${generateId()}`,
@@ -904,6 +897,53 @@ John enters the room, wearing a tailored Armani suit..."
                             >
                                 ← Back to Edit
                             </button>
+
+                            {/* NEW: Export to CSV Button */}
+                            <button
+                                onClick={() => {
+                                    if (!analysisResult) return;
+
+                                    // Generate CSV content
+                                    const headers = ['scene_number', 'group', 'voice_over', 'dialogue', 'dialogue_speaker', 'visual_context', 'character_names', 'is_key_frame'];
+                                    const rows = analysisResult.scenes.map((scene: any, index: number) => {
+                                        // Find group name from chapter ID
+                                        const chapter = analysisResult.chapters.find((c: any) => c.id === scene.chapterId);
+                                        const groupName = chapter ? chapter.title : 'Default';
+
+                                        // Escape special characters for CSV
+                                        const escape = (text: string) => `"${(text || '').replace(/"/g, '""')}"`;
+
+                                        return [
+                                            index + 1,
+                                            escape(groupName),
+                                            escape(scene.voiceOverText),
+                                            escape(scene.dialogueText),
+                                            escape(scene.dialogueSpeaker),
+                                            escape(scene.visualPrompt),
+                                            escape((scene.characterNames || []).join(', ')),
+                                            'false'
+                                        ].join(',');
+                                    });
+
+                                    const csvContent = [headers.join(','), ...rows].join('\n');
+                                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                    const link = document.createElement('a');
+                                    if (link.download !== undefined) {
+                                        const url = URL.createObjectURL(blob);
+                                        link.setAttribute('href', url);
+                                        link.setAttribute('download', 'analyzed_script_export.csv');
+                                        link.style.visibility = 'hidden';
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                    }
+                                }}
+                                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl font-medium flex items-center gap-2 transition-colors border border-zinc-700 hover:border-zinc-600"
+                            >
+                                <FileText className="w-4 h-4" />
+                                Export CSV
+                            </button>
+
                             <button
                                 onClick={handleImport}
                                 className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium flex items-center gap-2"

@@ -90,7 +90,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         try {
             const ai = new GoogleGenAI({ apiKey: trimmedKey });
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-1.5-flash',
                 contents: 'Test connection'
             });
 
@@ -429,8 +429,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
                         {groqCheckStatus !== 'idle' && (
                             <div className={`mt-2 text-[11px] p-2 rounded-lg border flex items-center ${groqCheckStatus === 'success' ? 'bg-green-900/10 border-green-800/30 text-green-400' :
-                                    groqCheckStatus === 'error' ? 'bg-red-900/10 border-red-800/30 text-red-400' :
-                                        'bg-blue-900/10 border-blue-800/30 text-blue-400'
+                                groqCheckStatus === 'error' ? 'bg-red-900/10 border-red-800/30 text-red-400' :
+                                    'bg-blue-900/10 border-blue-800/30 text-blue-400'
                                 }`}>
                                 {groqStatusMsg}
                             </div>

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ProjectState } from '../types';
+import { callGeminiVisionReasoning } from '../utils/geminiUtils';
 
 export const useStyleAnalysis = (
     userApiKey: string,
@@ -12,16 +13,15 @@ export const useStyleAnalysis = (
         const rawApiKey = userApiKey;
         const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
 
+        // Fallback allowed if no key
         if (!apiKey) {
-            setProfileModalOpen(true);
-            return;
+            console.warn("[StyleAnalysis] No specific API key provided, will attempt fallback");
         }
 
         setIsAnalyzingStyle(true);
 
         try {
-            const { GoogleGenAI } = await import('@google/genai');
-            const ai = new GoogleGenAI({ apiKey });
+            // Note: GoogleGenAI removed, using smart utility
 
             let data: string;
             let mimeType: string = 'image/jpeg';
@@ -46,21 +46,12 @@ Return the style description in English, including:
 
 Format as a single paragraph of style instructions, suitable for use as an AI image generation prompt. Be specific and detailed.`;
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [{ inlineData: { data, mimeType } }, { text: analyzePrompt }] }
-            });
-
-            // Extract text from Gemini response - handle multiple formats
-            let styleDescription = '';
-            try {
-                // Try different ways to get the text
-                const candidate = response.candidates?.[0];
-                const textPart = candidate?.content?.parts?.find((p: any) => p.text);
-                styleDescription = textPart?.text || '';
-            } catch (e) {
-                console.error('Failed to extract text from response:', e);
-            }
+            // Use Smart Vision (prioritize Gemini 1.5 Flash -> Fallback Groq)
+            const styleDescription = await callGeminiVisionReasoning(
+                analyzePrompt,
+                [{ data, mimeType }],
+                'gemini-1.5-flash'
+            );
 
             if (styleDescription) {
                 updateStateAndRecord(s => ({

@@ -230,62 +230,48 @@ export function useScriptAnalysis(userApiKey: string | null) {
             // Regex patterns for chapter headers:
             // PRIORITY 1: Explicit bracket format [Chapter Title] - 100% reliable
             // FALLBACK: Other patterns for non-bracketed scripts
+            // Regex patterns for chapter headers:
             const chapterPatterns = [
                 // PRIORITY: Bracket format [Chapter Title] - MOST RELIABLE
-                // Matches: [Marseille, November 2019], [The Mask], [Casino de Monte-Carlo, May 2019]
                 /^\[(.+)\]$/,
 
-                // Pattern 1: "Place, Month Year" (e.g., "Marseille, November 2019", "Casino de Monte-Carlo, May 2019")
-                /^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s\-']+),?\s*(January|February|March|April|May|June|July|August|September|October|November|December)\s*(\d{4}s?)$/i,
+                // Pattern: Explicit Act/Chapter markers (ACTO 1, ACT 1, CHAPTER 1, CHƯƠNG 1, HOOK)
+                /^(ACTO|ACT|CHAPTER|CHƯƠNG|PHẦN|HOOK|INTRO|OUTRO|ACTO|EPILOGUE|PROLOGUE)\s*(\d+|[A-Z]+)?\s*[:\-\.]?\s*(.*)$/i,
+
+                // Pattern 1: "Place, Month Year" (Support English & Spanish months)
+                /^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s\-']+),?\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December|Enero|Febrero|Marzo|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Octubre|Noviembre|Diciembre)\s*(?:de\s+)?(\d{4}s?)$/i,
 
                 // Pattern 2: "Place, Country Year" (e.g., "Rouen, France 1820s") 
                 /^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s\-']+),?\s*([A-Za-zÀ-ÿ]+)\s+(\d{4}s?|\d{3}0s)$/i,
 
-                // Pattern 3: Time jump phrases (e.g., "Two Years Later", "January 2022")
-                /^(Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|\d+)\s+(Years?|Months?|Weeks?|Days?|Hours?)\s+(Later|Earlier|Before|After|Ago)$/i,
-                /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}$/i,
+                // Pattern 3: Time jump phrases
+                /^(Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|\d+)\s+(Years?|Months?|Weeks?|Days?|Hours?|Năm|Tháng|Tuần|Ngày|Giờ)\s+(Later|Earlier|Before|After|Ago|Sau|Trước)$/i,
 
-                // Pattern 4: Section titles (e.g., "The Mask", "The Investigation", "The Warehouse")
-                // Match "The [Word]" or single/two capitalized words on their own line
-                /^The\s+[A-Z][a-zA-Z]+$/,
+                // Pattern 4: Section titles (e.g., "The Mask")
+                /^(The|Vụ|Cái|Hành|Trận)\s+[A-ZÀ-Ỹ][a-zA-ZÀ-ỹ]+$/,
 
-                // Pattern 5: Short standalone location headers (e.g., just a place name as chapter marker)
-                // Only match if it's a short line (< 40 chars) and starts with capital
-                /^[A-Z][a-zA-ZÀ-ÿ\s\-',]+$/,
+                // Pattern 5: Standalone header - Allow colons and basic punctuation
+                /^[A-ZÀ-Ỹ][a-zA-ZÀ-ỹ\s\-',:\.]{2,40}$/,
             ];
 
             lines.forEach((line, index) => {
                 const trimmedLine = line.trim();
 
-                // PRIORITY: Check for bracket format first - no length/word restrictions
-                if (/^\[.+\]$/.test(trimmedLine)) {
-                    // Extract text between brackets for chapterId
-                    const headerText = trimmedLine.slice(1, -1).trim();
-                    const chapterId = headerText
-                        .toLowerCase()
-                        .replace(/[^a-z0-9\s]/g, '')
-                        .replace(/\s+/g, '_')
-                        .substring(0, 30);
+                // Skip extremely long lines or lines with typical ending punctuation
+                if (!trimmedLine || trimmedLine.length > 60 || /[.!?]\s+[A-Z]/.test(trimmedLine)) return;
 
-                    chapterMarkers.push({
-                        lineNumber: index + 1,
-                        header: headerText, // Store without brackets for display
-                        chapterId: chapterId
-                    });
-                    console.log(`[Chapter Detection] 📍 Found chapter (bracket): "${headerText}" → ${chapterId}`);
-                    return; // Skip other patterns for this line
-                }
-
-                // FALLBACK: Non-bracketed patterns
-                // Skip empty lines, lines > 50 chars, or lines that look like sentences
-                if (!trimmedLine || trimmedLine.length > 50 || /[.!?]\s+[A-Z]/.test(trimmedLine)) return;
-
-                // Also skip lines that are clearly not headers (too many words = likely a sentence)
+                // Also skip lines that are clearly not headers (too many words)
                 const wordCount = trimmedLine.split(/\s+/).length;
-                if (wordCount > 6) return;
+                if (wordCount > 8) return;
 
                 for (const pattern of chapterPatterns) {
                     if (pattern.test(trimmedLine)) {
+                        // Special check: if it looks like a sentence but matched pattern 5, skip it
+                        if (trimmedLine.includes(' ') && !trimmedLine.includes(',') && !trimmedLine.includes(':') && wordCount > 4 && !/^(The|Act|Acto|Chapter|Chương)/i.test(trimmedLine)) {
+                            // High chance it's just a short sentence
+                            continue;
+                        }
+
                         // Generate chapter ID from header
                         const chapterId = trimmedLine
                             .toLowerCase()
@@ -351,8 +337,10 @@ export function useScriptAnalysis(userApiKey: string | null) {
             }
 
             // Expected Scene Count (Soft Target)
-            const wordsPerScene = readingSpeed === 'slow' ? 8 : readingSpeed === 'fast' ? 12 : 10;
-            const expectedSceneCount = Math.ceil(wordCount / wordsPerScene);
+            // Expected Scene Count (Strict Target for Granularity)
+            // For 2700 words, we want ~200-300 shots. 
+            const wordsPerScene = readingSpeed === 'slow' ? 8 : readingSpeed === 'fast' ? 15 : 10;
+            const targetMinShots = Math.ceil(wordCount / wordsPerScene);
 
             // [New] Existing Character Library - Inject to avoid duplicates
             if (activeCharacters && activeCharacters.length > 0) {
@@ -426,15 +414,35 @@ Each of these patterns MUST become its OWN separate shot:
    "Rouen, France 1820s" → chapter: rouen_1820s (NEW CHAPTER STARTS HERE!)
    "Pierre Dugal..." → chapter: rouen_1820s
 
+*** ATOM-BY-ATOM PROCESSING (CRITICAL) ***
+You MUST process the script word-by-word, sentence-by-sentence.
+- If the script mentions a detail (e.g., "hands trembling"), it MUST have its own shot.
+- If the character performs an action (e.g., "walks through the door"), it MUST have its own shot.
+- DO NOT SUMMARIZE. Summarization is a failure of this task.
+- For long scripts (2000+ words), you are expected to output hundreds of lines.
+
+*** MULTI-LANGUAGE PROTOCOL ***
+The script may be in Spanish, Vietnamese, or English.
+- Follow the original language's pace and intent.
+- Do NOT translate the Voice Over text in the "Covers text" part. Use the original text.
+
+*** MICRO-SHOT PROTOCOL (GEMINI EXTRA-DENSITY STANDARD) ***
+To achieve the high-density granularity of Gemini, you MUST follow these splitting rules:
+1. **PUNCTUATION SPLIT**: Every period (.) and almost every comma (,) that separates a new clause MUST be a new shot.
+2. **CONJUNCTION SPLIT**: Words like "And", "Then", "But", "While", "As", "Y", "Pero", "Sau đó", "Và" often indicate a shift in visual focus. Split them.
+   - Example: "He opened the door AND looked inside." -> Shot 1: Opening door. Shot 2: Looking inside.
+3. **SUBJECT-ACTION PAIR**: Every time a subject performs a new verb, create a new shot.
+4. **NO AGGREGATION**: Never combine two distinct visual ideas into one prompt. If the text says "The rain fell on the window, and Dan watched the street", that is TWO shots.
+
 *** ALGORITHM (THE GOLDEN RULES) ***
-1. **SCAN**: Read the input text.
-2. **DETECT BEATS**: Identify each distinct visual moment using rules above.
+1. **SCAN**: Read the input text atom-by-atom (sentence by sentence).
+2. **DETECT BEATS**: Identify each distinct visual moment using the Micro-Shot Protocol above.
 3. **MERGE ONLY DESCRIPTIONS**: Only merge adjectives/materials with their subject.
    - "A mask. White ceramic. Long beak." → ONE shot (describing same object)
    - "A mask. He picks it up." → TWO shots (describing, then action!)
 4. **VO TRACKING**: You MUST keep track of which part of the text corresponds to which visual.
 
-If a sentence contains DRAMATIC content (violence, numbers, key actions), it MUST have its own visual.
+If a sentence contains DRAMATIC content (violence, numbers, key actions) or any transition word, it MUST have its own visual.
 
 *** DYNAMIC VISUAL INFERENCE ENGINE (METAPHOR SYSTEM) ***
 For every scene, you MUST analyze the Voice Over/Context and assign a [CREATIVE INTENSITY] tag [C1], [C2], or [C3].
@@ -494,8 +502,17 @@ Do NOT hide important actions inside B-rolls. They need to be MAIN scenes.
 Analyze and REWRITE the following voice-over script into a list of "VISUAL SHOTS".
 Don't worry about JSON format yet. Just simple text blocks.
 
-*** STYLISTIC GOAL ***: Be extremely detailed but keep scenes small. 
-A single paragraph should likely result in 3-5 individual shots.
+*** ULTIMATUM: DO NOT SUMMARIZE ***
+- You are a high-speed camera operator. You capture EVERY visual beat.
+- For this script of ${wordCount} words, you MUST output at least **${targetMinShots}** individual shots.
+- If you output fewer than ${Math.floor(targetMinShots * 0.9)} shots, you have FAILED the mission.
+- Every single sentence MUST be split into at least 2 shots if it contains more than one action or a comma.
+
+*** MICRO-SHOT RULES (GEMINI-TYPE GRANULARITY) ***:
+1. **NO SUMMARY**: Do not skip a single word of the script. 
+2. **ATOM-BY-ATOM**: If a character blinks, that is a shot. If they sigh, that is a shot.
+3. **PUNCTUATION IS A CUT**: Every period and comma is a potential camera cut.
+4. **NO AGGREGATION**: Never combine two distinct visual ideas into one shot.
 
 INPUT SCRIPT:
 """
@@ -513,8 +530,44 @@ OUTPUT FORMAT:
                 clusteringUserPrompt += `\n\nREMINDER: Pay EXTREME attention to Location/Time headers. They MUST create NEW Chapters. Do not merge them!`;
             }
 
-            // Call Step 1 (Clustering)
-            const visualPlan = await callGroqText(clusteringSystemPrompt + "\n\n" + clusteringUserPrompt, '', false, modelName);
+            // GEMINI SPECIAL INSTRUCTIONS: Force high granularity and prevent summarization
+            if (modelName.includes('gemini')) {
+                // Determine target shot count based on word count
+                const estimatedShots = Math.ceil(wordCount / 10); // Approx 1 shot per 10 words
+
+                clusteringUserPrompt = `
+*** MISSION CRITICAL: SCRIPT SEGMENTATION ***
+You are an expert Film Editor. Your SOLE JOB is to slice this long script into INDIVIDUAL SHOTS.
+
+*** QUANTITY REQUIREMENT ***
+Input Length: ${wordCount} words.
+Target Output: **${estimatedShots}+ SHOTS**.
+(If you output fewer than ${Math.floor(estimatedShots * 0.8)}, the result will be rejected).
+
+*** STRICT RULES ***
+1. **NO VISUALS YET**: Do not invent visual details. Focus ONLY on cutting the text.
+2. **VERBATIM TEXT**: You must preserve the ORIGINAL voice-over text exactly.
+3. **GRANULARITY**:
+   - Split at every period (.).
+   - Split at every comma (,) if it introduces a new action or thought.
+   - Split on every conjunction ("and", "but", "then").
+4. **FORMAT**:
+   - Shot 1: "exact text segment..."
+   - Shot 2: "exact text segment..."
+   ...
+
+*** INPUT SCRIPT ***
+"""
+${scriptText}
+"""
+
+*** OUTPUT LIST (Start now, do not stop until the end) ***
+`;
+            }
+
+            // Call Step 1 (Clustering / Segmentation)
+            const visualPlan = await callGroqText(userApiKey || '', clusteringSystemPrompt + "\n\n" + clusteringUserPrompt, '', modelName, false);
+
             console.log('[ScriptAnalysis] 🧠 Visual Plan:', visualPlan);
 
 
@@ -671,7 +724,8 @@ RESPOND WITH JSON ONLY:
 }`;
 
             setAnalysisStage('connecting');
-            const responseText = await callGroqText(prompt, 'You are a professional script analyst.', true, modelName);
+            setAnalysisStage('connecting');
+            const responseText = await callGroqText(userApiKey || '', prompt, 'You are a professional script analyst.', modelName, true);
 
             setAnalysisStage('post-processing');
             const jsonMatch = responseText.match(/\{[\s\S]*\}/);

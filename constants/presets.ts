@@ -364,6 +364,7 @@ export const IMAGE_MODELS = [
 
 export const SCRIPT_MODELS = [
     { value: 'llama-3.3-70b-versatile', label: '🚀 Llama 3.3 70B (Groq) - Best All-rounder' },
+    { value: 'gemini-1.5-pro-latest', label: '💎 Gemini 1.5 Pro (Web Intelligence) - Best Logic' },
     { value: 'qwen/qwen3-32b', label: '🧠 Qwen 3 32B (Groq) - Best for Logic' },
     { value: 'openai/gpt-oss-120b', label: '🏟️ GPT-OSS 120B (Groq) - Large Scale' },
     { value: 'llama-3.1-70b-versatile', label: '🚀 Llama 3.1 70B (Groq)' },

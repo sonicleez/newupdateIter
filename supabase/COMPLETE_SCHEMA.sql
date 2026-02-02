@@ -318,6 +318,20 @@ CREATE TABLE IF NOT EXISTS director_brain_memory (
 
 CREATE INDEX IF NOT EXISTS idx_director_brain_user_id ON director_brain_memory(user_id);
 
+-- 4.2 RESEARCH PRESETS TABLE (Manual Script Analysis)
+CREATE TABLE IF NOT EXISTS public.research_presets (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+    name TEXT NOT NULL,
+    director_notes TEXT,
+    dop_notes TEXT,
+    category TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_research_presets_user ON research_presets(user_id);
+
 -- Trigger for auto-updating timestamp and version
 CREATE OR REPLACE FUNCTION update_director_brain_timestamp()
 RETURNS TRIGGER AS $$
@@ -401,6 +415,7 @@ ALTER TABLE public.generated_images_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dop_prompt_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dop_model_learnings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.director_brain_memory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.research_presets ENABLE ROW LEVEL SECURITY;
 
 -- Helper: Drop all policies on a table
 CREATE OR REPLACE FUNCTION drop_all_policies(target_table TEXT) RETURNS VOID AS $$
@@ -422,6 +437,7 @@ SELECT drop_all_policies('user_global_stats');
 SELECT drop_all_policies('generated_images_history');
 SELECT drop_all_policies('dop_prompt_records');
 SELECT drop_all_policies('director_brain_memory');
+SELECT drop_all_policies('research_presets');
 
 -- 8.1 PROFILES Policies
 CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (auth.uid() = id OR is_admin());
@@ -470,6 +486,9 @@ CREATE POLICY "brain_select" ON director_brain_memory FOR SELECT USING (auth.uid
 CREATE POLICY "brain_insert" ON director_brain_memory FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "brain_update" ON director_brain_memory FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "brain_delete" ON director_brain_memory FOR DELETE USING (auth.uid() = user_id);
+
+-- 8.11 RESEARCH_PRESETS Policies
+CREATE POLICY "research_presets_all" ON research_presets FOR ALL USING (auth.uid() = user_id);
 
 -- 8.11 STORAGE Policies
 CREATE POLICY "storage_public_access" ON storage.objects 

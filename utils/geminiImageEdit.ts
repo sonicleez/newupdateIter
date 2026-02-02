@@ -3,6 +3,151 @@ import { GoogleGenAI, Modality, Type } from "@google/genai";
 
 const OUTPUT_MIME_TYPE = 'image/png';
 
+// ═══════════════════════════════════════════════════════════════
+// MODEL ROUTING HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+// Detect if a model should use Gommo API instead of Gemini SDK
+const isGommoModel = (model: string): boolean => {
+    if (!model) return false;
+    // Gommo models don't start with 'gemini' and aren't Fal.ai
+    return !model.startsWith('gemini') && !model.startsWith('fal-ai');
+};
+
+// Get Gommo credentials from localStorage
+const getGommoCredentials = (): { domain: string; access_token: string } | null => {
+    if (typeof window === 'undefined') return null;
+    const domain = localStorage.getItem('gommoDomain');
+    const access_token = localStorage.getItem('gommoAccessToken');
+    if (!domain || !access_token) return null;
+    return { domain, access_token };
+};
+
+// Call Gommo API for image editing (via server proxy)
+const callGommoEditApi = async (
+    model: string,
+    prompt: string,
+    sourceImage: string, // base64 without header
+    sourceMimeType: string,
+    maskImage?: string, // base64 without header (optional)
+    aspectRatio: string = "1:1",
+    resolution: '1k' | '2k' | '4k' = '1k'
+): Promise<GeneratedImage> => {
+    const creds = getGommoCredentials();
+    if (!creds) {
+        throw new Error('Gommo credentials not found. Please configure Domain and Access Token in Settings.');
+    }
+
+    // Convert aspect ratio: '16:9' -> '16_9'
+    const ratioMap: Record<string, string> = {
+        '16:9': '16_9',
+        '9:16': '9_16',
+        '1:1': '1_1',
+        '4:3': '4_3',
+        '3:4': '3_4',
+    };
+    const gommoRatio = ratioMap[aspectRatio] || '16_9';
+
+    // Build subjects array with source image reference (Gommo format)
+    const subjects = [{
+        data: sourceImage, // Base64 WITHOUT prefix
+    }];
+
+    const body: Record<string, any> = {
+        domain: creds.domain,
+        access_token: creds.access_token,
+        action_type: 'create', // REQUIRED by Gommo API
+        model: model,
+        prompt: prompt,
+        ratio: gommoRatio,
+        resolution: resolution.toLowerCase(), // Gommo expects lowercase
+        project_id: 'default',
+        subjects: subjects, // For Face ID / reference
+    };
+
+    // If mask is provided, add base64Image for edit mode
+    if (maskImage) {
+        body.editImage = 'true';
+        body.base64Image = `data:image/png;base64,${maskImage}`;
+    }
+
+    console.log(`[GommoEdit] 🚀 Calling model: ${model}, ratio: ${gommoRatio}, resolution: ${resolution}`);
+
+    const response = await fetch('/api/proxy/gommo/ai/generateImage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+
+    const data = await response.json();
+
+    if (data.error && data.error !== 0) {
+        console.error('[GommoEdit] ❌ Error:', data);
+        throw new Error(data.message || data.error || 'Gommo API error');
+    }
+
+    // Gommo returns imageInfo with id_base, we need to poll for completion
+    const imageInfo = data.imageInfo;
+    if (!imageInfo?.id_base) {
+        throw new Error('No job ID returned from Gommo API');
+    }
+
+    console.log(`[GommoEdit] 📋 Job created: ${imageInfo.id_base}, polling for result...`);
+
+    // Poll for completion
+    const maxRetries = 60;
+    const pollInterval = 3000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const statusRes = await fetch('/api/proxy/gommo/ai/image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                domain: creds.domain,
+                access_token: creds.access_token,
+                id_base: imageInfo.id_base,
+            })
+        });
+
+        const statusData = await statusRes.json();
+        const info = statusData.imageInfo || statusData;
+
+        if (info.status === 'SUCCESS' && info.url) {
+            console.log(`[GommoEdit] ✅ Image ready: ${info.url}`);
+
+            // Convert URL to base64 via proxy
+            const proxyRes = await fetch(`/api/proxy/fetch-image?url=${encodeURIComponent(info.url)}`);
+            const proxyData = await proxyRes.json();
+
+            if (proxyData.success && proxyData.base64) {
+                const b64Data = proxyData.base64.split(',')[1] || proxyData.base64;
+                return { base64: b64Data, mimeType: 'image/png' };
+            }
+
+            // Fallback: direct fetch
+            const imgResponse = await fetch(info.url);
+            const blob = await imgResponse.blob();
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+            return { base64, mimeType: blob.type || 'image/png' };
+        }
+
+        if (info.status === 'ERROR') {
+            throw new Error(`Gommo generation failed: ${info.error || info.message || 'Unknown error'}`);
+        }
+
+        console.log(`[GommoEdit] ⏳ Polling... attempt ${attempt}/${maxRetries}, status: ${info.status}`);
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error('Timeout waiting for Gommo image generation');
+};
+
+
 const getAi = (apiKey: string) => {
     const trimmedKey = apiKey?.trim();
     if (!trimmedKey) {
@@ -15,6 +160,7 @@ export interface GeneratedImage {
     base64: string;
     mimeType: string;
 }
+
 
 // Helper: Delay function
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -102,33 +248,46 @@ export const editImageWithMask = async (
     base64MaskData: string,
     editPrompt: string,
     aspectRatio: string = "1:1",
-    resolution: '1k' | '2k' | '4k' = '1k'
+    resolution: '1k' | '2k' | '4k' = '1k',
+    model: string = 'gemini-3-pro-image-preview'
 ): Promise<GeneratedImage> => {
+    // Handle URL images by converting to Base64
+    let imageData = base64ImageData;
+    let imageMimeType = mimeType;
+
+    if (base64ImageData && base64ImageData.startsWith('http')) {
+        console.log('[EditMask] 🌐 Converting URL image to Base64...');
+        const converted = await urlToBase64(base64ImageData);
+        imageData = converted.data;
+        imageMimeType = converted.mimeType;
+    }
+
+    if (!imageData || !base64MaskData) {
+        throw new Error('Image data or mask data is missing.');
+    }
+
+    const cleanImage = imageData.includes(',') ? imageData.split(',')[1] : imageData;
+    const cleanMask = base64MaskData.includes(',') ? base64MaskData.split(',')[1] : base64MaskData;
+
+    // ═══════════════════════════════════════════════════════════════
+    // GOMMO MODEL PATH
+    // ═══════════════════════════════════════════════════════════════
+    if (isGommoModel(model)) {
+        console.log(`[editImageWithMask] 🟡 Routing to Gommo: ${model}`);
+        // For Gommo, we pass the mask as an additional subject
+        return callGommoEditApi(model, editPrompt, cleanImage, imageMimeType, cleanMask, aspectRatio, resolution);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GEMINI SDK PATH (Default)
+    // ═══════════════════════════════════════════════════════════════
     try {
         const ai = getAi(apiKey);
 
-        // Handle URL images by converting to Base64
-        let imageData = base64ImageData;
-        let imageMimeType = mimeType;
-
-        if (base64ImageData && base64ImageData.startsWith('http')) {
-            console.log('[EditMask] 🌐 Converting URL image to Base64...');
-            const converted = await urlToBase64(base64ImageData);
-            imageData = converted.data;
-            imageMimeType = converted.mimeType;
-        }
-
-        if (!imageData || !base64MaskData) {
-            throw new Error('Image data or mask data is missing.');
-        }
-
-        console.log("Sending to Gemini - Image Length:", imageData.length, "Mask Length:", base64MaskData.length);
-
-        const cleanImage = imageData.includes(',') ? imageData.split(',')[1] : imageData;
-        const cleanMask = base64MaskData.includes(',') ? base64MaskData.split(',')[1] : base64MaskData;
+        console.log("Sending to Gemini - Image Length:", cleanImage.length, "Mask Length:", cleanMask.length);
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-image-preview',
+            model: model.startsWith('gemini') ? model : 'gemini-3-pro-image-preview',
             contents: {
                 parts: [
                     {
@@ -170,6 +329,7 @@ export const editImageWithMask = async (
         throw new Error(`Failed to edit image. ${error instanceof Error ? error.message : String(error)}`);
     }
 };
+
 
 export const upscaleImage = async (
     apiKey: string,
@@ -386,7 +546,7 @@ export const analyzeImage = async (apiKey: string, image: GeneratedImage): Promi
     try {
         const ai = getAi(apiKey);
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-1.5-flash',
             contents: [{
                 parts: [
                     {
@@ -428,14 +588,27 @@ export const generateImageFromImage = async (
     mimeType: string,
     prompt: string,
     aspectRatio: string = "1:1",
-    resolution: '1k' | '2k' | '4k' = '1k'
+    resolution: '1k' | '2k' | '4k' = '1k',
+    model: string = 'gemini-3-pro-image-preview'
 ): Promise<GeneratedImage> => {
+    const cleanImage = base64ImageData.includes(',') ? base64ImageData.split(',')[1] : base64ImageData;
+
+    // ═══════════════════════════════════════════════════════════════
+    // GOMMO MODEL PATH
+    // ═══════════════════════════════════════════════════════════════
+    if (isGommoModel(model)) {
+        console.log(`[generateImageFromImage] 🟡 Routing to Gommo: ${model}`);
+        return callGommoEditApi(model, prompt, cleanImage, mimeType, undefined, aspectRatio, resolution);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GEMINI SDK PATH (Default)
+    // ═══════════════════════════════════════════════════════════════
     try {
         const ai = getAi(apiKey);
-        const cleanImage = base64ImageData.includes(',') ? base64ImageData.split(',')[1] : base64ImageData;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-image-preview',
+            model: model.startsWith('gemini') ? model : 'gemini-3-pro-image-preview',
             contents: {
                 parts: [
                     {
@@ -471,6 +644,7 @@ export const generateImageFromImage = async (
         throw new Error(`Failed to generate image from reference. ${error instanceof Error ? error.message : String(error)}`);
     }
 };
+
 
 export const tryOnOutfit = async (
     apiKey: string,

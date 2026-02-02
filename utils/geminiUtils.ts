@@ -3,6 +3,8 @@
  * Migrated from Google AI to Groq/Fal.ai - SDK removed
  */
 
+import { GoogleGenAI } from "@google/genai";
+
 // ═══════════════════════════════════════════════════════════════
 // IMAGE CACHE - Avoids re-fetching same images during generation
 // ═══════════════════════════════════════════════════════════════
@@ -180,12 +182,11 @@ export const callGroqText = async (
     let systemPrompt: string;
     let isJsonMode: boolean;
     let modelToUse = modelId || 'llama-3.3-70b-versatile';
+    let apiKey: string | null = null;
 
     if (modelId !== undefined && typeof promptOrApiKey === 'string' && typeof systemPromptOrPrompt === 'string') {
         // Old 5-argument signature: (apiKey, prompt, systemPrompt, model, jsonMode)
-        // Actually, looking at the usage, it seems some calls use:
-        // callGroqText(prompt, systemPrompt, jsonMode, modelId)
-        // Let's make it robust.
+        // OR (prompt, systemPrompt, isJsonMode, modelId) ??
 
         if (typeof jsonModeOrSystemPrompt === 'boolean') {
             // Signature: (prompt, systemPrompt, isJsonMode, modelId)
@@ -194,17 +195,92 @@ export const callGroqText = async (
             isJsonMode = jsonModeOrSystemPrompt;
         } else {
             // Signature: (apiKey, prompt, systemPrompt, modelId, isJsonMode)
+            apiKey = promptOrApiKey;
             prompt = systemPromptOrPrompt;
             systemPrompt = typeof jsonModeOrSystemPrompt === 'string' ? jsonModeOrSystemPrompt : '';
             isJsonMode = jsonMode ?? false;
         }
     } else {
         // New 3-argument signature: (prompt, systemPrompt, jsonMode)
+        // Or sometimes just (prompt)
         prompt = promptOrApiKey;
         systemPrompt = systemPromptOrPrompt;
         isJsonMode = typeof jsonModeOrSystemPrompt === 'boolean' ? jsonModeOrSystemPrompt : false;
         if (jsonMode !== undefined) isJsonMode = jsonMode;
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GEMINI 1.5 PRO PATH (GOOGLE AI STUDIO)
+    // ═══════════════════════════════════════════════════════════════
+    if (modelToUse.includes('gemini')) {
+        console.log(`[SmartAI] 💎 Routing to Google Gemini: ${modelToUse}`);
+
+        // Resolve API Key
+        // 1. Explicitly passed
+        // 2. localStorage 'geminiApiKey'
+        // 3. localStorage 'googleApiKey'
+        // 4. process.env
+        const effectiveKey = apiKey ||
+            (typeof window !== 'undefined' ? (localStorage.getItem('geminiApiKey') || localStorage.getItem('googleApiKey')) : null) ||
+            (process.env as any).GEMINI_API_KEY;
+
+        let shouldUseGemini = true;
+
+        if (!effectiveKey) {
+            console.warn('[SmartAI] ⚠️ No Gemini API Key found. Falling back to Groq (Llama 3)...');
+            shouldUseGemini = false;
+        }
+
+        if (shouldUseGemini && effectiveKey) {
+            try {
+                // Using @google/genai SDK syntax (v0.5+)
+                const client = new GoogleGenAI({ apiKey: effectiveKey });
+
+                // Map our model IDs to Google's actual model names
+                const googleModelName = modelToUse.includes('gemini-1.5-pro') ? 'gemini-1.5-pro' : 'gemini-1.5-flash';
+
+                // Construct prompt
+                const contentParts = [];
+                if (systemPrompt) {
+                    contentParts.push(`SYSTEM INSTRUCTION:\n${systemPrompt}\n\n`);
+                }
+                contentParts.push(prompt);
+
+                const response = await client.models.generateContent({
+                    model: googleModelName,
+                    contents: [{ role: 'user', parts: [{ text: contentParts.join('') }] }],
+                    config: {
+                        maxOutputTokens: 8192,
+                        temperature: 0.7,
+                        responseMimeType: isJsonMode ? "application/json" : "text/plain"
+                    }
+                });
+
+                // Handle response based on SDK version (property)
+                const text = response.text;
+
+                if (!text) {
+                    throw new Error("Empty response from Gemini");
+                }
+
+                console.log(`✅ [Gemini] Response received (${text.length} chars)`);
+                return text;
+
+            } catch (error: any) {
+                console.error('[Gemini] Error detailed:', error);
+                console.warn(`[SmartAI] ⚠️ Gemini failed (Rate Limit or Error). Falling back to Groq...`);
+                // Fall through to Groq logic below
+            }
+        }
+
+        // If we reached here, it means we either didn't have a key or Gemini failed
+        // Switch model to Groq default to ensure Groq handler works
+        modelToUse = 'llama-3.3-70b-versatile';
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GROQ PATH (DEFAULT)
+    // ═══════════════════════════════════════════════════════════════
 
     const messages: Array<{ role: string; content: string }> = [];
 
@@ -245,11 +321,63 @@ export const callGroqText = async (
 /**
  * Call Groq Vision API for image analysis via proxy
  */
-export const callGroqVision = async (
+/**
+ * Call Vision API (Gemini with Fallback to Groq)
+ */
+export const callSmartVision = async (
     prompt: string,
-    images: { data: string; mimeType: string }[]
+    images: { data: string; mimeType: string }[],
+    modelId: string = 'gemini-1.5-flash'
 ): Promise<string> => {
-    // Convert to data URLs
+    // ═══════════════════════════════════════════════════════════════
+    // GEMINI PATH (Prioritized)
+    // ═══════════════════════════════════════════════════════════════
+    if (modelId.includes('gemini')) {
+        console.log(`[SmartVision] 💎 Routing to Google Gemini: ${modelId}`);
+
+        const apiKey = typeof window !== 'undefined' ? (localStorage.getItem('geminiApiKey') || localStorage.getItem('googleApiKey')) : (process.env as any).GEMINI_API_KEY;
+        let shouldUseGemini = true;
+
+        if (!apiKey) {
+            console.warn('[SmartVision] ⚠️ No Gemini API Key found. Falling back to Groq Vision...');
+            shouldUseGemini = false;
+        }
+
+        if (shouldUseGemini && apiKey) {
+            try {
+                const client = new GoogleGenAI({ apiKey });
+
+                // Construct parts: images then text
+                const parts: any[] = images.map(img => ({
+                    inlineData: { data: img.data, mimeType: img.mimeType }
+                }));
+                parts.push({ text: prompt });
+
+                const response = await client.models.generateContent({
+                    model: modelId, // e.g. gemini-1.5-flash
+                    contents: [{ role: 'user', parts }],
+                });
+
+                const text = response.text;
+                if (!text) throw new Error("Empty response from Gemini Vision");
+
+                console.log(`✅ [Gemini Vision] Success (${text.length} chars)`);
+                return text;
+
+            } catch (error: any) {
+                console.error('[Gemini Vision] Error:', error);
+                console.warn('[SmartVision] ⚠️ Gemini failed. Falling back to Groq Vision...');
+                // Fall through to Groq
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GROQ VISION PATH (Fallback/Default)
+    // ═══════════════════════════════════════════════════════════════
+    console.log(`[SmartVision] ⚡ Routing to Groq Vision (Llama 3.2)`);
+
+    // Convert to data URLs for Groq Proxy
     const imageUrls = images.map(img => `data:${img.mimeType};base64,${img.data}`);
 
     const response = await fetch('/api/proxy/groq/vision', {
@@ -258,7 +386,7 @@ export const callGroqVision = async (
         body: JSON.stringify({
             prompt,
             images: imageUrls,
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct', // Groq recommendation
+            model: 'meta-llama/llama-4-scout-17b-16e-instruct', // Keep or update to 3.2-11b/90b-vision-preview if preferred, but existing code used this
             temperature: 0.5,
             max_tokens: 2048
         })
@@ -271,9 +399,10 @@ export const callGroqVision = async (
     return data.text;
 };
 
-// Legacy compatibility exports (for code that still references these)
+// Legacy compatibility exports
+export const callGroqVision = callSmartVision;
 export const callGeminiText = callGroqText;
-export const callGeminiVisionReasoning = callGroqVision;
+export const callGeminiVisionReasoning = callSmartVision;
 
 // GommoAI import for character generation
 import { GommoAI, urlToBase64 } from './gommoAI';

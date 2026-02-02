@@ -14,6 +14,7 @@ ALTER TABLE public.generated_images_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dop_prompt_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dop_model_learnings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.director_brain_memory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.research_presets ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies (ignore errors if not exist)
 DROP POLICY IF EXISTS "profiles_select" ON profiles;
@@ -43,6 +44,7 @@ DROP POLICY IF EXISTS "brain_select" ON director_brain_memory;
 DROP POLICY IF EXISTS "brain_insert" ON director_brain_memory;
 DROP POLICY IF EXISTS "brain_update" ON director_brain_memory;
 DROP POLICY IF EXISTS "brain_delete" ON director_brain_memory;
+DROP POLICY IF EXISTS "research_presets_all" ON research_presets;
 
 -- PROFILES Policies
 CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (auth.uid() = id OR is_admin());
@@ -92,6 +94,9 @@ CREATE POLICY "brain_select" ON director_brain_memory FOR SELECT USING (auth.uid
 CREATE POLICY "brain_insert" ON director_brain_memory FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "brain_update" ON director_brain_memory FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "brain_delete" ON director_brain_memory FOR DELETE USING (auth.uid() = user_id);
+
+-- RESEARCH_PRESETS Policies
+CREATE POLICY "research_presets_all" ON research_presets FOR ALL USING (auth.uid() = user_id);
 
 SELECT 'PART 5 COMPLETE - RLS Policies created' AS status;
 SELECT '✅ ALL DONE! Database setup complete.' AS final_status;

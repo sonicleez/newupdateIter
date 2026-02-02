@@ -130,7 +130,7 @@ OUTPUT FORMAT: JSON only
 
 
         try {
-            const response = await callGeminiText(userApiKey || '', command, systemPrompt, 'gemini-2.5-flash', true);
+            const response = await callGeminiText(userApiKey || '', command, systemPrompt, 'gemini-1.5-flash', true);
 
 
             return JSON.parse(response);
@@ -206,7 +206,7 @@ OUTPUT FORMAT: JSON only
                         ["New prompt 1", "New prompt 2", ...]`;
 
 
-                        const rawUpdates = await callGeminiText(userApiKey || '', rewritePrompt, 'You are an Expert Director.', 'gemini-2.5-flash', true);
+                        const rawUpdates = await callGeminiText(userApiKey || '', rewritePrompt, 'You are an Expert Director.', 'gemini-1.5-flash', true);
 
 
                         const newPrompts = JSON.parse(rawUpdates);
@@ -251,7 +251,7 @@ OUTPUT FORMAT: JSON only
                     How do you technically implement this? 
                     OUTPUT: Brief technical response in Vietnamese (max 30 words).`;
 
-                    const dopResponse = await callGeminiText(userApiKey || '', dopResponsePrompt, 'You are an Expert DOP.', 'gemini-2.5-flash', false);
+                    const dopResponse = await callGeminiText(userApiKey || '', dopResponsePrompt, 'You are an Expert DOP.', 'gemini-1.5-flash', false);
 
                     addProductionLog('dop', dopResponse, 'info');
                     setAgentState('dop', 'success', dopResponse);
@@ -303,7 +303,7 @@ OUTPUT FORMAT: JSON only
                         
                         OUTPUT: The new complete prompt for the target scene.`;
 
-                        const newPrompt = await callGeminiText(userApiKey || '', extractPrompt, 'You are an Expert Director.', 'gemini-2.5-flash', false);
+                        const newPrompt = await callGeminiText(userApiKey || '', extractPrompt, 'You are an Expert Director.', 'gemini-1.5-flash', false);
 
 
 
@@ -365,7 +365,7 @@ OUTPUT FORMAT: JSON only
                         
                         OUTPUT: The corrected complete prompt for TARGET scene.`;
 
-                        const fixedPrompt = await callGeminiText(userApiKey || '', syncPrompt, 'You are an Expert Director.', 'gemini-2.5-flash', false);
+                        const fixedPrompt = await callGeminiText(userApiKey || '', syncPrompt, 'You are an Expert Director.', 'gemini-1.5-flash', false);
 
 
                         // Update prompt and clear image
@@ -433,7 +433,7 @@ INSTRUCTION: Using the provided target image as the base, add ${objectDesc} (vis
 - Match the object's appearance from the reference image.`;
 
                         console.log('[Director] Calling Gemini for composite prompt...');
-                        const editPrompt = await callGeminiText(userApiKey || '', compositePrompt, 'You are an Expert VFX Compositor. Output only the final edit instruction prompt.', 'gemini-2.5-flash', false);
+                        const editPrompt = await callGeminiText(userApiKey || '', compositePrompt, 'You are an Expert VFX Compositor. Output only the final edit instruction prompt.', 'gemini-1.5-flash', false);
                         console.log('[Director] Got edit prompt:', editPrompt?.substring(0, 100) + '...');
 
                         // Update the target scene's prompt

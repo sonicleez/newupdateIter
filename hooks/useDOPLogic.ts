@@ -223,13 +223,26 @@ export function useDOPLogic(state: ProjectState) {
         correctionPrompt?: string;
         decision?: 'retry' | 'skip' | 'try_once';
     }> => {
-        if (!apiKey || !currentImage || !prevImage) {
+        // Images required for comparison
+        if (!currentImage || !prevImage) {
             return { isValid: true, errors: [] };
+        }
+
+        // API key check with graceful fallback
+        // Try multiple sources: passed key, localStorage, env
+        const effectiveApiKey = apiKey?.trim() ||
+            (typeof window !== 'undefined' ? (localStorage.getItem('geminiApiKey') || localStorage.getItem('googleApiKey')) : null) ||
+            (process.env as any).GEMINI_API_KEY;
+
+        if (!effectiveApiKey) {
+            console.warn('[DOP Vision] ⚠️ No Gemini API Key available - skipping raccord validation (no fallback for multi-image vision)');
+            // Return valid = true to not block workflow, but this is a "skip" scenario
+            return { isValid: true, errors: [], decision: 'skip' };
         }
 
         try {
             const { GoogleGenAI } = await import('@google/genai');
-            const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+            const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
 
             // Build context about what SHOULD be consistent
             const prevChars = (prevScene.characterIds || []).map(id =>
@@ -415,10 +428,15 @@ Do NOT say "hoàn hảo" (perfect) unless faces are IDENTICAL.`;
         }
 
         // If we have API key, use AI for deeper analysis
-        if (apiKey && failedImage && referenceImage) {
+        // Try multiple sources: passed key, localStorage, env
+        const effectiveApiKey = apiKey?.trim() ||
+            (typeof window !== 'undefined' ? (localStorage.getItem('geminiApiKey') || localStorage.getItem('googleApiKey')) : null) ||
+            (process.env as any).GEMINI_API_KEY;
+
+        if (effectiveApiKey && failedImage && referenceImage) {
             try {
                 const { GoogleGenAI } = await import('@google/genai');
-                const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+                const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
 
                 // Prepare image data
                 const getImageData = async (img: string) => {
@@ -457,7 +475,7 @@ RESPOND IN JSON ONLY:
 }`;
 
                     const response = await ai.models.generateContent({
-                        model: 'gemini-2.5-flash',
+                        model: 'gemini-1.5-flash',
                         contents: [
                             { text: 'FAILED IMAGE:' },
                             { inlineData: { data: failedData.data, mimeType: failedData.mimeType } },

@@ -1,8 +1,7 @@
 import { useCallback } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { ProjectState, Product } from '../types';
 import { generateId } from '../utils/helpers';
-import { callGeminiAPI } from '../utils/geminiUtils';
+import { callGeminiAPI, callGeminiVisionReasoning } from '../utils/geminiUtils';
 import { uploadImageToSupabase, syncUserStatsToCloud } from '../utils/storageUtils';
 
 export function useProductLogic(
@@ -47,14 +46,13 @@ export function useProductLogic(
         const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
         updateProduct(id, { masterImage: image, isAnalyzing: true });
 
+        // We allow missing Gemini key now because we have fallback to Groq
         if (!apiKey) {
-            updateProduct(id, { isAnalyzing: false });
-            setApiKeyModalOpen(true);
-            return;
+            console.warn("No Gemini API Key - relying on Groq fallback if available");
         }
 
         try {
-            const ai = new GoogleGenAI({ apiKey });
+            // Processing image data
             let data: string;
             let mimeType: string = 'image/jpeg';
             let finalMasterUrl = image;
@@ -83,15 +81,17 @@ export function useProductLogic(
             }
 
             const analyzePrompt = `Analyze this PRODUCT/PROP image. Return JSON: {"name": "Product Name", "description": "Detailed physical description."}`;
-            const analysisRes = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [{ inlineData: { data, mimeType } }, { text: analyzePrompt }] },
-                config: { responseMimeType: "application/json" }
-            });
+
+            // Use Smart Vision (prioritize Gemini 1.5 Flash -> Fallback Groq)
+            const textResponse = await callGeminiVisionReasoning(
+                analyzePrompt,
+                [{ data, mimeType }],
+                'gemini-1.5-flash'
+            );
 
             let json = { name: "", description: "" };
             try {
-                json = JSON.parse(analysisRes.text.replace(/```json/g, '').replace(/```/g, '').trim());
+                json = JSON.parse(textResponse.replace(/```json/g, '').replace(/```/g, '').trim());
             } catch (e) {
                 console.error("JSON parse error", e);
             }

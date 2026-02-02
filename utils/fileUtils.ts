@@ -138,7 +138,7 @@ export const openProject = (onLoad: (state: ProjectState) => void): void => {
             const loadedState: ProjectState = {
               ...rawData,
               stylePrompt: rawData.stylePrompt || 'cinematic-realistic',
-              imageModel: rawData.imageModel || 'gemini-2.5-flash-image',
+              imageModel: rawData.imageModel || 'fal-ai/flux-general',
               aspectRatio: rawData.aspectRatio || "16:9",
               scriptLanguage: rawData.scriptLanguage || 'vietnamese',
               characters: migratedCharacters,

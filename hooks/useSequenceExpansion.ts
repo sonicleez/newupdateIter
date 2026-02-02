@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { GoogleGenAI } from "@google/genai";
+import { callGeminiText } from '../utils/geminiUtils';
 import { Scene, Character, SceneGroup } from '../types';
 
 interface ExpansionResult {
@@ -25,17 +25,11 @@ export function useSequenceExpansion(): UseSequenceExpansionReturn {
         notes: { director?: string; dop?: string } | undefined,
         apiKey: string | null
     ): Promise<Partial<Scene>[] | null> => {
-        if (!apiKey) {
-            setExpansionError("API Key required");
-            return null;
-        }
-
+        // No longer strictly require apiKey - fallback will handle it
         setIsExpanding(true);
         setExpansionError(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey });
-
             // Build Context
             let contextInstructions = "";
             if (notes?.director) {
@@ -78,13 +72,8 @@ RESPONSE FORMAT:
 }
 `;
 
-            const model = "gemini-2.5-flash";
-
-            const result = await ai.models.generateContent({
-                model: model,
-                contents: [{ text: prompt }]
-            });
-            const responseText = result.text;
+            // Use callGeminiText with fallback (prioritize gemini-1.5-flash)
+            const responseText = await callGeminiText(prompt, 'You are an expert Film Editor.', true, 'gemini-1.5-flash');
 
             // Parse JSON
             const jsonMatch = responseText.match(/\{[\s\S]*\}/);

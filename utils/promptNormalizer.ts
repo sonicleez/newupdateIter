@@ -334,7 +334,7 @@ Output: "${mode === 'character'
             : 'cute spotted dalmatian dog wearing red collar, adorable pet portrait, studio lighting'}"`;
 
     try {
-        let optimized = await callGroqText(systemPrompt, '', false);
+        let optimized = await callGroqText(systemPrompt, '', false, 'gemini-1.5-flash');
         optimized = optimized.trim();
         const wasTranslated = containsVietnamese(userDescription);
 
