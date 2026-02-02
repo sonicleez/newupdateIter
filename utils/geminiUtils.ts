@@ -375,7 +375,7 @@ export const callSmartVision = async (
     // ═══════════════════════════════════════════════════════════════
     // GROQ VISION PATH (Fallback/Default)
     // ═══════════════════════════════════════════════════════════════
-    console.log(`[SmartVision] ⚡ Routing to Groq Vision (Llama 3.2)`);
+    console.log(`[SmartVision] ⚡ Routing to Groq Vision (v2.1 - Llama 4 Scout)`);
 
     // Retrieve Groq API Key from localStorage (User Setting)
     const customGroqKey = typeof window !== 'undefined' ? localStorage.getItem('groqApiKey') : null;
