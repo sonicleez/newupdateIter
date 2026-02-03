@@ -14,7 +14,7 @@ async function testVision() {
     const groq = new Groq({ apiKey: GROQ_API_KEY });
 
     try {
-        console.log('👀 Testing Vision Model: llama-3.2-11b-vision-preview');
+        console.log('👀 Testing Vision Model: meta-llama/llama-4-scout-17b-16e-instruct');
         const chatCompletion = await groq.chat.completions.create({
             messages: [
                 {
@@ -30,7 +30,7 @@ async function testVision() {
                     ]
                 }
             ],
-            model: 'llama-3.2-11b-vision-preview',
+            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
             temperature: 0.5,
             max_tokens: 100
         });
