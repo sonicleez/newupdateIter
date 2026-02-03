@@ -551,38 +551,47 @@ const App: React.FC = () => {
 
             // Initial fetch - Check assigned key first, then system key, then user key
             const fetchApiKey = async () => {
-                // 1. First, check if user has a directly assigned key in profiles
-                const { data: profile, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('assigned_api_key, system_key_id')
-                    .eq('id', userId)
-                    .maybeSingle();
-
-                // Priority 1: Direct assigned_api_key in profiles
-                if (profile?.assigned_api_key) {
-                    setUserApiKey(profile.assigned_api_key);
-                    localStorage.setItem('geminiApiKey', profile.assigned_api_key);
-                    console.log('[API Key] ✅ Loaded ASSIGNED key (directly in profile)');
-                    return;
-                }
-
-                // Priority 2: System key via system_key_id
-                if (profile?.system_key_id) {
-                    const { data: systemKey, error: systemKeyError } = await supabase
-                        .from('system_api_keys')
-                        .select('encrypted_key')
-                        .eq('id', profile.system_key_id)
-                        .eq('is_active', true)
+                try {
+                    // 1. First, check if user has a directly assigned key in profiles
+                    // We select everything to avoids 400 bad request if a column is missing
+                    const { data: profile, error: profileError } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('id', userId)
                         .maybeSingle();
 
-                    if (systemKey && !systemKeyError) {
-                        setUserApiKey(systemKey.encrypted_key);
-                        localStorage.setItem('geminiApiKey', systemKey.encrypted_key);
-                        console.log('[API Key] ✅ Loaded SYSTEM key (from system_api_keys)');
-                        return;
-                    } else if (systemKeyError) {
-                        console.warn('[API Key] ⚠️ System key fetch failed:', systemKeyError.message);
+                    if (profileError) {
+                        console.warn('[API Key] ⚠️ Profile fetch error (possibly missing schema):', profileError.message);
+                    } else if (profile) {
+                        // Priority 1: Direct assigned_api_key in profiles
+                        if (profile.assigned_api_key) {
+                            setUserApiKey(profile.assigned_api_key);
+                            localStorage.setItem('geminiApiKey', profile.assigned_api_key);
+                            console.log('[API Key] ✅ Loaded ASSIGNED key (directly in profile)');
+                            return;
+                        }
+
+                        // Priority 2: System key via system_key_id
+                        if (profile.system_key_id) {
+                            const { data: systemKey, error: systemKeyError } = await supabase
+                                .from('system_api_keys')
+                                .select('encrypted_key')
+                                .eq('id', profile.system_key_id)
+                                .eq('is_active', true)
+                                .maybeSingle();
+
+                            if (systemKey && !systemKeyError) {
+                                setUserApiKey(systemKey.encrypted_key);
+                                localStorage.setItem('geminiApiKey', systemKey.encrypted_key);
+                                console.log('[API Key] ✅ Loaded SYSTEM key (from system_api_keys)');
+                                return;
+                            } else if (systemKeyError) {
+                                console.warn('[API Key] ⚠️ System key fetch failed:', systemKeyError.message);
+                            }
+                        }
                     }
+                } catch (err) {
+                    console.error('[API Key] Unexpected error in fetchApiKey:', err);
                 }
 
                 // Priority 3: User-provided key in user_api_keys

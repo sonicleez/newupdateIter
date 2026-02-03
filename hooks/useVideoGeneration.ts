@@ -376,15 +376,20 @@ Return ONLY the video prompt string. NO explanations, NO markdown.
         setAgentState('director', 'thinking', 'Đang phân tích kịch bản để tối ưu Prompt cho Veo 3.1...');
         setAgentState('dop', 'idle', '');
 
-        const rawApiKey = userApiKey || (process.env as any).API_KEY;
-        const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : rawApiKey;
-        if (!apiKey) {
-            setApiKeyModalOpen(true);
-            setIsVeoGenerating(false);
-            return;
-        }
-
         try {
+            // STEP 0: Check if we have at least one valid key (Gemini or Groq)
+            const hasGeminiKey = userApiKey || (typeof window !== 'undefined' && (localStorage.getItem('geminiApiKey') || localStorage.getItem('googleApiKey')));
+            const hasGroqKey = typeof window !== 'undefined' && localStorage.getItem('groqApiKey');
+
+            if (!hasGeminiKey && !hasGroqKey) {
+                console.warn('[Veo] No API keys found for generation.');
+                alert("Vui lòng cung cấp Gemini API Key hoặc Groq API Key trong phần Profile để sử dụng tính năng này.");
+                setApiKeyModalOpen(true);
+                setIsVeoGenerating(false);
+                return;
+            }
+
+            console.log(`[Veo] Starting generation with keys: Gemini=${!!hasGeminiKey}, Groq=${!!hasGroqKey}`);
             // STEP 1: DOP Auto-Suggest Presets for scenes without preset
             const scenesNeedingPreset = scenesToProcess.filter(s => !s.veoPreset);
             if (scenesNeedingPreset.length > 0) {

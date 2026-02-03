@@ -302,9 +302,16 @@ export function useImageGeneration(
                 if (continuityPart) console.log(`[ImageGen] 🔗 Sequential reference detected: ${continuityPart.imageUrl?.substring(0, 50)}...`);
                 if (facePart) console.log(`[ImageGen] 🎭 Face ID reference detected: ${facePart.imageUrl?.substring(0, 50)}...`);
 
+                // Retrieve Fal API Key from localStorage (User Setting)
+                const customFalKey = typeof window !== 'undefined' ? localStorage.getItem('falApiKey') : null;
+                const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                if (customFalKey) {
+                    headers['x-fal-api-key'] = customFalKey;
+                }
+
                 const response = await fetch('/api/proxy/fal/flux', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({
                         prompt,
                         image_url: continuityPart?.imageUrl || undefined,
@@ -498,9 +505,16 @@ export function useImageGeneration(
             const facePart = parts.find(p => p.text?.includes('FACE ID LOCK') || p.text?.includes('IDENTITY'));
             const continuityPart = parts.find(p => p.text?.includes('CONTINUITY_ANCHOR') || p.text?.includes('LOCATION CONTINUITY'));
 
+            // Retrieve Fal API Key from localStorage (User Setting)
+            const customFalKey = typeof window !== 'undefined' ? localStorage.getItem('falApiKey') : null;
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (customFalKey) {
+                headers['x-fal-api-key'] = customFalKey;
+            }
+
             const response = await fetch('/api/proxy/fal/flux', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     prompt,
                     image_url: continuityPart?.imageUrl || undefined,

@@ -106,7 +106,7 @@ app.post('/api/proxy/groq/chat', async (req, res) => {
 });
 
 // ==================== GROQ VISION PROXY (DOP - Raccord Validation) ====================
-// Uses meta-llama/llama-4-scout-17b-16e-instruct for image analysis
+// Uses llama-3.2-11b-vision-preview for image analysis
 app.post('/api/proxy/groq/vision', async (req, res) => {
     try {
         const customKey = req.headers['x-groq-api-key'];
@@ -120,7 +120,7 @@ app.post('/api/proxy/groq/vision', async (req, res) => {
             return res.status(500).json({ error: 'Groq client not configured. Check GROQ_API_KEY or provide custom key.' });
         }
 
-        const { prompt, images, model = 'meta-llama/llama-4-scout-17b-16e-instruct', temperature = 0.5, max_tokens = 2048 } = req.body;
+        const { prompt, images, model = 'llama-3.2-11b-vision-preview', temperature = 0.5, max_tokens = 2048 } = req.body;
 
         if (!prompt) {
             return res.status(400).json({ error: 'Prompt is required' });
@@ -422,13 +422,19 @@ app.post('/api/genyu/auto-generate', autoGenerate);
 app.post('/api/proxy/fal/flux', async (req, res) => {
     try {
         const { prompt, image_url, face_id_url, aspect_ratio, model = 'fal-ai/flux-general' } = req.body;
+        const customKey = req.headers['x-fal-api-key'];
 
         if (!prompt) {
             return res.status(400).json({ error: 'Prompt is required' });
         }
 
-        if (!FAL_KEY) {
-            return res.status(500).json({ error: 'FAL_KEY not configured on server' });
+        let keyToUse = FAL_KEY;
+        if (customKey) {
+            keyToUse = customKey;
+        }
+
+        if (!keyToUse) {
+            return res.status(500).json({ error: 'FAL_KEY not configured on server and no custom key provided' });
         }
 
         console.log(`[Fal.ai] 🎨 Starting Flux generation with model: ${model}`);
@@ -1089,8 +1095,15 @@ app.post('/api/intelligence/process-video', upload.single('video'), async (req, 
 // Uses meta-llama/llama-4-scout-17b-16e-instruct to analyze a frame and extract description
 app.post('/api/intelligence/analyze-frame', async (req, res) => {
     try {
-        if (!groqClient) {
-            return res.status(500).json({ error: 'Groq client not configured' });
+        const customKey = req.headers['x-groq-api-key'];
+        let clientToUse = groqClient;
+
+        if (customKey) {
+            clientToUse = new Groq({ apiKey: customKey });
+        }
+
+        if (!clientToUse) {
+            return res.status(500).json({ error: 'Groq client not configured. Check GROQ_API_KEY or provide custom key.' });
         }
 
         const { imageBase64 } = req.body;
@@ -1117,7 +1130,7 @@ Respond in this exact JSON format:
     "possibleSource": "movie/show name if recognizable, or null"
 }`;
 
-        const response = await groqClient.chat.completions.create({
+        const response = await clientToUse.chat.completions.create({
             messages: [
                 {
                     role: 'user',
@@ -1127,7 +1140,7 @@ Respond in this exact JSON format:
                     ]
                 }
             ],
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+            model: 'llama-3.2-11b-vision-preview',
             temperature: 0.3,
             max_tokens: 1000
         });

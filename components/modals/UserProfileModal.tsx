@@ -69,12 +69,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     const [groqCheckStatus, setGroqCheckStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
     const [groqStatusMsg, setGroqStatusMsg] = useState('');
 
+    // Fal.ai state
+    const [localFalApiKey, setLocalFalApiKey] = useState('');
+    const [falCheckStatus, setFalCheckStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
+    const [falStatusMsg, setFalStatusMsg] = useState('');
+
     useEffect(() => {
         if (isOpen) {
             setCheckStatus('idle');
             setStatusMsg('');
             setLocalApiKey(apiKey);
             setLocalGroqApiKey(localStorage.getItem('groqApiKey') || '');
+            setLocalFalApiKey(localStorage.getItem('falApiKey') || '');
         }
     }, [isOpen, apiKey]);
 
@@ -220,6 +226,47 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             setGroqStatusMsg(error.message || "Lỗi kết nối Groq.");
         }
     };
+    const handleFalVerify = async () => {
+        const trimmedKey = localFalApiKey.trim();
+        if (!trimmedKey) {
+            setFalCheckStatus('error');
+            setFalStatusMsg("Vui lòng nhập API Key.");
+            return;
+        }
+
+        setFalCheckStatus('checking');
+        try {
+            // Test connection using proxy with custom header
+            const response = await fetch('/api/proxy/fal/flux', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-fal-api-key': trimmedKey
+                },
+                body: JSON.stringify({
+                    prompt: 'Test connection',
+                    model: 'fal-ai/flux/dev', // Smallest/cheapest for test
+                    aspect_ratio: '1:1'
+                })
+            });
+
+            const data = await response.json();
+            if (!data.success && !data.url) {
+                throw new Error(data.error || 'Fal connection failed');
+            }
+
+            // Save to localStorage
+            localStorage.setItem('falApiKey', trimmedKey);
+
+            setFalCheckStatus('success');
+            setFalStatusMsg("✅ Fal.ai API Key hợp lệ!");
+
+        } catch (error: any) {
+            setFalCheckStatus('error');
+            setFalStatusMsg(error.message || "Lỗi kết nối Fal.ai.");
+        }
+    };
+
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Thông tin tài khoản">
@@ -436,6 +483,43 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                             </div>
                         )}
                     </div>
+                </div>
+
+                {/* Fal.ai API Key Section */}
+                <div className="pt-4 border-t border-gray-700/50 mt-4">
+                    <div className="flex items-center space-x-2 mb-2">
+                        <div className="p-1.5 bg-pink-500/10 rounded">
+                            <Image className="text-pink-400" size={14} />
+                        </div>
+                        <h4 className="text-xs font-bold text-gray-300 uppercase">Fal.ai Flux Key (Consistency)</h4>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mb-2">Optional. Used for high-consistency Flux.1 models.</p>
+
+                    <div className="relative">
+                        <input
+                            type="password"
+                            value={localFalApiKey}
+                            onChange={(e) => setLocalFalApiKey(e.target.value)}
+                            placeholder="fal_..."
+                            className="w-full px-3 py-2.5 bg-gray-900/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/50 transition-all text-sm"
+                        />
+                        <button
+                            onClick={handleFalVerify}
+                            disabled={falCheckStatus === 'checking'}
+                            className={`absolute right-1.5 top-1.5 bottom-1.5 px-3 rounded-md font-bold text-[10px] uppercase tracking-wider transition-all ${falCheckStatus === 'checking' ? 'bg-gray-700 text-gray-500' : `bg-gray-700 hover:bg-gray-600 text-white`}`}
+                        >
+                            {falCheckStatus === 'checking' ? '...' : 'Save'}
+                        </button>
+                    </div>
+
+                    {falCheckStatus !== 'idle' && (
+                        <div className={`mt-2 text-[11px] p-2 rounded-lg border flex items-center ${falCheckStatus === 'success' ? 'bg-green-900/10 border-green-800/30 text-green-400' :
+                            falCheckStatus === 'error' ? 'bg-red-900/10 border-red-800/30 text-red-400' :
+                                'bg-blue-900/10 border-blue-800/30 text-blue-400'
+                            }`}>
+                            {falStatusMsg}
+                        </div>
+                    )}
                 </div>
 
                 {/* Gommo AI Section */}

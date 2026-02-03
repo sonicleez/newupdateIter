@@ -33,6 +33,7 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_expires_at TIM
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS system_key_id UUID;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS assigned_api_key TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
 
