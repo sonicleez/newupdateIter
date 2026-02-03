@@ -106,7 +106,7 @@ app.post('/api/proxy/groq/chat', async (req, res) => {
 });
 
 // ==================== GROQ VISION PROXY (DOP - Raccord Validation) ====================
-// Uses llama-3.2-11b-vision-preview for image analysis
+// Uses meta-llama/llama-4-scout-17b-16e-instruct for image analysis
 app.post('/api/proxy/groq/vision', async (req, res) => {
     try {
         const customKey = req.headers['x-groq-api-key'];
@@ -1086,7 +1086,7 @@ app.post('/api/intelligence/process-video', upload.single('video'), async (req, 
 });
 
 // POST /api/intelligence/analyze-frame
-// Uses Groq Vision to analyze a frame and extract description
+// Uses meta-llama/llama-4-scout-17b-16e-instruct to analyze a frame and extract description
 app.post('/api/intelligence/analyze-frame', async (req, res) => {
     try {
         if (!groqClient) {
@@ -1127,7 +1127,7 @@ Respond in this exact JSON format:
                     ]
                 }
             ],
-            model: 'llama-3.2-11b-vision-preview',
+            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
             temperature: 0.3,
             max_tokens: 1000
         });

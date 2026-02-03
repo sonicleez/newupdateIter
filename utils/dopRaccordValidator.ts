@@ -2,7 +2,7 @@
  * DOP Raccord Validator
  * 
  * Validates visual continuity between consecutive shots.
- * Uses Groq Vision (llama-3.2-11b-vision-preview) to detect raccord breaks:
+ * Uses Groq Vision (meta-llama/llama-4-scout-17b-16e-instruct) to detect raccord breaks:
  * - Character identity changes
  * - Outfit/clothing changes
  * - Lighting direction changes
@@ -75,7 +75,7 @@ async function callGroqVision(
         body: JSON.stringify({
             prompt,
             images,
-            model: 'llama-3.2-11b-vision-preview',
+            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
             temperature: 0.3,
             max_tokens: 2048
         })
