@@ -744,10 +744,10 @@ app.post(/^\/api\/proxy\/gommo\/(.*)/, async (req, res) => {
                 injectedToken = TOKEN_POOL.shift();
                 console.log(`[Gommo Proxy] 🔑 Injected fresh token from pool (Remaining: ${TOKEN_POOL.length})`);
             }
-            // Check if we have a single token
             else if (EXTENSION_TOKENS.recaptchaToken) {
                 injectedToken = EXTENSION_TOKENS.recaptchaToken;
-                console.log(`[Gommo Proxy] 🔑 Injected token from EXTENSION_TOKENS`);
+                EXTENSION_TOKENS.recaptchaToken = null; // Clear after use
+                console.log(`[Gommo Proxy] 🔑 Injected token from EXTENSION_TOKENS (one-time use)`);
             }
             // SMART WAIT: If no token available, try to wait for a few seconds
             // This handles cases where the extension hasn't pushed yet
@@ -762,7 +762,8 @@ app.post(/^\/api\/proxy\/gommo\/(.*)/, async (req, res) => {
                     }
                     if (EXTENSION_TOKENS.recaptchaToken) {
                         injectedToken = EXTENSION_TOKENS.recaptchaToken;
-                        console.log(`[Gommo Proxy] 🔑 Got EXTENSION_TOKEN after wait!`);
+                        EXTENSION_TOKENS.recaptchaToken = null; // Clear after use
+                        console.log(`[Gommo Proxy] 🔑 Got EXTENSION_TOKEN after wait and cleared!`);
                         break;
                     }
                     await new Promise(resolve => setTimeout(resolve, 500));

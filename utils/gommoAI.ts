@@ -379,7 +379,13 @@ export class GommoAI {
                 const r = result as any;
                 const errorMsg = r.error || r.message || r.reason || 'Unknown error';
                 console.error('[Gommo AI] ❌ Generation failed:', result);
-                throw new Error(`Gommo error: ${errorMsg}. Model may not support this request.`);
+                let suggestion = "Model may not support this request.";
+                if (errorMsg.toLowerCase().includes('upload') || errorMsg.toLowerCase().includes('ảnh')) {
+                    suggestion = "Character reference (subject) processing failed. Try reducing subjects or checking image accessibility.";
+                } else if (errorMsg.toLowerCase().includes('token') || errorMsg.toLowerCase().includes('captcha')) {
+                    suggestion = "Authentication/Token error. Check extension and recapture token pool.";
+                }
+                throw new Error(`Gommo error: ${errorMsg}. ${suggestion}`);
             }
 
             // Still processing, wait and retry

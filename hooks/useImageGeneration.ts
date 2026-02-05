@@ -111,7 +111,8 @@ const createInlineData = (data: string, mimeType: string, sourceUrl?: string) =>
         inlineData: {
             data,
             mimeType: fixMimeType(mimeType, sourceUrl)
-        }
+        },
+        imageUrl: sourceUrl
     };
 };
 
@@ -343,9 +344,9 @@ export function useImageGeneration(
             // ═══════════════════════════════════════════════════════════════
 
             // Categorize parts by type for smart prioritization
-            const faceSubjects: Array<{ data: string; charName?: string }> = [];
-            const bodySubjects: Array<{ data: string; charName?: string }> = [];
-            const otherSubjects: Array<{ data: string }> = [];
+            const faceSubjects: Array<{ data: string; url?: string; charName?: string }> = [];
+            const bodySubjects: Array<{ data: string; url?: string; charName?: string }> = [];
+            const otherSubjects: Array<{ data: string; url?: string }> = [];
 
             for (let i = 0; i < parts.length; i++) {
                 const part = parts[i];
@@ -354,6 +355,9 @@ export function useImageGeneration(
                 if (!part.inlineData?.data || !part.inlineData?.mimeType) continue;
 
                 const base64Data = part.inlineData.data;
+                const publicUrl = part.imageUrl && part.imageUrl.startsWith('http') && !part.imageUrl.includes('blob:')
+                    ? part.imageUrl
+                    : undefined;
 
                 // Look at the PREVIOUS part for context (text instruction)
                 const prevPart = i > 0 ? parts[i - 1] : null;
@@ -363,14 +367,14 @@ export function useImageGeneration(
                 if (prevText.includes('FACE ID') || prevText.includes('IDENTITY_') || prevText.includes('IDENTITY LOCK')) {
                     // Extract character name from text like "[IDENTITY_JOHN]:" or "FACE ID LOCK - JOHN"
                     const nameMatch = prevText.match(/(?:IDENTITY_|FACE ID LOCK[^A-Z]*)([\w\s]+)/);
-                    faceSubjects.push({ data: base64Data, charName: nameMatch?.[1]?.trim() });
-                    console.log(`[ImageGen] 🔒 Found FACE ID reference${nameMatch ? ` for ${nameMatch[1].trim()}` : ''}`);
+                    faceSubjects.push({ data: base64Data, url: publicUrl, charName: nameMatch?.[1]?.trim() });
+                    console.log(`[ImageGen] 🔒 Found FACE ID reference${nameMatch ? ` for ${nameMatch[1].trim()}` : ''} (Using URL: ${!!publicUrl})`);
                 } else if (prevText.includes('FULL BODY') || prevText.includes('FULLBODY_') || prevText.includes('COSTUME')) {
                     const nameMatch = prevText.match(/(?:FULLBODY_|)([\w\s]+)\s*(?:FULL BODY|COSTUME)/);
-                    bodySubjects.push({ data: base64Data, charName: nameMatch?.[1]?.trim() });
-                    console.log(`[ImageGen] 👕 Found BODY reference${nameMatch ? ` for ${nameMatch[1].trim()}` : ''}`);
+                    bodySubjects.push({ data: base64Data, url: publicUrl, charName: nameMatch?.[1]?.trim() });
+                    console.log(`[ImageGen] 👕 Found BODY reference${nameMatch ? ` for ${nameMatch[1].trim()}` : ''} (Using URL: ${!!publicUrl})`);
                 } else {
-                    otherSubjects.push({ data: base64Data });
+                    otherSubjects.push({ data: base64Data, url: publicUrl });
                 }
             }
 
@@ -378,14 +382,23 @@ export function useImageGeneration(
             // This ensures Face ID is never dropped when limiting
             const prioritizedSubjects: Array<{ id_base?: string; url?: string; data?: string }> = [];
 
+            const buildSubject = (s: { data: string; url?: string }) => {
+                // IMPORTANT: If we have a public URL, use it and SKIP the huge base64 data
+                // This drastically reduces payload size for Gommo Proxy (x-www-form-urlencoded)
+                if (s.url) {
+                    return { url: s.url };
+                }
+                return { data: s.data };
+            };
+
             // 1. Add ALL Face IDs first (critical for identity)
-            faceSubjects.forEach(s => prioritizedSubjects.push({ data: s.data }));
+            faceSubjects.forEach(s => prioritizedSubjects.push(buildSubject(s)));
 
             // 2. Add Body references (important for clothing consistency)
-            bodySubjects.forEach(s => prioritizedSubjects.push({ data: s.data }));
+            bodySubjects.forEach(s => prioritizedSubjects.push(buildSubject(s)));
 
             // 3. Add other references (continuity, environment, etc.)
-            otherSubjects.forEach(s => prioritizedSubjects.push({ data: s.data }));
+            otherSubjects.forEach(s => prioritizedSubjects.push(buildSubject(s)));
 
             console.log(`[ImageGen] 📊 Subject breakdown: ${faceSubjects.length} Face, ${bodySubjects.length} Body, ${otherSubjects.length} Other = ${prioritizedSubjects.length} total`);
 
@@ -1252,7 +1265,7 @@ TECHNICAL CAMERA: ${effectiveCameraPrompt}`.trim().replace(/\n+/g, ' '); // Flat
                 const baseImgData = await safeGetImageData(baseImage);
                 if (baseImgData) {
                     console.log('[ImageGen] 🖼️ Base Image Editing Mode: Injecting as PRIMARY input.');
-                    parts.push(createInlineData(baseImgData.data, baseImgData.mimeType));
+                    parts.push(createInlineData(baseImgData.data, baseImgData.mimeType, baseImage));
                     parts.push({ text: `Using the provided image as the base scene, please EDIT it according to the instructions. Retain the original composition, lighting, and subject pose unless explicitly asked to change them.` });
                 }
             }
@@ -1277,7 +1290,7 @@ COPY the EXACT appearance of "${objectToExtract}" (color, texture, shape, detail
 ADD this object to the BASE scene (the first image) in a natural position.
 DO NOT copy the background or other elements from this reference - ONLY the specified object.`
                         });
-                        parts.push(createInlineData(dnaImgData.data, dnaImgData.mimeType));
+                        parts.push(createInlineData(dnaImgData.data, dnaImgData.mimeType, referenceImage));
                         continuityInstruction += `(COMPOSITE: Add "${objectToExtract}" from reference) `;
                         console.log('[ImageGen] 🎯 COMPOSITE Mode: Extracting object:', objectToExtract);
                     } else {
@@ -1297,7 +1310,7 @@ This image shows the VISUAL STYLE for this project. Use it as a LOOSE guide for:
 4. STYLE ONLY - Only carry over the general visual "feel", not the actual content
 
 The text prompt below describes the ACTUAL scene you must create.` });
-                        parts.push(createInlineData(dnaImgData.data, dnaImgData.mimeType));
+                        parts.push(createInlineData(dnaImgData.data, dnaImgData.mimeType, currentState.directorDNAImage));
                         continuityInstruction += '(STYLE REF) ';
                         console.log('[ImageGen] 🧬 DNA Reference Image injected (SOFT mode for variation)');
                     }
@@ -1339,7 +1352,7 @@ The text prompt below describes the ACTUAL scene you must create.` });
                             console.log(`[ImageGen] 👤 Injected FACE reference for ${char.name}`);
                         }
 
-                        parts.push(createInlineData(imgData.data, imgData.mimeType));
+                        parts.push(createInlineData(imgData.data, imgData.mimeType, char.faceImage));
                         continuityInstruction += `(STRICT IDENTITY LOCK: ${char.name}) `;
                     } else {
                         console.warn(`[ImageGen] ⚠️ Failed to load FACE image for ${char.name}`);
@@ -1350,7 +1363,7 @@ The text prompt below describes the ACTUAL scene you must create.` });
                     if (imgData) {
                         const refLabel = `IDENTITY_${char.name.toUpperCase().replace(/\s+/g, '_')}`;
                         parts.push({ text: `[${refLabel}]: !!! MANDATORY IDENTITY LOCK (MASTER) !!! Use this supplied image as the ONLY AUTHORITATIVE reference for ${char.name}. Focus on the face and identity from this image. ${char.description}` });
-                        parts.push(createInlineData(imgData.data, imgData.mimeType));
+                        parts.push(createInlineData(imgData.data, imgData.mimeType, char.masterImage));
                         continuityInstruction += `(STRICT IDENTITY LOCK (MASTER): ${char.name}) `;
                         console.log(`[ImageGen] 👤 Injected MASTER reference (as Face fallback) for ${char.name}`);
                     }
@@ -1365,7 +1378,7 @@ The text prompt below describes the ACTUAL scene you must create.` });
                         const refLabel = `FULLBODY_${char.name.toUpperCase()}`;
                         // STRONGER COSTUME LOCK
                         parts.push({ text: `[${refLabel}]: MANDATORY COSTUME REFERENCE for ${char.name}. Match clothing, colors, uniform, and textures 100%. If character has clothes in this image, they MUST HAVE CLOTHES in the output.` });
-                        parts.push(createInlineData(imgData.data, imgData.mimeType));
+                        parts.push(createInlineData(imgData.data, imgData.mimeType, bodyRef));
                         console.log(`[ImageGen] 👕 Injected BODY reference for ${char.name} (source: ${char.bodyImage ? 'bodyImage' : 'masterImage fallback'})`);
                     }
                 }
@@ -1383,7 +1396,7 @@ The text prompt below describes the ACTUAL scene you must create.` });
                 const charNames = selectedChars.map(c => c.name).join(', ');
                 if (imgData) {
                     parts.push({ text: `[STYLE_REFERENCE]: Apply ONLY the artistic rendering style of this image (shading, colors, texture) while RIGIDLY MAINTAINING the facial identity from ${charNames ? `IDENTITY references for ${charNames}` : 'above'}. DO NOT let this image influence the person's face structure or identity.` });
-                    parts.push(createInlineData(imgData.data, imgData.mimeType));
+                    parts.push(createInlineData(imgData.data, imgData.mimeType, currentState.customStyleImage));
                     continuityInstruction += `(STYLE ISOLATION: APPLY STYLE TO ENVIRONMENT/RENDER ONLY) `;
                     console.log('[ImageGen] ✅ Style Image INJECTED into prompt');
                 } else {
@@ -1399,7 +1412,7 @@ The text prompt below describes the ACTUAL scene you must create.` });
                     if (imgData) {
                         const refLabel = `FACE_OVERRIDE: ${char.name.toUpperCase()}`;
                         parts.push({ text: `[${refLabel}]: !!! IDENTITY GUARD !!! ABSOLUTELY REJECT any facial variations introduced by style. RE-ESTABLISH this exact person. This face is the ONLY valid person for ${char.name}.` });
-                        parts.push(createInlineData(imgData.data, imgData.mimeType));
+                        parts.push(createInlineData(imgData.data, imgData.mimeType, char.faceImage));
                     }
                 }
             }
@@ -1443,7 +1456,7 @@ DO NOT invent new environments or change the location. This is NOT a different p
                     if (imgData) {
                         const refLabel = `MANDATORY_LOCATION_TEMPLATE`;
                         parts.push({ text: `[${refLabel}]: !!! CRITICAL ENVIRONMENT ANCHOR !!! This concept image defines the EXACT environment for ALL scenes in this location group. EVERY shot must exist within this space. Match: architectural style, layout, color palette, lighting, textures, and geometry. CHARACTER APPEARANCE comes from separate IDENTITY references - only use this for ENVIRONMENT. This location must be IDENTICAL across all scenes in the group.` });
-                        parts.push(createInlineData(imgData.data, imgData.mimeType));
+                        parts.push(createInlineData(imgData.data, imgData.mimeType, effectiveConceptImage));
                         continuityInstruction += `(CONCEPT ENVIRONMENT ENFORCED) `;
                     }
                 } else if (groupObj) {
@@ -1462,7 +1475,7 @@ DO NOT invent new environments or change the location. This is NOT a different p
                     if (imgData) {
                         const refLabel = `ENVIRONMENT_ONLY_LOCK`;
                         parts.push({ text: `[${refLabel}]: Use this as the RIGID template for architecture and lighting ONLY. Match: layout, wall textures, room geometry, furniture placement, and lighting source. ABSOLUTELY IGNORE characters, clothing, and small props. This is a background-only consistency anchor.` });
-                        parts.push(createInlineData(imgData.data, imgData.mimeType));
+                        parts.push(createInlineData(imgData.data, imgData.mimeType, firstSceneInGroup.generatedImage));
                         continuityInstruction += `(BACKGROUND LOCK FROM MASTER SCENE) `;
                     }
                 }
@@ -1502,7 +1515,7 @@ ${isReentry ? '⚠️ CHARACTER RE-ENTERING - Reset to this exact face!' : ''}
 DO NOT generate a different face. DO NOT create a "similar" face. This EXACT face only.`,
                             imageUrl: char.faceImage // Added for Fal.ai proxy
                         });
-                        parts.push(createInlineData(faceData.data, faceData.mimeType));
+                        parts.push(createInlineData(faceData.data, faceData.mimeType, char.faceImage));
                         console.log(`[ImageGen] 🔒 FACE ID injected FIRST for ${char.name}`);
                     }
                 }
@@ -1541,7 +1554,7 @@ DO NOT generate a different face. DO NOT create a "similar" face. This EXACT fac
                 for (const { ref, data: imgData } of refDataArray) {
                     if (imgData) {
                         parts.push({ text: `[${char.name.toUpperCase()} ${ref.type}]: Use for OUTFIT and POSE only. Face from FACE ID LOCK above. Description: ${char.description}` });
-                        parts.push(createInlineData(imgData.data, imgData.mimeType));
+                        parts.push(createInlineData(imgData.data, imgData.mimeType, ref.img));
                         referencePreamble += `(${char.name} ${ref.type}) `;
                     }
                 }
@@ -1578,7 +1591,7 @@ DO NOT generate a different face. DO NOT create a "similar" face. This EXACT fac
                         const refLabel = `MASTER VISUAL: ${prod.name.toUpperCase()} ${ref.type}`;
                         // STRONGER RACCORD FOR PROPS
                         parts.push({ text: `[${refLabel}]: AUTHORITATIVE visual anchor for ${prod.name} (PROP RACCORD). Match the design, colors, material, and branding from this image EXACTLY. Maintain consistent scale relative to the character.` });
-                        parts.push(createInlineData(imgData.data, imgData.mimeType));
+                        parts.push(createInlineData(imgData.data, imgData.mimeType, ref.img));
                         referencePreamble += `(PROP CONTINUITY: Match ${refLabel}) `;
                     }
                 }
@@ -1624,7 +1637,7 @@ INHERIT THESE:
                             imageUrl: prevSceneWithImage.generatedImage // Added for Fal.ai proxy
                         });
 
-                        parts.push(createInlineData(imgData.data, imgData.mimeType));
+                        parts.push(createInlineData(imgData.data, imgData.mimeType, prevSceneWithImage.generatedImage));
 
                         if (skippedFailedNote) {
                             console.log(`[ImageGen] ⚠️ Skipped failed scene, using Scene ${prevSceneWithImage.sceneNumber} as continuity ref`);
@@ -1647,7 +1660,7 @@ STEP 1: ANALYZE this image deeply. Identify the key visual attributes of the ${f
 STEP 2: GENERATE the new scene by strictly applying these identified attributes.
 Match the ${focus} EXACTLY as shown in this reference.
 IGNORE any prior text descriptions if they conflict with this visual DNA.` });
-                    parts.push(createInlineData(imgData.data, imgData.mimeType));
+                    parts.push(createInlineData(imgData.data, imgData.mimeType, sceneToUpdate.referenceImage));
                     // Add to top of parts if it's really important? No, index-wise handles it.
                 }
             }
