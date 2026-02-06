@@ -130,8 +130,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         } catch (error: any) {
             setCheckStatus('error');
             let msg = error.message || "Lỗi kết nối.";
-            if (msg.includes('403')) msg = "Lỗi 403: Quyền bị từ chối.";
-            else if (msg.includes('400')) msg = "Lỗi 400: API Key không hợp lệ.";
+
+            // Parse structured API error responses
+            if (msg.includes('401') || msg.includes('invalid_api_key') || msg.includes('Invalid API Key')) {
+                msg = "❌ API Key không hợp lệ. Vui lòng kiểm tra lại key từ Google AI Studio.";
+            } else if (msg.includes('403')) {
+                msg = "❌ Lỗi 403: Quyền bị từ chối. Key này có thể đã bị vô hiệu hoá.";
+            } else if (msg.includes('400')) {
+                msg = "❌ Lỗi 400: Định dạng request không hợp lệ.";
+            } else if (msg.includes('quota') || msg.includes('429')) {
+                msg = "⚠️ Hết quota. Vui lòng đợi vài phút hoặc dùng key khác.";
+            }
+
             setStatusMsg(msg);
         }
     };
@@ -223,7 +233,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
         } catch (error: any) {
             setGroqCheckStatus('error');
-            setGroqStatusMsg(error.message || "Lỗi kết nối Groq.");
+            let msg = error.message || "Lỗi kết nối Groq.";
+
+            // Parse structured API error responses
+            if (msg.includes('401') || msg.includes('invalid_api_key') || msg.includes('Invalid API Key')) {
+                msg = "❌ Groq API Key không hợp lệ. Vui lòng kiểm tra lại key từ console.groq.com.";
+            } else if (msg.includes('403')) {
+                msg = "❌ Lỗi 403: Quyền bị từ chối.";
+            } else if (msg.includes('quota') || msg.includes('429')) {
+                msg = "⚠️ Hết quota Groq. Vui lòng đợi hoặc dùng key khác.";
+            }
+
+            setGroqStatusMsg(msg);
         }
     };
     const handleFalVerify = async () => {

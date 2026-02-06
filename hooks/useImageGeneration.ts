@@ -2442,7 +2442,7 @@ IGNORE any prior text descriptions if they conflict with this visual DNA.` });
                                 let retryBoost = '';
 
                                 lastValidation.errors.forEach(e => {
-                                    const desc = e.description.toLowerCase();
+                                    const desc = (e.description || '').toLowerCase();
                                     if (e.type === 'character' || desc.includes('face') || desc.includes('person')) {
                                         negativeConstraints.push('wrong person', 'different face', 'extra people', 'ugly face', 'distorted face');
                                         // STRONG IDENTITY FIX
