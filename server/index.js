@@ -810,7 +810,18 @@ app.post(/^\/api\/proxy\/gommo\/(.*)/, async (req, res) => {
         const data = await response.json();
 
         if (data.error || !response.ok) {
-            console.error(`[Gommo Proxy] ❌ API Error (${response.status}) on path ${path}:`, JSON.stringify(data));
+            console.error(`[Gommo Proxy] ❌ API Error (${response.status}) on path ${path}:`);
+            console.error(`[Gommo Proxy] ❌ Error details:`, JSON.stringify(data, null, 2));
+            console.error(`[Gommo Proxy] ❌ Token used: ${injectedToken ? 'YES (injected)' : 'NO'}`);
+
+            // Check for specific error codes
+            const errorMsg = data.message || data.error || '';
+            if (errorMsg.includes('#1112') || errorMsg.includes('token')) {
+                console.error('[Gommo Proxy] 🔑 Likely TOKEN/AUTH issue - recaptcha token may be invalid or expired');
+            }
+            if (errorMsg.includes('upload') || errorMsg.includes('subject')) {
+                console.error('[Gommo Proxy] 🖼️ Likely SUBJECT/IMAGE issue - check base64 encoding or image size');
+            }
         } else {
             console.log(`[Gommo Proxy] ✅ Success on path ${path}`);
         }

@@ -321,13 +321,25 @@ export class GommoAI {
             console.log('[Gommo AI] ⚠️ No subjects provided - character reference will NOT be used');
         }
 
-        const result = await this.request<{ imageInfo: GommoImageResult; success: boolean }>(
-            GOMMO_ENDPOINTS.createImage,
-            payload
-        );
+        try {
+            const result = await this.request<{ imageInfo: GommoImageResult; success: boolean; error?: string; message?: string }>(
+                GOMMO_ENDPOINTS.createImage,
+                payload
+            );
 
-        console.log('[Gommo AI] Image job created:', result.imageInfo?.id_base);
-        return result.imageInfo;
+            // Check for error in response
+            if (result.error || !result.imageInfo) {
+                const errorMsg = result.message || result.error || 'Unknown create error';
+                console.error('[Gommo AI] ❌ createImage failed:', { error: errorMsg, fullResponse: JSON.stringify(result) });
+                throw new Error(`Error create ${errorMsg}`);
+            }
+
+            console.log('[Gommo AI] Image job created:', result.imageInfo?.id_base);
+            return result.imageInfo;
+        } catch (error: any) {
+            console.error('[Gommo AI] ❌ createImage exception:', error.message);
+            throw error;
+        }
     }
 
     /**
