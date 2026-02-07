@@ -354,6 +354,14 @@ export async function callImperialImage(
             throw new Error('Empty response from Imperial Ultra image API');
         }
 
+        // Check if content is markdown image format: ![image](data:image/jpeg;base64,...)
+        const markdownMatch = content.match(/!\[.*?\]\((data:image\/[^;]+;base64,[A-Za-z0-9+/=]+)\)/);
+        if (markdownMatch) {
+            console.log('[Imperial Ultra] ✅ Image received (markdown format)');
+            consecutiveFailures = 0;
+            return { base64: markdownMatch[1] };
+        }
+
         // Check if content is base64 image data
         if (content.startsWith('data:image')) {
             console.log('[Imperial Ultra] ✅ Image received (base64 data URL)');
