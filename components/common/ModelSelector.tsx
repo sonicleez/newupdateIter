@@ -37,6 +37,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         yellow: 'border-yellow-500 text-yellow-400',
         green: 'border-green-500 text-green-400',
         red: 'border-red-500 text-red-400',
+        cyan: 'border-cyan-500 text-cyan-400',
     };
 
     const colorBgClasses: Record<string, string> = {
@@ -45,6 +46,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         yellow: 'bg-yellow-500/10',
         green: 'bg-green-500/10',
         red: 'bg-red-500/10',
+        cyan: 'bg-cyan-500/10',
     };
 
     // Close on outside click
@@ -83,8 +85,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     {models.map((model, idx) => {
                         if (model.isHeader) {
                             return (
-                                <div 
-                                    key={model.value || idx} 
+                                <div
+                                    key={model.value || idx}
                                     className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b border-gray-800 mt-2 first:mt-0 ${model.color ? colorClasses[model.color].split(' ')[1] : 'text-gray-500'}`}
                                 >
                                     {model.label}
@@ -103,10 +105,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                     onChange(model.value);
                                     setIsOpen(false);
                                 }}
-                                className={`w-full text-left px-4 py-2.5 hover:bg-gray-800 transition-all border-l-2 ${isSelected 
-                                    ? (model.color ? `${colorClasses[model.color].split(' ')[0]} ${modelBgClass}` : 'bg-purple-600/20 border-purple-500') 
+                                className={`w-full text-left px-4 py-2.5 hover:bg-gray-800 transition-all border-l-2 ${isSelected
+                                    ? (model.color ? `${colorClasses[model.color].split(' ')[0]} ${modelBgClass}` : 'bg-purple-600/20 border-purple-500')
                                     : 'border-transparent'
-                                }`}
+                                    }`}
                             >
                                 <div className={`font-bold text-sm ${isSelected ? (model.color ? colorClasses[model.color].split(' ')[1] : 'text-purple-300') : 'text-gray-200'}`}>
                                     {model.label}
