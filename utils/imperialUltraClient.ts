@@ -287,7 +287,8 @@ export interface ImperialImageOptions {
 
 /**
  * Call Imperial Ultra for image generation
- * Uses Gemini 3 Pro Image model
+ * Uses Gemini 3 Pro Image model via OpenAI-compatible endpoint
+ * Same as Python: client.chat.completions.create(model="gemini-3-pro-image", extra_body={"size": "..."})
  */
 export async function callImperialImage(
     prompt: string,
@@ -298,19 +299,28 @@ export async function callImperialImage(
         aspectRatio = '16:9'
     } = options;
 
-    console.log(`[Imperial Ultra] Image request - model: ${model}, ratio: ${aspectRatio}`);
+    // Map aspect ratio to size (matching server expectations)
+    const sizeMap: Record<string, string> = {
+        '1:1': '1024x1024',
+        '16:9': '1280x720',
+        '9:16': '720x1280',
+        '4:3': '1216x896',
+        '3:4': '896x1216',
+    };
+    const size = sizeMap[aspectRatio] || '1024x1024';
 
-    // Gemini image generation via OpenAI-compatible endpoint
-    // Note: May need adjustment based on actual API response format
+    console.log(`[Imperial Ultra] 🎨 Image Request:`);
+    console.log(`  ├─ Model: ${model}`);
+    console.log(`  ├─ Aspect Ratio: ${aspectRatio} → Size: ${size}`);
+    console.log(`  └─ Prompt: ${prompt.substring(0, 60)}...`);
+
+    // OpenAI-compatible format (same as Python SDK)
     const requestBody = {
         model,
         messages: [
             { role: 'user', content: prompt }
         ],
-        // Image-specific params (if supported)
-        image_config: {
-            aspect_ratio: aspectRatio
-        }
+        size  // This goes into the request body directly
     };
 
     const controller = new AbortController();
@@ -331,40 +341,61 @@ export async function callImperialImage(
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(`Imperial Image API error (${response.status}): ${errorData.error?.message || response.statusText}`);
+            throw new Error(`Imperial Image API error (${response.status}): ${JSON.stringify(errorData)}`);
         }
 
         const data = await response.json();
+        console.log('[Imperial Ultra] Raw response:', JSON.stringify(data).substring(0, 200));
 
-        // Extract image from response
-        // Format depends on actual API response structure
+        // Extract image from response - content is the base64/URL string
         const content = data.choices?.[0]?.message?.content;
 
-        // Check if content contains base64 image data
-        if (content && content.startsWith('data:image')) {
-            console.log('[Imperial Ultra] ✅ Image received (base64)');
+        if (!content) {
+            throw new Error('Empty response from Imperial Ultra image API');
+        }
+
+        // Check if content is base64 image data
+        if (content.startsWith('data:image')) {
+            console.log('[Imperial Ultra] ✅ Image received (base64 data URL)');
+            consecutiveFailures = 0;
             return { base64: content };
         }
 
-        // Check if there's an image URL in the response
-        if (data.images?.[0]?.url) {
+        // Check if content is raw base64 (without data: prefix)
+        if (content.match(/^[A-Za-z0-9+/=]{100,}/)) {
+            console.log('[Imperial Ultra] ✅ Image received (raw base64)');
+            consecutiveFailures = 0;
+            return { base64: `data:image/png;base64,${content}` };
+        }
+
+        // Check if content is a URL
+        if (content.startsWith('http')) {
             console.log('[Imperial Ultra] ✅ Image received (URL)');
+            consecutiveFailures = 0;
+            return { url: content };
+        }
+
+        // Check for images array in response
+        if (data.images?.[0]?.url) {
+            console.log('[Imperial Ultra] ✅ Image received (images array)');
+            consecutiveFailures = 0;
             return { url: data.images[0].url };
         }
 
-        // Check for inline image in parts
+        // Check for inline image in parts (Gemini format)
         const parts = data.choices?.[0]?.message?.parts;
         if (parts) {
             for (const part of parts) {
                 if (part.inlineData?.data) {
                     const mimeType = part.inlineData.mimeType || 'image/png';
-                    console.log('[Imperial Ultra] ✅ Image received (inline)');
+                    console.log('[Imperial Ultra] ✅ Image received (inline parts)');
+                    consecutiveFailures = 0;
                     return { base64: `data:${mimeType};base64,${part.inlineData.data}` };
                 }
             }
         }
 
-        throw new Error('No image found in Imperial Ultra response');
+        throw new Error(`Unexpected response format: ${content.substring(0, 100)}`);
     } catch (error: any) {
         clearTimeout(timeoutId);
         consecutiveFailures++;
