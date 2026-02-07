@@ -515,6 +515,56 @@ export const callCharacterImageAPI = async (
     console.log(`[CharacterGen] Provider: ${provider}, Model: ${imageModel}`);
 
     // ═══════════════════════════════════════════════════════════════
+    // 👑 IMPERIAL ULTRA PATH - Premium Character Generation
+    // ═══════════════════════════════════════════════════════════════
+    if (provider === 'imperial') {
+        console.log('[CharacterGen] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('[CharacterGen] 👑 Using IMPERIAL ULTRA provider');
+
+        const { callImperialImage, isImperialUltraEnabled, checkImperialHealth, getImperialKeySource } = await import('./imperialUltraClient');
+
+        if (isImperialUltraEnabled()) {
+            const isHealthy = await checkImperialHealth();
+            if (isHealthy) {
+                try {
+                    const keySource = getImperialKeySource();
+                    console.log(`[CharacterGen] 👑 Imperial Character Request:`);
+                    console.log(`  ├─ Model: ${imageModel}`);
+                    console.log(`  ├─ Key Source: ${keySource.toUpperCase()}`);
+                    console.log(`  ├─ Aspect Ratio: ${aspectRatio}`);
+                    console.log(`  └─ Prompt: ${prompt.substring(0, 60)}...`);
+
+                    const result = await callImperialImage(prompt, {
+                        model: imageModel,
+                        aspectRatio: aspectRatio
+                    });
+
+                    if (result.base64) {
+                        console.log('[CharacterGen] 👑 ✅ Imperial character generated (base64)');
+                        console.log('[CharacterGen] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                        return result.base64;
+                    } else if (result.url) {
+                        console.log('[CharacterGen] 👑 ✅ Imperial character generated (URL)');
+                        const base64 = await urlToBase64(result.url);
+                        console.log('[CharacterGen] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                        return base64;
+                    }
+                    throw new Error('No image in Imperial response');
+                } catch (error: any) {
+                    console.error('[CharacterGen] 👑 ❌ Imperial failed:', error.message);
+                    console.log('[CharacterGen] 📉 Fallback: Imperial → Fal.ai');
+                }
+            } else {
+                console.warn('[CharacterGen] ⚠️ Imperial Ultra unhealthy, falling back...');
+            }
+        } else {
+            console.warn('[CharacterGen] ⚠️ Imperial Ultra disabled, falling back...');
+        }
+        console.log('[CharacterGen] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        // Fall through to other providers below
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // GOMMO PATH
     // ═══════════════════════════════════════════════════════════════
     if (provider === 'gommo') {

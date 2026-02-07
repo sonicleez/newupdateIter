@@ -31,11 +31,12 @@ const cleanPromptForImageGen = (prompt: string): string => {
 };
 
 // Helper: Determine which provider to use based on model ID
-const getProviderFromModel = (modelId: string): 'gemini' | 'gommo' | 'fal' => {
+const getProviderFromModel = (modelId: string): 'gemini' | 'gommo' | 'fal' | 'imperial' => {
     const model = IMAGE_MODELS.find(m => m.value === modelId);
     if (!model) return 'gemini';
 
     const p = model.provider;
+    if (p === 'imperial') return 'imperial';
     if (p === 'google') return 'gommo'; // Google models via Gommo Proxy
     return (p as 'gemini' | 'gommo' | 'fal') || 'gemini';
 };
@@ -282,6 +283,59 @@ export function useImageGeneration(
             hasToken: !!gommoCredentials?.accessToken,
             tokenLength: gommoCredentials?.accessToken?.length || 0
         });
+
+        // ═══════════════════════════════════════════════════════════════
+        // 👑 IMPERIAL ULTRA PATH: Premium Gemini 3 Image Generation
+        // ═══════════════════════════════════════════════════════════════
+        if (provider === 'imperial') {
+            console.log('[ImageGen] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('[ImageGen] 👑 Using IMPERIAL ULTRA provider');
+
+            // Dynamically import to avoid circular deps
+            const { callImperialImage, isImperialUltraEnabled, checkImperialHealth, getImperialKeySource } = await import('../utils/imperialUltraClient');
+
+            if (!isImperialUltraEnabled()) {
+                console.warn('[ImageGen] ⚠️ Imperial Ultra disabled, falling back to Fal.ai');
+                // Fall through to Fal.ai below
+            } else {
+                const isHealthy = await checkImperialHealth();
+                if (!isHealthy) {
+                    console.warn('[ImageGen] ⚠️ Imperial Ultra unhealthy, falling back to Fal.ai');
+                    // Fall through to Fal.ai below
+                } else {
+                    try {
+                        const keySource = getImperialKeySource();
+                        console.log(`[ImageGen] 👑 Imperial Image Request:`);
+                        console.log(`  ├─ Model: ${model}`);
+                        console.log(`  ├─ Key Source: ${keySource.toUpperCase()}`);
+                        console.log(`  ├─ Aspect Ratio: ${aspectRatio}`);
+                        console.log(`  └─ Prompt: ${prompt.substring(0, 80)}...`);
+
+                        const result = await callImperialImage(prompt, {
+                            model: model,
+                            aspectRatio: aspectRatio
+                        });
+
+                        if (result.base64) {
+                            console.log('[ImageGen] 👑 ✅ Imperial image generated (base64)');
+                            return { imageUrl: result.base64 };
+                        } else if (result.url) {
+                            console.log('[ImageGen] 👑 ✅ Imperial image generated (URL)');
+                            // Convert to base64 for consistency
+                            const { urlToBase64 } = await import('../utils/gommoAI');
+                            const base64 = await urlToBase64(result.url);
+                            return { imageUrl: base64 };
+                        }
+                        throw new Error('No image in Imperial response');
+                    } catch (error: any) {
+                        console.error('[ImageGen] 👑 ❌ Imperial image failed:', error.message);
+                        console.log('[ImageGen] 📉 Fallback: Imperial → Fal.ai');
+                        // Fall through to Fal.ai below
+                    }
+                }
+            }
+            console.log('[ImageGen] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        }
 
         // ═══════════════════════════════════════════════════════════════
         // FAL.AI PATH: Optimized for Flux.1 Sequential Consistency

@@ -135,6 +135,13 @@ export const IMAGE_PROVIDERS = [
 // IMAGE_MODELS - Reorganized by Provider with Colors (Real-time from Gommo API)
 export const IMAGE_MODELS = [
     // ═══════════════════════════════════════════════════════════════════════════
+    // 👑 IMPERIAL ULTRA - Premium Gemini 3 Access
+    // ═══════════════════════════════════════════════════════════════════════════
+    { value: '__header_imperial__', label: '─── 👑 IMPERIAL ULTRA ───', provider: 'imperial', isHeader: true, color: 'cyan' },
+    { value: 'gemini-3-pro-image', label: '👑 Imperial Pro Image (Best)', provider: 'imperial', description: 'Gemini 3 Pro - Premium Quality', supportsEdit: true, supportsSubject: true, color: 'cyan' },
+    { value: 'gemini-3-flash-image', label: '👑 Imperial Flash Image (Fast)', provider: 'imperial', description: 'Gemini 3 Flash - Quick Gen', supportsEdit: true, supportsSubject: false, color: 'cyan' },
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // 🔵 GOOGLE / GEMINI - Direct API
     // ═══════════════════════════════════════════════════════════════════════════
     { value: '__header_google__', label: '─── 🔵 GOOGLE / GEMINI ───', provider: 'google', isHeader: true, color: 'blue' },
@@ -153,7 +160,7 @@ export const IMAGE_MODELS = [
     // 🟡 GOMMO PROXY - Multi-Provider Hub
     // ═══════════════════════════════════════════════════════════════════════════
     { value: '__header_gommo__', label: '─── 🟡 GOMMO PROXY ───', provider: 'gommo', isHeader: true, color: 'yellow' },
-    
+
     // Google via Gommo
     { value: 'google_image_gen_banana_pro', label: '🟡 Nano Banana Pro (4K)', provider: 'gommo', description: 'High Quality - 250 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
     { value: 'google_image_gen_banana_pro_reason', label: '🟡 Nano Banana Pro Reason', provider: 'gommo', description: 'AI Reasoning - 150 credits', supportsEdit: true, supportsSubject: true, color: 'yellow' },
@@ -194,6 +201,9 @@ export const IMAGE_MODELS = [
 // CHARACTER_MODELS - Models for character/lora generation
 // Fixed to include all models that support consistency
 export const CHARACTER_MODELS = [
+    // Imperial Ultra (Premium)
+    { value: 'gemini-3-pro-image', label: '👑 Imperial Pro Image', provider: 'imperial', supportsLora: true },
+
     // Fal.ai Flux (Recommended)
     { value: 'fal-ai/flux-general', label: '🚀 Flux.1 [Dev] Consistency', provider: 'fal', supportsLora: true },
     { value: 'fal-ai/flux-pro/v1.1-ultra', label: '🚀 Flux.1.1 Ultra', provider: 'fal', supportsLora: true },
