@@ -5,7 +5,7 @@ import { supabase } from '../../utils/supabaseClient';
 import { PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from '../../constants/presets';
 import { User, Key, Calendar, ShieldCheck, CreditCard, LogOut, BarChart3, Image, FileText, Layers, Package, Zap, Crown, CheckCircle, XCircle } from 'lucide-react';
 import { GommoAI } from '../../utils/gommoAI';
-import { isImperialUltraEnabled, setImperialUltraEnabled, checkImperialHealth, getImperialStatus } from '../../utils/imperialUltraClient';
+import { isImperialUltraEnabled, setImperialUltraEnabled, checkImperialHealth, getImperialStatus, setImperialApiKey, getImperialApiKey } from '../../utils/imperialUltraClient';
 
 export interface UserProfileModalProps {
     isOpen: boolean;
@@ -79,6 +79,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     const [imperialEnabled, setImperialEnabled] = useState(false);
     const [imperialHealthy, setImperialHealthy] = useState(true);
     const [imperialChecking, setImperialChecking] = useState(false);
+    const [localImperialKey, setLocalImperialKey] = useState('');
+    const [imperialKeySaved, setImperialKeySaved] = useState(false);
+    const hasAdminImperialKey = !!profile?.assigned_imperial_key;
 
     useEffect(() => {
         if (isOpen) {
@@ -91,6 +94,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             // Load Imperial Ultra state
             setImperialEnabled(isImperialUltraEnabled());
             checkImperialHealth().then(healthy => setImperialHealthy(healthy));
+            setLocalImperialKey(localStorage.getItem('imperialApiKey') || '');
+            setImperialKeySaved(false);
         }
     }, [isOpen, apiKey]);
 
@@ -588,6 +593,43 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <p className="text-[11px] text-gray-500 mb-2">
                         Premium API với Gemini 3 Pro + Claude 4.5. Auto-fallback về Groq khi offline.
                     </p>
+
+                    {/* Admin-assigned key notice */}
+                    {hasAdminImperialKey && (
+                        <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-2 mb-2 flex items-center space-x-2">
+                            <ShieldCheck className="text-blue-400 flex-shrink-0" size={14} />
+                            <span className="text-[11px] text-blue-300">🔑 Đang sử dụng key được Admin cấp</span>
+                        </div>
+                    )}
+
+                    {/* User API Key Input */}
+                    <div className="relative mb-2">
+                        <input
+                            type="password"
+                            value={localImperialKey}
+                            onChange={(e) => {
+                                setLocalImperialKey(e.target.value);
+                                setImperialKeySaved(false);
+                            }}
+                            placeholder={hasAdminImperialKey ? 'Key từ Admin đang được sử dụng...' : 'sk-xxxx... (Optional)'}
+                            disabled={hasAdminImperialKey}
+                            className={`w-full px-3 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all ${hasAdminImperialKey ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        />
+                        <button
+                            onClick={() => {
+                                setImperialApiKey(localImperialKey);
+                                setImperialKeySaved(true);
+                            }}
+                            disabled={hasAdminImperialKey || !localImperialKey}
+                            className={`absolute right-1.5 top-1.5 bottom-1.5 px-3 rounded-md font-bold text-[10px] uppercase tracking-wider transition-all ${imperialKeySaved ? 'bg-green-600 text-white' :
+                                    hasAdminImperialKey || !localImperialKey ? 'bg-gray-700 text-gray-500' :
+                                        'bg-amber-600 hover:bg-amber-500 text-white'
+                                }`}
+                        >
+                            {imperialKeySaved ? '✓' : 'Save'}
+                        </button>
+                    </div>
+
                     {imperialEnabled && (
                         <div className="bg-amber-900/10 border border-amber-700/30 rounded-lg p-2 text-[11px] text-amber-400/80">
                             👑 Imperial Ultra đang hoạt động. Text generation sẽ ưu tiên dùng Gemini 3 Flash.

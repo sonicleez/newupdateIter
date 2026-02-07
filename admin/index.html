@@ -439,6 +439,12 @@
                 <label>Chọn System Key</label>
                 <select id="systemKeyDropdown"></select>
             </div>
+            <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #333;">
+                <label>👑 Imperial Ultra API Key (Optional)</label>
+                <input type="text" id="imperialApiKey" placeholder="sk-xxxx... (để trống = dùng key mặc định)">
+                <p style="font-size: 11px; color: #666; margin-top: 4px;">Gán key riêng từ Antigravity Admin cho user
+                    này</p>
+            </div>
             <div class="modal-actions">
                 <button class="btn-secondary" onclick="closeModal()">Hủy</button>
                 <button class="btn-primary" onclick="saveAssignment()">Lưu</button>
@@ -517,7 +523,7 @@
         async function loadUsers() {
             const { data: users, error } = await supabase
                 .from('profiles')
-                .select('id, email, subscription_tier, assigned_api_key, system_key_id')
+                .select('id, email, subscription_tier, assigned_api_key, system_key_id, assigned_imperial_key')
                 .order('email');
 
             if (error) {
@@ -556,7 +562,7 @@
                         <td>${keySource}</td>
                         <td>
                             <button class="btn-primary" style="padding:5px 10px; font-size:12px" 
-                                onclick="openAssignModal('${user.id}', '${user.email}', '${user.assigned_api_key || ''}')">
+                                onclick="openAssignModal('${user.id}', '${user.email}', '${user.assigned_api_key || ''}', '${user.assigned_imperial_key || ''}')">
                                 Gán Key
                             </button>
                             ${user.assigned_api_key || user.system_key_id ? `
@@ -676,10 +682,11 @@
         }
 
         // Open Assign Modal
-        function openAssignModal(userId, email, currentKey) {
+        function openAssignModal(userId, email, currentKey, currentImperialKey) {
             document.getElementById('editUserId').value = userId;
             document.getElementById('editUserEmail').value = email;
             document.getElementById('directApiKey').value = currentKey || '';
+            document.getElementById('imperialApiKey').value = currentImperialKey || '';
             document.getElementById('assignKeyModal').classList.add('active');
         }
 
@@ -716,6 +723,14 @@
                 updateData = { system_key_id: systemKeyId, assigned_api_key: null };
             }
 
+            // Add Imperial key if provided
+            const imperialKey = document.getElementById('imperialApiKey').value.trim();
+            if (imperialKey) {
+                updateData.assigned_imperial_key = imperialKey;
+            } else {
+                updateData.assigned_imperial_key = null;
+            }
+
             const { error } = await supabase
                 .from('profiles')
                 .update(updateData)
@@ -736,7 +751,7 @@
 
             const { error } = await supabase
                 .from('profiles')
-                .update({ assigned_api_key: null, system_key_id: null })
+                .update({ assigned_api_key: null, system_key_id: null, assigned_imperial_key: null })
                 .eq('id', userId);
 
             if (error) {

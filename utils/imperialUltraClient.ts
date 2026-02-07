@@ -14,7 +14,7 @@
 
 const IMPERIAL_CONFIG = {
     baseUrl: 'https://ag.itera102.cloud',
-    apiKey: 'sk-imperial-ultra-vault-2026',
+    defaultApiKey: 'sk-imperial-ultra-vault-2026',
     timeout: 120000, // 120s as configured on server
     models: {
         // Text models
@@ -33,6 +33,53 @@ const IMPERIAL_CONFIG = {
         flashThinking: 'gemini-2.5-flash-thinking', // Chain of thought
     }
 };
+
+/**
+ * Get API key with priority:
+ * 1. Admin-assigned key (from Supabase)
+ * 2. User-input key (from localStorage)
+ * 3. Default fallback key
+ */
+export function getImperialApiKey(): string {
+    if (typeof window === 'undefined') return IMPERIAL_CONFIG.defaultApiKey;
+
+    // Priority 1: Admin-assigned key (stored from Supabase profile)
+    const assignedKey = localStorage.getItem('assignedImperialKey');
+    if (assignedKey) {
+        return assignedKey;
+    }
+
+    // Priority 2: User-input key
+    const userKey = localStorage.getItem('imperialApiKey');
+    if (userKey) {
+        return userKey;
+    }
+
+    // Priority 3: Default fallback
+    return IMPERIAL_CONFIG.defaultApiKey;
+}
+
+/**
+ * Set user's Imperial API key
+ */
+export function setImperialApiKey(key: string): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('imperialApiKey', key);
+    console.log('[Imperial Ultra] User API key saved');
+}
+
+/**
+ * Set admin-assigned Imperial API key (called from App.tsx on login)
+ */
+export function setAssignedImperialKey(key: string | null): void {
+    if (typeof window === 'undefined') return;
+    if (key) {
+        localStorage.setItem('assignedImperialKey', key);
+        console.log('[Imperial Ultra] Admin-assigned key loaded');
+    } else {
+        localStorage.removeItem('assignedImperialKey');
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // HEALTH CHECK & STATUS
@@ -168,7 +215,7 @@ export async function callImperialText(
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${IMPERIAL_CONFIG.apiKey}`
+                'Authorization': `Bearer ${getImperialApiKey()}`
             },
             body: JSON.stringify(requestBody),
             signal: controller.signal
@@ -247,7 +294,7 @@ export async function callImperialImage(
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${IMPERIAL_CONFIG.apiKey}`
+                'Authorization': `Bearer ${getImperialApiKey()}`
             },
             body: JSON.stringify(requestBody),
             signal: controller.signal
@@ -353,7 +400,7 @@ export async function callImperialVision(
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${IMPERIAL_CONFIG.apiKey}`
+                'Authorization': `Bearer ${getImperialApiKey()}`
             },
             body: JSON.stringify(requestBody),
             signal: controller.signal

@@ -33,6 +33,7 @@ import { AdminDashboard } from './components/admin/AdminDashboard';
 import { IntelligenceSidebar, IntelligenceWorkspace, AppMode } from './components/intelligence';
 import { SourcingWorkspace } from './components/sourcing';
 import { syncDirectorBrain } from './utils/directorBrain';
+import { setAssignedImperialKey } from './utils/imperialUltraClient';
 import { APP_NAME, PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from './constants/presets';
 import { handleDownloadAll, saveProjectPackage } from './utils/zipUtils';
 import {
@@ -568,6 +569,17 @@ const App: React.FC = () => {
                             setUserApiKey(profile.assigned_api_key);
                             localStorage.setItem('geminiApiKey', profile.assigned_api_key);
                             console.log('[API Key] ✅ Loaded ASSIGNED key (directly in profile)');
+                        }
+
+                        // Load Imperial Ultra admin-assigned key if present
+                        if (profile.assigned_imperial_key) {
+                            setAssignedImperialKey(profile.assigned_imperial_key);
+                            console.log('[Imperial] ✅ Loaded admin-assigned Imperial key');
+                        } else {
+                            setAssignedImperialKey(null);
+                        }
+
+                        if (profile.assigned_api_key) {
                             return;
                         }
 
