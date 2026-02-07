@@ -363,12 +363,18 @@ export const IMAGE_MODELS = [
 ];
 
 export const SCRIPT_MODELS = [
-    { value: 'llama-3.3-70b-versatile', label: '🚀 Llama 3.3 70B (Groq) - Best All-rounder' },
-    { value: 'gemini-1.5-pro-latest', label: '💎 Gemini 1.5 Pro (Web Intelligence) - Best Logic' },
-    { value: 'qwen/qwen3-32b', label: '🧠 Qwen 3 32B (Groq) - Best for Logic' },
-    { value: 'openai/gpt-oss-120b', label: '🏟️ GPT-OSS 120B (Groq) - Large Scale' },
-    { value: 'llama-3.1-70b-versatile', label: '🚀 Llama 3.1 70B (Groq)' },
-    { value: 'llama-3.1-8b-instant', label: '⚡ Llama 3.1 8B (Groq) - Fast' },
+    // Imperial Ultra (Premium)
+    { value: 'gemini-3-pro-high', label: '👑 Imperial Ultra Pro (Best)', provider: 'imperial', description: 'Gemini 3 Pro - Premium thinking' },
+    { value: 'gemini-3-flash', label: '👑 Imperial Ultra Flash (Fast)', provider: 'imperial', description: 'Gemini 3 Flash - Quick responses' },
+
+    // Gemini Native (Direct API)
+    { value: 'gemini-1.5-pro-latest', label: '🔵 Gemini 1.5 Pro (Native)', provider: 'gemini', description: 'Direct Google API - Best Logic' },
+    { value: 'gemini-1.5-flash', label: '🔵 Gemini 1.5 Flash (Native)', provider: 'gemini', description: 'Direct Google API - Fast' },
+
+    // Groq (Free tier)
+    { value: 'llama-3.3-70b-versatile', label: '🚀 Llama 3.3 70B (Groq)', provider: 'groq', description: 'Free - Best All-rounder' },
+    { value: 'qwen/qwen3-32b', label: '🧠 Qwen 3 32B (Groq)', provider: 'groq', description: 'Free - Best for Logic' },
+    { value: 'llama-3.1-8b-instant', label: '⚡ Llama 3.1 8B (Groq)', provider: 'groq', description: 'Free - Fast' },
 ];
 
 export const ASPECT_RATIOS = [
