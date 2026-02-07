@@ -35,6 +35,21 @@ const IMPERIAL_CONFIG = {
 };
 
 /**
+ * Get API key source type for debugging
+ */
+export function getImperialKeySource(): 'admin' | 'user' | 'default' {
+    if (typeof window === 'undefined') return 'default';
+
+    if (localStorage.getItem('assignedImperialKey')) {
+        return 'admin';
+    }
+    if (localStorage.getItem('imperialApiKey')) {
+        return 'user';
+    }
+    return 'default';
+}
+
+/**
  * Get API key with priority:
  * 1. Admin-assigned key (from Supabase)
  * 2. User-input key (from localStorage)
@@ -187,7 +202,15 @@ export async function callImperialText(
         jsonMode = false
     } = options;
 
-    console.log(`[Imperial Ultra] Text request - model: ${model}`);
+    const apiKey = getImperialApiKey();
+    const keySource = getImperialKeySource();
+    const keyPreview = apiKey.substring(0, 12) + '...' + apiKey.slice(-4);
+
+    console.log(`[Imperial Ultra] 🚀 Text Request:`);
+    console.log(`  ├─ Model: ${model}`);
+    console.log(`  ├─ API Key: ${keyPreview} (${keySource.toUpperCase()})`);
+    console.log(`  ├─ JSON Mode: ${jsonMode}`);
+    console.log(`  └─ Prompt length: ${prompt.length} chars`);
 
     const messages: Array<{ role: string; content: string }> = [];
 
@@ -230,8 +253,12 @@ export async function callImperialText(
 
         const data = await response.json();
         const content = data.choices?.[0]?.message?.content || '';
+        const usage = data.usage || {};
 
-        console.log(`[Imperial Ultra] ✅ Text response received (${content.length} chars)`);
+        console.log(`[Imperial Ultra] ✅ Text Response:`);
+        console.log(`  ├─ Content: ${content.length} chars`);
+        console.log(`  ├─ Prompt tokens: ${usage.prompt_tokens || 'N/A'}`);
+        console.log(`  └─ Completion tokens: ${usage.completion_tokens || 'N/A'}`);
         consecutiveFailures = 0;
 
         return content;
@@ -363,7 +390,15 @@ export async function callImperialVision(
     images: Array<{ data: string; mimeType: string }>,
     model: string = IMPERIAL_CONFIG.models.textFast
 ): Promise<string> {
-    console.log(`[Imperial Ultra] Vision request - ${images.length} image(s), model: ${model}`);
+    const apiKey = getImperialApiKey();
+    const keySource = getImperialKeySource();
+    const keyPreview = apiKey.substring(0, 12) + '...' + apiKey.slice(-4);
+
+    console.log(`[Imperial Ultra] 🎨 Vision Request:`);
+    console.log(`  ├─ Model: ${model}`);
+    console.log(`  ├─ API Key: ${keyPreview} (${keySource.toUpperCase()})`);
+    console.log(`  ├─ Images: ${images.length}`);
+    console.log(`  └─ Prompt length: ${prompt.length} chars`);
 
     // Build content with images
     const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];

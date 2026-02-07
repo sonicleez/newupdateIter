@@ -8,6 +8,7 @@ import { GoogleGenAI } from "@google/genai";
 import {
     isImperialUltraEnabled,
     callImperialText,
+    callImperialVision,
     checkImperialHealth
 } from './imperialUltraClient';
 
@@ -219,23 +220,42 @@ export const callGroqText = async (
     // IMPERIAL ULTRA PATH (Premium API Proxy) - TRY FIRST
     // ═══════════════════════════════════════════════════════════════
     if (isImperialUltraEnabled()) {
+        console.log('[SmartAI] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('[SmartAI] 👑 Imperial Ultra ENABLED - Checking health...');
         try {
             const isHealthy = await checkImperialHealth();
             if (isHealthy) {
-                console.log('[SmartAI] 👑 Routing to Imperial Ultra (Premium)');
+                // Map requested model to Imperial model
+                let imperialModel: string | undefined;
+                if (modelToUse.includes('pro')) {
+                    imperialModel = 'gemini-3-pro-high'; // Best thinking
+                } else if (modelToUse.includes('flash')) {
+                    imperialModel = 'gemini-3-flash'; // Fast responses
+                }
+                // undefined = use Imperial's default (gemini-3-flash)
+
+                console.log(`[SmartAI] 👑 Routing to Imperial Ultra:`);
+                console.log(`  ├─ Original request: ${modelToUse || 'default'}`);
+                console.log(`  ├─ Imperial model: ${imperialModel || 'gemini-3-flash (default)'}`);
+                console.log(`  └─ Prompt: ${prompt.substring(0, 80)}...`);
+
                 const result = await callImperialText(prompt, {
                     systemPrompt,
                     jsonMode: isJsonMode,
-                    model: modelToUse.includes('gemini') ? undefined : undefined // Use default model
+                    model: imperialModel
                 });
+                console.log('[SmartAI] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                 return result;
             } else {
-                console.warn('[SmartAI] ⚠️ Imperial Ultra unhealthy, using fallback...');
+                console.warn('[SmartAI] ⚠️ Imperial Ultra unhealthy, falling back...');
             }
         } catch (error: any) {
-            console.warn('[SmartAI] ⚠️ Imperial Ultra failed, falling back:', error.message);
+            console.warn('[SmartAI] ⚠️ Imperial Ultra failed:', error.message);
+            console.log('[SmartAI] 📉 Fallback chain: Imperial → Gemini → Groq');
             // Continue to Gemini/Groq fallback
         }
+    } else {
+        console.log('[SmartAI] Imperial Ultra: DISABLED (toggle off or not configured)');
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -359,45 +379,70 @@ export const callSmartVision = async (
     modelId: string = 'gemini-1.5-flash'
 ): Promise<string> => {
     // ═══════════════════════════════════════════════════════════════
-    // GEMINI PATH (Prioritized)
+    // IMPERIAL ULTRA PATH (Premium) - TRY FIRST
     // ═══════════════════════════════════════════════════════════════
-    if (modelId.includes('gemini')) {
-        console.log(`[SmartVision] 💎 Routing to Google Gemini: ${modelId}`);
+    if (isImperialUltraEnabled()) {
+        console.log('[SmartVision] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('[SmartVision] 👑 Imperial Ultra ENABLED - Checking health...');
+        try {
+            const isHealthy = await checkImperialHealth();
+            if (isHealthy) {
+                console.log(`[SmartVision] 👑 Routing to Imperial Ultra Vision:`);
+                console.log(`  ├─ Images: ${images.length}`);
+                console.log(`  └─ Prompt: ${prompt.substring(0, 60)}...`);
 
-        const apiKey = typeof window !== 'undefined' ? (localStorage.getItem('geminiApiKey') || localStorage.getItem('googleApiKey')) : (process.env as any).GEMINI_API_KEY;
-        let shouldUseGemini = true;
-
-        if (!apiKey) {
-            console.warn('[SmartVision] ⚠️ No Gemini API Key found. Falling back to Groq Vision...');
-            shouldUseGemini = false;
-        }
-
-        if (shouldUseGemini && apiKey) {
-            try {
-                const client = new GoogleGenAI({ apiKey });
-
-                // Construct parts: images then text
-                const parts: any[] = images.map(img => ({
-                    inlineData: { data: img.data, mimeType: img.mimeType }
-                }));
-                parts.push({ text: prompt });
-
-                const response = await client.models.generateContent({
-                    model: modelId, // e.g. gemini-1.5-flash
-                    contents: [{ role: 'user', parts }],
-                });
-
-                const text = response.text;
-                if (!text) throw new Error("Empty response from Gemini Vision");
-
-                console.log(`✅ [Gemini Vision] Success (${text.length} chars)`);
-                return text;
-
-            } catch (error: any) {
-                console.error('[Gemini Vision] Error:', error);
-                console.warn('[SmartVision] ⚠️ Gemini failed. Falling back to Groq Vision...');
-                // Fall through to Groq
+                const result = await callImperialVision(prompt, images, 'gemini-3-flash');
+                console.log('[SmartVision] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                return result;
+            } else {
+                console.warn('[SmartVision] ⚠️ Imperial Ultra unhealthy, falling back...');
             }
+        } catch (error: any) {
+            console.warn('[SmartVision] ⚠️ Imperial Ultra Vision failed:', error.message);
+            console.log('[SmartVision] 📉 Fallback chain: Imperial → Gemini → Groq');
+        }
+    } else {
+        console.log('[SmartVision] Imperial Ultra: DISABLED');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GEMINI PATH (Fallback 1)
+    // ═══════════════════════════════════════════════════════════════
+    console.log(`[SmartVision] 💎 Routing to Google Gemini: ${modelId}`);
+
+    const apiKey = typeof window !== 'undefined' ? (localStorage.getItem('geminiApiKey') || localStorage.getItem('googleApiKey')) : (process.env as any).GEMINI_API_KEY;
+    let shouldUseGemini = true;
+
+    if (!apiKey) {
+        console.warn('[SmartVision] ⚠️ No Gemini API Key found. Falling back to Groq Vision...');
+        shouldUseGemini = false;
+    }
+
+    if (shouldUseGemini && apiKey) {
+        try {
+            const client = new GoogleGenAI({ apiKey });
+
+            // Construct parts: images then text
+            const parts: any[] = images.map(img => ({
+                inlineData: { data: img.data, mimeType: img.mimeType }
+            }));
+            parts.push({ text: prompt });
+
+            const response = await client.models.generateContent({
+                model: modelId, // e.g. gemini-1.5-flash
+                contents: [{ role: 'user', parts }],
+            });
+
+            const text = response.text;
+            if (!text) throw new Error("Empty response from Gemini Vision");
+
+            console.log(`✅ [Gemini Vision] Success (${text.length} chars)`);
+            return text;
+
+        } catch (error: any) {
+            console.error('[Gemini Vision] Error:', error);
+            console.warn('[SmartVision] ⚠️ Gemini failed. Falling back to Groq Vision...');
+            // Fall through to Groq
         }
     }
 
