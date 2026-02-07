@@ -3,8 +3,9 @@ import { GoogleGenAI } from "@google/genai";
 import Modal from '../Modal';
 import { supabase } from '../../utils/supabaseClient';
 import { PRIMARY_GRADIENT, PRIMARY_GRADIENT_HOVER } from '../../constants/presets';
-import { User, Key, Calendar, ShieldCheck, CreditCard, LogOut, BarChart3, Image, FileText, Layers, Package, Zap } from 'lucide-react';
+import { User, Key, Calendar, ShieldCheck, CreditCard, LogOut, BarChart3, Image, FileText, Layers, Package, Zap, Crown, CheckCircle, XCircle } from 'lucide-react';
 import { GommoAI } from '../../utils/gommoAI';
+import { isImperialUltraEnabled, setImperialUltraEnabled, checkImperialHealth, getImperialStatus } from '../../utils/imperialUltraClient';
 
 export interface UserProfileModalProps {
     isOpen: boolean;
@@ -74,6 +75,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     const [falCheckStatus, setFalCheckStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
     const [falStatusMsg, setFalStatusMsg] = useState('');
 
+    // Imperial Ultra state
+    const [imperialEnabled, setImperialEnabled] = useState(false);
+    const [imperialHealthy, setImperialHealthy] = useState(true);
+    const [imperialChecking, setImperialChecking] = useState(false);
+
     useEffect(() => {
         if (isOpen) {
             setCheckStatus('idle');
@@ -81,6 +87,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             setLocalApiKey(apiKey);
             setLocalGroqApiKey(localStorage.getItem('groqApiKey') || '');
             setLocalFalApiKey(localStorage.getItem('falApiKey') || '');
+
+            // Load Imperial Ultra state
+            setImperialEnabled(isImperialUltraEnabled());
+            checkImperialHealth().then(healthy => setImperialHealthy(healthy));
         }
     }, [isOpen, apiKey]);
 
@@ -539,6 +549,48 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                                 'bg-blue-900/10 border-blue-800/30 text-blue-400'
                             }`}>
                             {falStatusMsg}
+                        </div>
+                    )}
+                </div>
+
+                {/* Imperial Ultra API Section */}
+                <div className="pt-4 border-t border-gray-700/50 mt-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                            <div className="p-1.5 bg-amber-500/10 rounded">
+                                <Crown className="text-amber-400" size={14} />
+                            </div>
+                            <h4 className="text-xs font-bold text-gray-300 uppercase">Imperial Ultra API</h4>
+                            {imperialEnabled && (
+                                <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full flex items-center space-x-1 ${imperialHealthy ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                    {imperialHealthy ? <CheckCircle size={10} /> : <XCircle size={10} />}
+                                    <span>{imperialHealthy ? 'Healthy' : 'Offline'}</span>
+                                </span>
+                            )}
+                        </div>
+                        <button
+                            onClick={async () => {
+                                const newState = !imperialEnabled;
+                                setImperialEnabled(newState);
+                                setImperialUltraEnabled(newState);
+                                if (newState) {
+                                    setImperialChecking(true);
+                                    const healthy = await checkImperialHealth();
+                                    setImperialHealthy(healthy);
+                                    setImperialChecking(false);
+                                }
+                            }}
+                            className={`relative w-12 h-6 rounded-full transition-colors ${imperialEnabled ? 'bg-amber-500' : 'bg-gray-700'}`}
+                        >
+                            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${imperialEnabled ? 'right-1' : 'left-1'}`} />
+                        </button>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mb-2">
+                        Premium API với Gemini 3 Pro + Claude 4.5. Auto-fallback về Groq khi offline.
+                    </p>
+                    {imperialEnabled && (
+                        <div className="bg-amber-900/10 border border-amber-700/30 rounded-lg p-2 text-[11px] text-amber-400/80">
+                            👑 Imperial Ultra đang hoạt động. Text generation sẽ ưu tiên dùng Gemini 3 Flash.
                         </div>
                     )}
                 </div>

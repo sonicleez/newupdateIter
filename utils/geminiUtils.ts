@@ -1,9 +1,15 @@
 /**
  * Utility functions for image handling and caching
  * Migrated from Google AI to Groq/Fal.ai - SDK removed
+ * With Imperial Ultra API as premium provider (fallback enabled)
  */
 
 import { GoogleGenAI } from "@google/genai";
+import {
+    isImperialUltraEnabled,
+    callImperialText,
+    checkImperialHealth
+} from './imperialUltraClient';
 
 // ═══════════════════════════════════════════════════════════════
 // IMAGE CACHE - Avoids re-fetching same images during generation
@@ -210,7 +216,30 @@ export const callGroqText = async (
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // GEMINI 1.5 PRO PATH (GOOGLE AI STUDIO)
+    // IMPERIAL ULTRA PATH (Premium API Proxy) - TRY FIRST
+    // ═══════════════════════════════════════════════════════════════
+    if (isImperialUltraEnabled()) {
+        try {
+            const isHealthy = await checkImperialHealth();
+            if (isHealthy) {
+                console.log('[SmartAI] 👑 Routing to Imperial Ultra (Premium)');
+                const result = await callImperialText(prompt, {
+                    systemPrompt,
+                    jsonMode: isJsonMode,
+                    model: modelToUse.includes('gemini') ? undefined : undefined // Use default model
+                });
+                return result;
+            } else {
+                console.warn('[SmartAI] ⚠️ Imperial Ultra unhealthy, using fallback...');
+            }
+        } catch (error: any) {
+            console.warn('[SmartAI] ⚠️ Imperial Ultra failed, falling back:', error.message);
+            // Continue to Gemini/Groq fallback
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GEMINI 1.5 PRO PATH (GOOGLE AI STUDIO) - FALLBACK 1
     // ═══════════════════════════════════════════════════════════════
     if (modelToUse.includes('gemini')) {
         console.log(`[SmartAI] 💎 Routing to Google Gemini: ${modelToUse}`);
