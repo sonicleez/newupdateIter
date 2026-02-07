@@ -313,6 +313,13 @@ export const IMAGE_ROLES = [
 
 export const IMAGE_MODELS = [
     // ═══════════════════════════════════════════════════════════════════════════
+    // 👑 IMPERIAL ULTRA - Premium Gemini 3 Access
+    // ═══════════════════════════════════════════════════════════════════════════
+    { value: '__header_imperial__', label: '─── 👑 IMPERIAL ULTRA ───', provider: 'imperial', isHeader: true, color: 'cyan' },
+    { value: 'gemini-3-pro-image', label: '👑 Imperial Pro Image (Best)', provider: 'imperial', description: 'Gemini 3 Pro - Premium Quality', supportsEdit: true, supportsSubject: true, color: 'cyan' },
+    { value: 'gemini-3-flash-image', label: '👑 Imperial Flash Image (Fast)', provider: 'imperial', description: 'Gemini 3 Flash - Quick Gen', supportsEdit: true, supportsSubject: false, color: 'cyan' },
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // 🔵 GOOGLE / GEMINI - Direct API
     // ═══════════════════════════════════════════════════════════════════════════
     { value: '__header_google__', label: '─── 🔵 GOOGLE / GEMINI ───', provider: 'google', isHeader: true, color: 'blue' },
@@ -363,18 +370,12 @@ export const IMAGE_MODELS = [
 ];
 
 export const SCRIPT_MODELS = [
-    // Imperial Ultra (Premium)
-    { value: 'gemini-3-pro-high', label: '👑 Imperial Ultra Pro (Best)', provider: 'imperial', description: 'Gemini 3 Pro - Premium thinking' },
-    { value: 'gemini-3-flash', label: '👑 Imperial Ultra Flash (Fast)', provider: 'imperial', description: 'Gemini 3 Flash - Quick responses' },
-
-    // Gemini Native (Direct API)
-    { value: 'gemini-1.5-pro-latest', label: '🔵 Gemini 1.5 Pro (Native)', provider: 'gemini', description: 'Direct Google API - Best Logic' },
-    { value: 'gemini-1.5-flash', label: '🔵 Gemini 1.5 Flash (Native)', provider: 'gemini', description: 'Direct Google API - Fast' },
-
-    // Groq (Free tier)
-    { value: 'llama-3.3-70b-versatile', label: '🚀 Llama 3.3 70B (Groq)', provider: 'groq', description: 'Free - Best All-rounder' },
-    { value: 'qwen/qwen3-32b', label: '🧠 Qwen 3 32B (Groq)', provider: 'groq', description: 'Free - Best for Logic' },
-    { value: 'llama-3.1-8b-instant', label: '⚡ Llama 3.1 8B (Groq)', provider: 'groq', description: 'Free - Fast' },
+    { value: 'llama-3.3-70b-versatile', label: '🚀 Llama 3.3 70B (Groq) - Best All-rounder' },
+    { value: 'gemini-1.5-pro-latest', label: '💎 Gemini 1.5 Pro (Web Intelligence) - Best Logic' },
+    { value: 'qwen/qwen3-32b', label: '🧠 Qwen 3 32B (Groq) - Best for Logic' },
+    { value: 'openai/gpt-oss-120b', label: '🏟️ GPT-OSS 120B (Groq) - Large Scale' },
+    { value: 'llama-3.1-70b-versatile', label: '🚀 Llama 3.1 70B (Groq)' },
+    { value: 'llama-3.1-8b-instant', label: '⚡ Llama 3.1 8B (Groq) - Fast' },
 ];
 
 export const ASPECT_RATIOS = [

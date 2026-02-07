@@ -217,74 +217,72 @@ export const callGroqText = async (
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // DETECT PROVIDER FROM SELECTED MODEL
+    // IMPERIAL ULTRA PATH (Premium API Proxy) - TRY FIRST
     // ═══════════════════════════════════════════════════════════════
-    // Route based on model prefix, not auto-priority
-    const getTextProvider = (model: string): 'imperial' | 'gemini' | 'groq' => {
-        // Imperial Ultra models (gemini-3-*)
-        if (model.startsWith('gemini-3-')) return 'imperial';
-        // Gemini Native models (gemini-1.5-*, gemini-2-*)
-        if (model.includes('gemini')) return 'gemini';
-        // Everything else goes to Groq
-        return 'groq';
-    };
-
-    const provider = getTextProvider(modelToUse);
-    console.log(`[SmartAI] Provider detected: ${provider} for model: ${modelToUse}`);
-
-    // ═══════════════════════════════════════════════════════════════
-    // 👑 IMPERIAL ULTRA PATH (Explicit model selection)
-    // ═══════════════════════════════════════════════════════════════
-    if (provider === 'imperial') {
+    if (isImperialUltraEnabled()) {
         console.log('[SmartAI] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('[SmartAI] 👑 Imperial Ultra MODEL SELECTED');
-
-        // Check if Imperial is enabled and healthy
-        if (!isImperialUltraEnabled()) {
-            console.warn('[SmartAI] ⚠️ Imperial Ultra model selected but DISABLED in settings!');
-            console.warn('[SmartAI] 📉 Fallback to Groq (enable Imperial in Profile to use)');
-            // Fall through to Groq
-        } else {
-            try {
-                const isHealthy = await checkImperialHealth();
-                if (!isHealthy) {
-                    console.warn('[SmartAI] ⚠️ Imperial Ultra unhealthy, falling back to Groq...');
-                } else {
-                    console.log(`[SmartAI] 👑 Routing to Imperial Ultra: ${modelToUse}`);
-                    console.log(`  └─ Prompt: ${prompt.substring(0, 80)}...`);
-
-                    const result = await callImperialText(prompt, {
-                        systemPrompt,
-                        jsonMode: isJsonMode,
-                        model: modelToUse
-                    });
-                    console.log('[SmartAI] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                    return result;
+        console.log('[SmartAI] 👑 Imperial Ultra ENABLED - Checking health...');
+        try {
+            const isHealthy = await checkImperialHealth();
+            if (isHealthy) {
+                // Map requested model to Imperial model
+                let imperialModel: string | undefined;
+                if (modelToUse.includes('pro')) {
+                    imperialModel = 'gemini-3-pro-high'; // Best thinking
+                } else if (modelToUse.includes('flash')) {
+                    imperialModel = 'gemini-3-flash'; // Fast responses
                 }
-            } catch (error: any) {
-                console.warn('[SmartAI] ⚠️ Imperial Ultra failed:', error.message);
-                console.log('[SmartAI] 📉 Fallback to Groq');
+                // undefined = use Imperial's default (gemini-3-flash)
+
+                console.log(`[SmartAI] 👑 Routing to Imperial Ultra:`);
+                console.log(`  ├─ Original request: ${modelToUse || 'default'}`);
+                console.log(`  ├─ Imperial model: ${imperialModel || 'gemini-3-flash (default)'}`);
+                console.log(`  └─ Prompt: ${prompt.substring(0, 80)}...`);
+
+                const result = await callImperialText(prompt, {
+                    systemPrompt,
+                    jsonMode: isJsonMode,
+                    model: imperialModel
+                });
+                console.log('[SmartAI] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                return result;
+            } else {
+                console.warn('[SmartAI] ⚠️ Imperial Ultra unhealthy, falling back...');
             }
+        } catch (error: any) {
+            console.warn('[SmartAI] ⚠️ Imperial Ultra failed:', error.message);
+            console.log('[SmartAI] 📉 Fallback chain: Imperial → Gemini → Groq');
+            // Continue to Gemini/Groq fallback
         }
-        console.log('[SmartAI] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        // Fall through to Groq below
+    } else {
+        console.log('[SmartAI] Imperial Ultra: DISABLED (toggle off or not configured)');
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // 🔵 GEMINI NATIVE PATH (Direct Google API)
+    // GEMINI 1.5 PRO PATH (GOOGLE AI STUDIO) - FALLBACK 1
     // ═══════════════════════════════════════════════════════════════
-    if (provider === 'gemini') {
-        console.log(`[SmartAI] 🔵 Gemini Native MODEL SELECTED: ${modelToUse}`);
+    if (modelToUse.includes('gemini')) {
+        console.log(`[SmartAI] 💎 Routing to Google Gemini: ${modelToUse}`);
 
         // Resolve API Key
+        // 1. Explicitly passed
+        // 2. localStorage 'geminiApiKey'
+        // 3. localStorage 'googleApiKey'
+        // 4. process.env
         const effectiveKey = apiKey ||
             (typeof window !== 'undefined' ? (localStorage.getItem('geminiApiKey') || localStorage.getItem('googleApiKey')) : null) ||
             (process.env as any).GEMINI_API_KEY;
 
+        let shouldUseGemini = true;
+
         if (!effectiveKey) {
-            console.warn('[SmartAI] ⚠️ No Gemini API Key found. Falling back to Groq...');
-        } else {
+            console.warn('[SmartAI] ⚠️ No Gemini API Key found. Falling back to Groq (Llama 3)...');
+            shouldUseGemini = false;
+        }
+
+        if (shouldUseGemini && effectiveKey) {
             try {
+                // Using @google/genai SDK syntax (v0.5+)
                 const client = new GoogleGenAI({ apiKey: effectiveKey });
 
                 // Map our model IDs to Google's actual model names
@@ -307,6 +305,7 @@ export const callGroqText = async (
                     }
                 });
 
+                // Handle response based on SDK version (property)
                 const text = response.text;
 
                 if (!text) {
@@ -318,10 +317,14 @@ export const callGroqText = async (
 
             } catch (error: any) {
                 console.error('[Gemini] Error detailed:', error);
-                console.warn(`[SmartAI] ⚠️ Gemini failed. Falling back to Groq...`);
+                console.warn(`[SmartAI] ⚠️ Gemini failed (Rate Limit or Error). Falling back to Groq...`);
+                // Fall through to Groq logic below
             }
         }
-        // Fall through to Groq below
+
+        // If we reached here, it means we either didn't have a key or Gemini failed
+        // Switch model to Groq default to ensure Groq handler works
+        modelToUse = 'llama-3.3-70b-versatile';
     }
 
     // ═══════════════════════════════════════════════════════════════

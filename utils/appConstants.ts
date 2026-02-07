@@ -230,20 +230,11 @@ export const NOEDIT_MODELS = IMAGE_MODELS.filter(m => !m.supportsEdit && !m.isHe
 // Get selectable models (exclude headers)
 export const SELECTABLE_IMAGE_MODELS = IMAGE_MODELS.filter(m => !m.isHeader);
 
-// SCRIPT_MODELS - Text generation models for script writing
+// SCRIPT_MODELS - Updated decommissioned models
 export const SCRIPT_MODELS = [
-    // Imperial Ultra (Premium)
-    { value: 'gemini-3-pro-high', label: '👑 Imperial Ultra Pro (Best)', provider: 'imperial', description: 'Gemini 3 Pro - Premium thinking' },
-    { value: 'gemini-3-flash', label: '👑 Imperial Ultra Flash (Fast)', provider: 'imperial', description: 'Gemini 3 Flash - Quick responses' },
-
-    // Gemini Native (Direct API)
-    { value: 'gemini-1.5-pro', label: '🔵 Gemini 1.5 Pro (Native)', provider: 'gemini', description: 'Direct Google API' },
-    { value: 'gemini-1.5-flash', label: '🔵 Gemini 1.5 Flash (Native)', provider: 'gemini', description: 'Direct Google API - Fast' },
-
-    // Groq (Free tier)
-    { value: 'llama-3.3-70b-versatile', label: '🚀 Llama 3.3 70B (Groq)', provider: 'groq', description: 'Free - Recommended' },
-    { value: 'llama-3.1-8b-instant', label: '🚀 Llama 3.1 8B Fast (Groq)', provider: 'groq', description: 'Free - Fast' },
-    { value: 'mixtral-8x7b-32768', label: '🚀 Mixtral 8x7B (Groq)', provider: 'groq', description: 'Free - Good quality' },
+    { value: 'llama-3.3-70b-versatile', label: '🚀 Llama 3.3 70B (Groq) - Recommended' },
+    { value: 'llama-3.1-8b-instant', label: '🚀 Llama 3.1 8B Fast (Groq)' },
+    { value: 'mixtral-8x7b-32768', label: '🚀 Mixtral 8x7B (Groq)' },
 ];
 
 export const ASPECT_RATIOS = [
