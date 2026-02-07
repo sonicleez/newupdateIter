@@ -139,7 +139,6 @@ export const IMAGE_MODELS = [
     // ═══════════════════════════════════════════════════════════════════════════
     { value: '__header_imperial__', label: '─── 👑 IMPERIAL ULTRA ───', provider: 'imperial', isHeader: true, color: 'cyan' },
     { value: 'gemini-3-pro-image', label: '👑 Imperial Pro Image (Best)', provider: 'imperial', description: 'Gemini 3 Pro - Premium Quality', supportsEdit: true, supportsSubject: true, color: 'cyan' },
-    { value: 'gemini-3-flash-image', label: '👑 Imperial Flash Image (Fast)', provider: 'imperial', description: 'Gemini 3 Flash - Quick Gen', supportsEdit: true, supportsSubject: false, color: 'cyan' },
 
     // ═══════════════════════════════════════════════════════════════════════════
     // 🔵 GOOGLE / GEMINI - Direct API

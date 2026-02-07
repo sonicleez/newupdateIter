@@ -317,7 +317,7 @@ export const IMAGE_MODELS = [
     // ═══════════════════════════════════════════════════════════════════════════
     { value: '__header_imperial__', label: '─── 👑 IMPERIAL ULTRA ───', provider: 'imperial', isHeader: true, color: 'cyan' },
     { value: 'gemini-3-pro-image', label: '👑 Imperial Pro Image (Best)', provider: 'imperial', description: 'Gemini 3 Pro - Premium Quality', supportsEdit: true, supportsSubject: true, color: 'cyan' },
-    { value: 'gemini-3-flash-image', label: '👑 Imperial Flash Image (Fast)', provider: 'imperial', description: 'Gemini 3 Flash - Quick Gen', supportsEdit: true, supportsSubject: false, color: 'cyan' },
+
 
     // ═══════════════════════════════════════════════════════════════════════════
     // 🔵 GOOGLE / GEMINI - Direct API
@@ -370,7 +370,13 @@ export const IMAGE_MODELS = [
 ];
 
 export const SCRIPT_MODELS = [
+    // Imperial Ultra
+    { value: 'gemini-3-pro-high', label: '👑 Imperial Pro (Think) - Best Logic' },
+    { value: 'gemini-3-flash', label: '👑 Imperial Flash - Fast' },
+
+    // Groq / Gemini
     { value: 'llama-3.3-70b-versatile', label: '🚀 Llama 3.3 70B (Groq) - Best All-rounder' },
+
     { value: 'gemini-1.5-pro-latest', label: '💎 Gemini 1.5 Pro (Web Intelligence) - Best Logic' },
     { value: 'qwen/qwen3-32b', label: '🧠 Qwen 3 32B (Groq) - Best for Logic' },
     { value: 'openai/gpt-oss-120b', label: '🏟️ GPT-OSS 120B (Groq) - Large Scale' },
