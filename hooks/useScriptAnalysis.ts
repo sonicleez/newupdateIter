@@ -13,6 +13,7 @@ import { Scene, SceneGroup, Character, CharacterStyleDefinition } from '../types
 import { DirectorPreset, DIRECTOR_PRESETS } from '../constants/directors';
 import { resolveStyleWithInheritance } from '../constants/characterStyles';
 import { callGroqText } from '../utils/geminiUtils';
+import { isImperialUltraEnabled } from '../utils/imperialUltraClient';
 
 // Analysis result types
 export interface ChapterAnalysis {
@@ -187,7 +188,12 @@ export function useScriptAnalysis(userApiKey: string | null) {
         researchNotes?: { director?: string; dop?: string; story?: string } | null,
         activeCharacters: { id: string; name: string; description?: string }[] = [] // New Param for auto-assignment
     ): Promise<ScriptAnalysisResult | null> => {
-        if (!userApiKey) {
+        // Check API Keys
+        // If Imperial Ultra is enabled and we are using a Gemini/Imperial model, we don't need userApiKey
+        const [modelName] = modelSelector.split('|');
+        const isImperialRequest = isImperialUltraEnabled() && (modelName.includes('gemini') || modelName.includes('imperial'));
+
+        if (!userApiKey && !isImperialRequest) {
             setAnalysisError('API key required');
             return null;
         }
