@@ -1,11 +1,22 @@
 
 import { GoogleGenAI, Modality, Type } from "@google/genai";
+import {
+    isImperialUltraEnabled,
+    callImperialImageEdit
+} from './imperialUltraClient';
 
 const OUTPUT_MIME_TYPE = 'image/png';
 
 // ═══════════════════════════════════════════════════════════════
 // MODEL ROUTING HELPERS
 // ═══════════════════════════════════════════════════════════════
+
+// Detect if a model should use Imperial Ultra API
+const isImperialModel = (model: string): boolean => {
+    if (!model) return false;
+    // Imperial Ultra models start with 'gemini-3-' (e.g., gemini-3-pro-image)
+    return model.startsWith('gemini-3-');
+};
 
 // Detect if a model should use Gommo API instead of Gemini SDK
 const isGommoModel = (model: string): boolean => {
@@ -268,6 +279,56 @@ export const editImageWithMask = async (
 
     const cleanImage = imageData.includes(',') ? imageData.split(',')[1] : imageData;
     const cleanMask = base64MaskData.includes(',') ? base64MaskData.split(',')[1] : base64MaskData;
+
+    // ═══════════════════════════════════════════════════════════════
+    // IMPERIAL ULTRA MODEL PATH
+    // ═══════════════════════════════════════════════════════════════
+    if (isImperialUltraEnabled() && isImperialModel(model)) {
+        console.log(`[editImageWithMask] 🟣 Routing to Imperial Ultra: ${model}`);
+        try {
+            const result = await callImperialImageEdit(
+                cleanImage,
+                imageMimeType,
+                editPrompt,
+                cleanMask, // mask
+                { model, aspectRatio }
+            );
+
+            // Convert result to GeneratedImage format
+            if (result.base64) {
+                const base64Data = result.base64.includes(',')
+                    ? result.base64.split(',')[1]
+                    : result.base64;
+                return {
+                    base64: base64Data,
+                    mimeType: result.mimeType || 'image/png'
+                };
+            }
+
+            // If URL, fetch and convert to base64
+            if (result.url) {
+                const response = await fetch(result.url);
+                const blob = await response.blob();
+                const reader = new FileReader();
+                return new Promise((resolve, reject) => {
+                    reader.onloadend = () => {
+                        const base64 = (reader.result as string).split(',')[1];
+                        resolve({
+                            base64,
+                            mimeType: blob.type || 'image/png'
+                        });
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            throw new Error('Invalid response from Imperial Ultra');
+        } catch (error: any) {
+            console.error('[editImageWithMask] ❌ Imperial Ultra failed:', error.message);
+            throw error;
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════════
     // GOMMO MODEL PATH
@@ -592,6 +653,56 @@ export const generateImageFromImage = async (
     model: string = 'gemini-3-pro-image-preview'
 ): Promise<GeneratedImage> => {
     const cleanImage = base64ImageData.includes(',') ? base64ImageData.split(',')[1] : base64ImageData;
+
+    // ═══════════════════════════════════════════════════════════════
+    // IMPERIAL ULTRA MODEL PATH
+    // ═══════════════════════════════════════════════════════════════
+    if (isImperialUltraEnabled() && isImperialModel(model)) {
+        console.log(`[generateImageFromImage] 🟣 Routing to Imperial Ultra: ${model}`);
+        try {
+            const result = await callImperialImageEdit(
+                cleanImage,
+                mimeType,
+                prompt,
+                undefined, // no mask
+                { model, aspectRatio }
+            );
+
+            // Convert result to GeneratedImage format
+            if (result.base64) {
+                const base64Data = result.base64.includes(',')
+                    ? result.base64.split(',')[1]
+                    : result.base64;
+                return {
+                    base64: base64Data,
+                    mimeType: result.mimeType || 'image/png'
+                };
+            }
+
+            // If URL, fetch and convert to base64
+            if (result.url) {
+                const response = await fetch(result.url);
+                const blob = await response.blob();
+                const reader = new FileReader();
+                return new Promise((resolve, reject) => {
+                    reader.onloadend = () => {
+                        const base64 = (reader.result as string).split(',')[1];
+                        resolve({
+                            base64,
+                            mimeType: blob.type || 'image/png'
+                        });
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            throw new Error('Invalid response from Imperial Ultra');
+        } catch (error: any) {
+            console.error('[generateImageFromImage] ❌ Imperial Ultra failed:', error.message);
+            throw error;
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════════
     // GOMMO MODEL PATH

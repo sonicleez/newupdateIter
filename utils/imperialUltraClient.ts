@@ -508,6 +508,157 @@ export async function callImperialVision(
 }
 
 // ═══════════════════════════════════════════════════════════════
+// IMAGE EDITING (with mask support)
+// ═══════════════════════════════════════════════════════════════
+
+export interface ImperialImageEditOptions {
+    model?: string;
+    aspectRatio?: string;
+}
+
+/**
+ * Call Imperial Ultra for image editing (with optional mask)
+ * Used by Advanced Image Editor for edit workflows
+ */
+export async function callImperialImageEdit(
+    sourceImage: string, // base64 without data: prefix
+    sourceMimeType: string,
+    prompt: string,
+    maskImage?: string, // base64 without data: prefix (optional)
+    options: ImperialImageEditOptions = {}
+): Promise<{ url?: string; base64?: string; mimeType?: string }> {
+    const {
+        model = IMPERIAL_CONFIG.models.image, // gemini-3-pro-image
+        aspectRatio = '1:1'
+    } = options;
+
+    // Map aspect ratio to size
+    const sizeMap: Record<string, string> = {
+        '1:1': '1024x1024',
+        '16:9': '1280x720',
+        '9:16': '720x1280',
+        '4:3': '1216x896',
+        '3:4': '896x1216',
+    };
+    const size = sizeMap[aspectRatio] || '1024x1024';
+
+    console.log(`[Imperial Ultra] 🖼️ Image Edit Request:`);
+    console.log(`  ├─ Model: ${model}`);
+    console.log(`  ├─ Aspect Ratio: ${aspectRatio} → Size: ${size}`);
+    console.log(`  ├─ Has Mask: ${maskImage ? 'Yes' : 'No'}`);
+    console.log(`  └─ Prompt: ${prompt.substring(0, 60)}...`);
+
+    // Build multi-part content message
+    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+
+    // Add source image
+    const sourceDataUrl = sourceImage.startsWith('data:')
+        ? sourceImage
+        : `data:${sourceMimeType};base64,${sourceImage}`;
+    content.push({
+        type: 'image_url',
+        image_url: { url: sourceDataUrl }
+    });
+
+    // Add mask if provided
+    if (maskImage) {
+        const maskDataUrl = maskImage.startsWith('data:')
+            ? maskImage
+            : `data:image/png;base64,${maskImage}`;
+        content.push({
+            type: 'image_url',
+            image_url: { url: maskDataUrl }
+        });
+    }
+
+    // Add text prompt
+    content.push({
+        type: 'text',
+        text: prompt
+    });
+
+    const requestBody = {
+        model,
+        messages: [
+            { role: 'user', content }
+        ],
+        size
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), IMPERIAL_CONFIG.timeout);
+
+    try {
+        const response = await fetch(`${IMPERIAL_CONFIG.baseUrl}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getImperialApiKey()}`
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`Imperial Image Edit API error (${response.status}): ${JSON.stringify(errorData)}`);
+        }
+
+        const data = await response.json();
+        const contentStr = data.choices?.[0]?.message?.content;
+
+        if (!contentStr) {
+            throw new Error('Empty response from Imperial Ultra image edit API');
+        }
+
+        // Parse response (same logic as callImperialImage)
+        // Check if content is markdown image format
+        const markdownMatch = contentStr.match(/!\[.*?\]\((data:image\/[^;]+;base64,[A-Za-z0-9+/=]+)\)/);
+        if (markdownMatch) {
+            console.log('[Imperial Ultra] ✅ Edited image received (markdown format)');
+            consecutiveFailures = 0;
+            return { base64: markdownMatch[1], mimeType: 'image/png' };
+        }
+
+        // Check if content is base64 image data
+        if (contentStr.startsWith('data:image')) {
+            console.log('[Imperial Ultra] ✅ Edited image received (base64 data URL)');
+            consecutiveFailures = 0;
+            return { base64: contentStr, mimeType: 'image/png' };
+        }
+
+        // Check if content is raw base64
+        if (contentStr.match(/^[A-Za-z0-9+/=]{100,}/)) {
+            console.log('[Imperial Ultra] ✅ Edited image received (raw base64)');
+            consecutiveFailures = 0;
+            return { base64: `data:image/png;base64,${contentStr}`, mimeType: 'image/png' };
+        }
+
+        // Check if content is a URL
+        if (contentStr.startsWith('http')) {
+            console.log('[Imperial Ultra] ✅ Edited image received (URL)');
+            consecutiveFailures = 0;
+            return { url: contentStr, mimeType: 'image/png' };
+        }
+
+        throw new Error('Unexpected response format from Imperial Ultra image edit API');
+    } catch (error: any) {
+        clearTimeout(timeoutId);
+        consecutiveFailures++;
+
+        if (error.name === 'AbortError') {
+            throw new Error('Imperial Ultra image edit request timed out');
+        }
+
+        console.error('[Imperial Ultra] ❌ Image edit request failed:', error.message);
+        throw error;
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 // EXPORTS
 // ═══════════════════════════════════════════════════════════════
 
@@ -515,6 +666,7 @@ export const IMPERIAL_MODELS = IMPERIAL_CONFIG.models;
 export default {
     callImperialText,
     callImperialImage,
+    callImperialImageEdit,
     callImperialVision,
     checkImperialHealth,
     isImperialUltraEnabled,
